@@ -1,12 +1,9 @@
 package main
 
 import (
-  // "fmt"
-  // "os"
-
-  "github.com/hypotheticalco/tracker/cmd"
+	"github.com/hypotheticalco/tracker/cmd"
 )
 
 func main() {
-  cmd.Execute()
+	cmd.Execute()
 }

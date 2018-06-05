@@ -1,3 +1,3 @@
 
-ht: 
-	go build -o ht
+bin/ht: 
+	go build -o bin/ht

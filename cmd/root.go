@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path"
 
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/spf13/cobra"
@@ -13,14 +14,16 @@ var rootCmd = &cobra.Command{
 	Use:   "ht",
 	Short: "Hypothetical tracker is a todo list manager and time tracker",
 	Run: func(cmd *cobra.Command, args []string) {
-		// Do Stuff Here
+		println(cmd.Short)
+		println()
+		// println(cmd.Long)
+		cmd.Usage()
 	},
 }
 
 var cfgFile = ""
-var projectBase = ""
-var userLicense = ""
 
+// Execute the root command
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
@@ -30,38 +33,35 @@ func Execute() {
 
 func init() {
 	cobra.OnInitialize(initConfig)
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.cobra.yaml)")
-	rootCmd.PersistentFlags().StringVarP(&projectBase, "projectbase", "b", "", "base project directory eg. github.com/spf13/")
-	rootCmd.PersistentFlags().StringP("author", "a", "YOUR NAME", "Author name for copyright attribution")
-	rootCmd.PersistentFlags().StringVarP(&userLicense, "license", "l", "", "Name of license for the project (can provide `licensetext` in config)")
-	rootCmd.PersistentFlags().Bool("viper", true, "Use Viper for configuration")
-	viper.BindPFlag("author", rootCmd.PersistentFlags().Lookup("author"))
-	viper.BindPFlag("projectbase", rootCmd.PersistentFlags().Lookup("projectbase"))
-	viper.BindPFlag("useViper", rootCmd.PersistentFlags().Lookup("viper"))
-	viper.SetDefault("author", "NAME HERE <EMAIL ADDRESS>")
-	viper.SetDefault("license", "apache")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "configfile", "", "absolute path to config file (default is $HOME/.hypothetical/tracker.yaml)")
 }
 
 func initConfig() {
-	// Don't forget to read config either from cfgFile or from home directory!
+	// We need the home directory
+	homeDir, err := homedir.Dir()
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	// default values
+	appPath := path.Join(homeDir, ".hypothetical", "tracker")
+
+	viper.AddConfigPath(".")
+	viper.SetConfigName("config")
+
 	if cfgFile != "" {
-		// Use config file from the flag.
 		viper.SetConfigFile(cfgFile)
 	} else {
-		// Find home directory.
-		home, err := homedir.Dir()
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-
-		// Search config in home directory with name ".cobra" (without extension).
-		viper.AddConfigPath(home)
-		viper.SetConfigName(".cobra")
+		viper.AddConfigPath(appPath)
 	}
 
 	if err := viper.ReadInConfig(); err != nil {
 		fmt.Println("Can't read config:", err)
 		os.Exit(1)
 	}
+
+	rootCmd.AddCommand(cmdTodo)
+	rootCmd.AddCommand(cmdTracking)
+
 }

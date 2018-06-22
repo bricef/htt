@@ -166,6 +166,36 @@ func PushChanges(repo *git.Repository, hash plumbing.Hash) (PushDetails, error) 
 	}, nil
 }
 
+func Sync() {
+
+	// get repo
+	r := EnsureAndGetDataRepo(vars.Get(vars.ConfigKeyDataDir))
+
+	// Ensure we have a master
+	EnsureOriginRemote(r, vars.Get(vars.ConfigKeyRepoURL))
+
+	// Create commit
+	hash, err := CreateCommitFromChanges(r, "Commiting state via ht sync")
+	if err != nil {
+		if err == WorkingTreeUnchanged {
+			log.Println("✓ No relevant changes to be commited")
+		} else {
+			log.Fatal("Could not commit changes due to error: ", err)
+		}
+	} else {
+		log.Println("✓ Created commit of changes with hash ", hash.String())
+	}
+
+	// push commit
+	details, err := PushChanges(r, hash)
+	if err == git.NoErrAlreadyUpToDate {
+		log.Println("✓ Remote " + details.RemoteName + " is already up to date")
+	} else if err == nil {
+		log.Println("✓ Pushed commit " + details.Hash + " to " + details.RemoteName)
+	}
+
+}
+
 // SyncData will sync the current data to the remote repository.
 // func SyncData() error {
 // 	var path = viper.GetString("datadir")

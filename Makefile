@@ -1,5 +1,5 @@
 
-bin/ht: main.go cmd/*
+bin/ht: main.go cmd/* models/* vars/*
 	go build -o bin/ht
 
 clean:

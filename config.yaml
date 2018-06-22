@@ -1,3 +1,6 @@
 config_path: /Users/brice/.hypothetical/tracker/config.yaml
 data_dir: /Users/brice/.hypothetical/tracker/data
 backing_repo_url: git@github.com:bricef/todotxt-backing-repo.git
+author_name: "Brice Fernandes"
+author_email: brice@fractallambda.com
+ssh_key_file: /Users/brice/.ssh/id_rsa

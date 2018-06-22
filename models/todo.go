@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 
+	"github.com/hypotheticalco/tracker-client/utils"
 	"github.com/hypotheticalco/tracker-client/vars"
 )
 
@@ -15,22 +16,21 @@ import (
 
 func ensurePath(filename string) {
 	err := os.MkdirAll(path.Dir(filename), 0700)
-	if err != nil {
-		log.Fatal(err)
-		os.Exit(1)
-	}
+	utils.DieOnError("Could not ensure path "+path.Dir(filename)+": ", err)
 }
 
 func todoFilePath() string {
 	return path.Join(vars.Get(vars.ConfigKeyDataDir), vars.Get(vars.DefaultTodoFileName))
 }
 
-func todoFile() (*os.File, error) {
+func todoFile() *os.File {
 	// Get todofile and make sure the path exists
 	todoFile := todoFilePath()
 	ensurePath(todoFile)
 	f, err := os.OpenFile(todoFile, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
-	return f, err
+	utils.DieOnError("Could not open file: "+todoFile, err)
+
+	return f
 }
 
 func getTags(entry string) []string {
@@ -42,10 +42,8 @@ func getPrefixedWords(prefix string, entry string) []string {
 }
 
 func taskListFromFile(filename string) []Task {
-	f, err := todoFile()
-	if err != nil {
-		log.Fatal(err)
-	}
+	f := todoFile()
+
 	var tasks []Task
 
 	scanner := bufio.NewScanner(f)
@@ -71,14 +69,11 @@ type Task struct {
 
 // AddTodo will add an item to the default todo list
 func AddTodo(todo string) {
-	f, err := todoFile()
-	if err != nil {
-		log.Fatal(err)
-	}
+	f := todoFile()
 
 	defer f.Close()
 
-	_, err = f.WriteString(todo + "\n")
+	_, err := f.WriteString(todo + "\n")
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -27,6 +27,10 @@ func main() {
 	viper.SetDefault(vars.ConfigKeyDataDir, path.Join(trackerDir, vars.DefaultDataDirName))
 	viper.SetDefault(vars.ConfigKeyRemoteName, vars.DefaultRemoteName)
 	viper.SetDefault(vars.ConfigKeyTodoFileName, vars.DefaultTodoFileName)
+	viper.SetDefault(vars.ConfigKeyFilePatterns, vars.DefaultFilePatterns)
+	viper.SetDefault(vars.ConfigKeyAuthorName, vars.DefaultCommitterName)
+	viper.SetDefault(vars.ConfigKeyAuthorEmail, vars.DefaultCommitterEmail)
+	viper.SetDefault(vars.ConfigKeySSHKeyFile, path.Join(homeDir, ".ssh", "id_rsa.pub"))
 
 	// viper.WriteConfigAs("dump.yaml")
 

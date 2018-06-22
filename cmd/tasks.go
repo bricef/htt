@@ -1,9 +1,10 @@
 package cmd
 
 import (
+	"fmt"
 	"strings"
 
-	"github.com/hypotheticalco/tracker-client/models"
+	"github.com/hypotheticalco/tracker-client/todo"
 	"github.com/spf13/cobra"
 )
 
@@ -14,7 +15,7 @@ func init() {
 		Short: "Add an item to the default task list",
 		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			models.AddTodo(strings.Join(args, " "))
+			todo.AddTodo(strings.Join(args, " "))
 		},
 	})
 
@@ -24,7 +25,13 @@ func init() {
 		Long: `Show the default tasklist. You can filter the task list using 
 	search terms. Search terms will be matched fuzzily.`,
 		Run: func(cmd *cobra.Command, args []string) {
-			models.GetTodos(nil)
+			todos := todo.GetTodos()
+			filtered := todo.Filter(todos, []string{})
+			for i, todo := range filtered {
+				fmt.Printf("%3d %s\n", i+1, todo.Entry)
+			}
+			fmt.Printf("---\n")
+			fmt.Printf("TODO %d of %d tasks shown", len(filtered), len(todos))
 		},
 	})
 

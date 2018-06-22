@@ -1,10 +1,10 @@
-package models
+package todo
 
 import (
-	"bufio"
 	"log"
 	"os"
 	"path"
+	"strings"
 
 	"github.com/hypotheticalco/tracker-client/utils"
 	"github.com/hypotheticalco/tracker-client/vars"
@@ -20,23 +20,24 @@ func ensurePath(filename string) {
 }
 
 func todoFilePath() string {
-	return path.Join(vars.Get(vars.ConfigKeyDataDir), vars.Get(vars.DefaultTodoFileName))
+	path := path.Join(vars.Get(vars.ConfigKeyDataDir), vars.Get(vars.ConfigKeyTodoFileName))
+	return path
 }
 
 func todoFile() *os.File {
-	// Get todofile and make sure the path exists
 	todoFile := todoFilePath()
 	ensurePath(todoFile)
 	f, err := os.OpenFile(todoFile, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
-	utils.DieOnError("Could not open file: "+todoFile, err)
+	utils.DieOnError("Could not open file: "+todoFile+": ", err)
 
 	return f
 }
 
 func getTags(entry string) []string {
-	return []string{}
+	return getPrefixedWords("#", entry)
 }
 
+// TODO: Implement
 func getPrefixedWords(prefix string, entry string) []string {
 	return []string{}
 }
@@ -45,24 +46,23 @@ func taskListFromFile(filename string) []Task {
 	f := todoFile()
 
 	var tasks []Task
-
-	scanner := bufio.NewScanner(f)
+	scanner := utils.NewLineScanner(f)
 	for scanner.Scan() {
-		entry := string(scanner.Text())
-		tasks = append(tasks, Task{
-			ID:    1,
-			Entry: entry,
-			Tags:  getTags(entry),
-		})
+		entry := strings.TrimSpace(string(scanner.Text()))
+		if entry != "" {
+			tasks = append(tasks, Task{
+				Entry: entry,
+				Tags:  getTags(entry),
+			})
+		}
 	}
-	return []Task{}
+	return tasks
 }
 
 // Task represents a task in a todo list.
-// It's needed because we need to have an ID
 // for tasks that is stable even though they might be filtered.
 type Task struct {
-	ID    int
+	UID   string
 	Entry string
 	Tags  []string
 }
@@ -80,8 +80,13 @@ func AddTodo(todo string) {
 }
 
 // GetTodos will add the todos according to the serach terms
-func GetTodos(searchTerms []string) []Task {
-	tasks := taskListFromFile(todoFilePath())
+func GetTodos() []Task {
+	return taskListFromFile(todoFilePath())
+}
 
+// Filter will filter out any tasks that do not match the serach terms
+// More than one search term can be given
+// TODO: Implement
+func Filter(tasks []Task, terms []string) []Task {
 	return tasks
 }

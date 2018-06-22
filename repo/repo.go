@@ -8,8 +8,6 @@ import (
 	"golang.org/x/crypto/ssh"
 	"gopkg.in/src-d/go-git.v4/plumbing/object"
 
-	"log"
-
 	"github.com/hypotheticalco/tracker-client/utils"
 	"github.com/hypotheticalco/tracker-client/vars"
 	"github.com/spf13/viper"
@@ -36,7 +34,7 @@ func EnsureAndGetDataRepo(path string) *git.Repository {
 	repo, err := git.PlainOpen(path)
 
 	if err == git.ErrRepositoryNotExists {
-		log.Println("Could not open repository. Attempting to create one instead.")
+		utils.Info("Could not open repository. Attempting to create one instead.")
 		repo, err = git.PlainInit(path, false)
 	} else if err != nil {
 		utils.DieOnError("Fatal: Ensuring a data repository failed: ", err)
@@ -166,6 +164,9 @@ func PushChanges(repo *git.Repository, hash plumbing.Hash) (PushDetails, error) 
 	}, nil
 }
 
+// Sync will attempt to sync the local repo to the remote repo.
+// Sync will fail is the remote repo is further ahead.
+// TODO: handle remote repo ahead gracefully
 func Sync() {
 
 	// get repo
@@ -175,31 +176,23 @@ func Sync() {
 	EnsureOriginRemote(r, vars.Get(vars.ConfigKeyRepoURL))
 
 	// Create commit
-	hash, err := CreateCommitFromChanges(r, "Commiting state via ht sync")
+	hash, err := CreateCommitFromChanges(r, "Commiting state via tracker client sync")
 	if err != nil {
 		if err == WorkingTreeUnchanged {
-			log.Println("✓ No relevant changes to be commited")
+			utils.Info("No relevant changes to be commited")
 		} else {
-			log.Fatal("Could not commit changes due to error: ", err)
+			utils.Fatal("Could not commit changes due to error: ", err)
 		}
 	} else {
-		log.Println("✓ Created commit of changes with hash ", hash.String())
+		utils.Success("Created commit of changes with hash ", hash.String())
 	}
 
 	// push commit
 	details, err := PushChanges(r, hash)
 	if err == git.NoErrAlreadyUpToDate {
-		log.Println("✓ Remote " + details.RemoteName + " is already up to date")
+		utils.Info("Remote " + details.RemoteName + " is already up to date")
 	} else if err == nil {
-		log.Println("✓ Pushed commit " + details.Hash + " to " + details.RemoteName)
+		utils.Success("Pushed commit " + details.Hash + " to " + details.RemoteName)
 	}
 
 }
-
-// SyncData will sync the current data to the remote repository.
-// func SyncData() error {
-// 	var path = viper.GetString("datadir")
-// 	repo, err := ensureAndGetDataRepo(path)
-// 	log.Println(repo.Config())
-// 	return err
-// }

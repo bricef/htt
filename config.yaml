@@ -1,2 +1,3 @@
-dataDir: "/Users/brice/.hypothetical/data"
-logFile: "/Users/brice/.hypothetical/log.txt"
+config_path: /Users/brice/.hypothetical/tracker/config.yaml
+data_dir: /Users/brice/.hypothetical/tracker/data
+backing_repo_url: git@github.com:bricef/todotxt-backing-repo.git

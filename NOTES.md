@@ -47,6 +47,9 @@ https://github.com/gogs/gogs - Complete server solution (2018, recent)
 https://github.com/gogs/git-module - Shell over git CLI (2018, recent)
 https://github.com/libgit2/git2go libgit2 Go bindings (libgit2 is complete in term of functionality, including merges, etc...)
 
+### making an interactive prompt
+See https://github.com/c-bata/go-prompt.
+
 # Implementation plan
 
 - [ ] Develop the go-git client against github private repo 

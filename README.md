@@ -1,9 +1,9 @@
-# Hypothetical tracker
+# Hypothetical Tasks & Time Tracker (htt)
 
 ## Usage
 
 ```shell
-$ ht help
+$ htt help
 Hypothetical tracker is a todo list manager and time tracker
 
 Usage:
@@ -17,7 +17,7 @@ Available Commands:
   sync        Sync the data to the backend manually
 
 Flags:
-  -h, --help   help for ht
+  -h, --help   help for htt
 
 Use "ht [command] --help" for more information about a command.
 ```

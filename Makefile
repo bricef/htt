@@ -1,6 +1,6 @@
 
-bin/ht: main.go cmd/* models/* vars/*
-	go build -o bin/ht
+bin/htt: main.go cmd/* models/* vars/*
+	go build -o bin/htt
 
 clean:
 	rm -rf bin

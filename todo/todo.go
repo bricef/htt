@@ -1,6 +1,7 @@
 package todo
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path"
@@ -51,6 +52,7 @@ func taskListFromFile(filename string) []Task {
 		entry := strings.TrimSpace(string(scanner.Text()))
 		if entry != "" {
 			tasks = append(tasks, Task{
+				Line:  scanner.Line,
 				Entry: entry,
 				Tags:  getTags(entry),
 			})
@@ -62,7 +64,7 @@ func taskListFromFile(filename string) []Task {
 // Task represents a task in a todo list.
 // for tasks that is stable even though they might be filtered.
 type Task struct {
-	UID   string
+	Line  int
 	Entry string
 	Tags  []string
 }
@@ -88,5 +90,42 @@ func GetTodos() []Task {
 // More than one search term can be given
 // TODO: Implement
 func Filter(tasks []Task, terms []string) []Task {
+	utils.Failure("`todo.Filter` is not Implemented. Returning unfiltered list.")
 	return tasks
+}
+
+func GetTodoId(index int) Task {
+	ts := GetTodos()
+	if index > len(ts) {
+		utils.Fatal("Item selected is outside of range")
+	}
+	return ts[index-1]
+}
+
+func Delete(task Task) {
+	todos := GetTodos()
+	originalPath := todoFilePath()
+	backupPath := originalPath + ".bak"
+	err := os.Rename(originalPath, backupPath)
+	utils.DieOnError("Could not create a backup file.", err)
+
+	newTodos := append(todos[:task.Line-1], todos[task.Line:]...)
+	f := todoFile()
+	defer f.Close()
+	for _, task := range newTodos {
+		_, err := f.WriteString(task.Entry + "\n")
+		utils.DieOnError("Failed to write todo to file", err)
+	}
+	//mv the original file to a backup
+	//re-write the file
+	// if no error, remove the temp file
+}
+
+func Show(tasks []Task) {
+	ts := GetTodos()
+	for _, todo := range tasks {
+		fmt.Printf("%3d %s\n", todo.Line, todo.Entry)
+	}
+	fmt.Printf("---\n")
+	fmt.Printf("TODO: %d of %d tasks shown\n", len(tasks), len(ts))
 }

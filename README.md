@@ -25,3 +25,4 @@ Use "ht [command] --help" for more information about a command.
 ## Todo
 
 - [ ] Handle case when local repo is behind remote. (Rebase? Merge? How?)
+- [ ] Set up interactive cli

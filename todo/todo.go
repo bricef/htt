@@ -94,7 +94,8 @@ func Filter(tasks []Task, terms []string) []Task {
 	return tasks
 }
 
-func GetTodoId(index int) Task {
+// GetTodoID will get a given todo by ID (ID is an idex from 1)
+func GetTodoID(index int) Task {
 	ts := GetTodos()
 	if index > len(ts) {
 		utils.Fatal("Item selected is outside of range")
@@ -102,6 +103,7 @@ func GetTodoId(index int) Task {
 	return ts[index-1]
 }
 
+// Delete will remove the given task from the task list
 func Delete(task Task) {
 	todos := GetTodos()
 	originalPath := todoFilePath()
@@ -121,6 +123,7 @@ func Delete(task Task) {
 	// if no error, remove the temp file
 }
 
+// Show will print out the tasks given
 func Show(tasks []Task) {
 	ts := GetTodos()
 	for _, todo := range tasks {

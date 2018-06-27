@@ -64,3 +64,7 @@ See https://github.com/c-bata/go-prompt.
 Q: Auth on SSH server besides Keys? - Not needed. Just don't provide key in the callback if delinquent.
 Q: Stop users reading each-other's repos? - Unique, high entropy key / token
 
+# Useful Libraries
+Cron library in Golang - https://godoc.org/github.com/robfig/cron
+File watcher golang library - https://github.com/radovskyb/watcher
+Daemon library golang - https://github.com/takama/daemon

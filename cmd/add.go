@@ -19,4 +19,9 @@ var add = &cobra.Command{
 
 func init() {
 	RootCmd.AddCommand(add)
+	// deduplicate
+	// up-pri
+	// down-pri
+	// do
+	// report
 }

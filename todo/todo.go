@@ -103,24 +103,25 @@ func GetTodoID(index int) Task {
 	return ts[index-1]
 }
 
-// Delete will remove the given task from the task list
-func Delete(task Task) {
-	todos := GetTodos()
+func setTodos(tasks []Task) {
 	originalPath := todoFilePath()
 	backupPath := originalPath + ".bak"
 	err := os.Rename(originalPath, backupPath)
 	utils.DieOnError("Could not create a backup file.", err)
 
-	newTodos := append(todos[:task.Line-1], todos[task.Line:]...)
 	f := todoFile()
 	defer f.Close()
-	for _, task := range newTodos {
+	for _, task := range tasks {
 		_, err := f.WriteString(task.Entry + "\n")
 		utils.DieOnError("Failed to write todo to file", err)
 	}
-	//mv the original file to a backup
-	//re-write the file
-	// if no error, remove the temp file
+}
+
+// Delete will remove the given task from the task list
+func Delete(task Task) {
+	todos := GetTodos()
+	newTodos := append(todos[:task.Line-1], todos[task.Line:]...)
+	setTodos(newTodos)
 }
 
 // Show will print out the tasks given
@@ -131,4 +132,10 @@ func Show(tasks []Task) {
 	}
 	fmt.Printf("---\n")
 	fmt.Printf("TODO: %d of %d tasks shown\n", len(tasks), len(ts))
+}
+
+func Replace(id int, entry string) {
+	todos := GetTodos()
+	todos[id-1].Entry = entry
+	setTodos(todos)
 }

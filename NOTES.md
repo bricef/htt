@@ -1,4 +1,6 @@
 
+The todotxt format: https://github.com/todotxt/todo.txt
+
 Backend should be git repo. It does the work already, so why not leverage it. 
 
 Client can then sync straight to git server, and can sync to a personal git repo if needed (Github, eg)

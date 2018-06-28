@@ -33,10 +33,10 @@ func SetContext(raw string) {
 }
 
 func ContextToFilePath(context string) string {
-	return path.Join(vars.Get(vars.ConfigKeyDataDir), GetContext()+vars.DefaultFileExtension)
+	return path.Join(vars.Get(vars.ConfigKeyDataDir), context+vars.DefaultFileExtension)
 }
 
-func GetContext() string {
+func GetCurrentContext() string {
 	contextStoreFilePath := path.Join(vars.Get(vars.ConfigKeyDataDir), vars.DefaultContextFileName)
 	context := vars.DefaultContext
 
@@ -50,7 +50,7 @@ func GetContext() string {
 }
 
 func todoFilePath() string {
-	path := path.Join(vars.Get(vars.ConfigKeyDataDir), GetContext()+vars.DefaultFileExtension)
+	path := path.Join(vars.Get(vars.ConfigKeyDataDir), GetCurrentContext()+vars.DefaultFileExtension)
 	return path
 }
 
@@ -159,12 +159,29 @@ func Show(tasks []Task) {
 	for _, todo := range tasks {
 		fmt.Printf("%3d %s\n", todo.Line, todo.Entry)
 	}
-	fmt.Printf("---\n")
-	fmt.Printf("TODO: %d of %d tasks shown\n", len(tasks), len(ts))
+	fmt.Printf("--- (%s): %d of %d tasks shown ---\n", GetCurrentContext(), len(tasks), len(ts))
 }
 
 func Replace(id int, entry string) {
 	todos := GetTodos()
 	todos[id-1].Entry = entry
 	setTodos(todos)
+}
+
+func GetContexts() []string {
+	fileinfos, err := ioutil.ReadDir(vars.Get(vars.ConfigKeyDataDir))
+	utils.DieOnError("Failed to list contexts", err)
+
+	contexts := []string{}
+	for _, info := range fileinfos {
+		filename := info.Name()
+		if strings.HasSuffix(filename, vars.DefaultFileExtension) && filename != "done.txt" {
+
+			context := strings.TrimSuffix(filename, vars.DefaultFileExtension)
+			contexts = append(contexts, context)
+
+		}
+	}
+	return contexts
+
 }

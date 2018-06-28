@@ -18,8 +18,15 @@ same context.`,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) == 0 {
-			context := todo.GetContext()
-			fmt.Printf("%s (%s)\n", context, todo.ContextToFilePath(context))
+			contexts := todo.GetContexts()
+			current := todo.GetCurrentContext()
+			fmt.Printf("➤ %s\n", current)
+			for _, c := range contexts {
+				if current != c {
+					fmt.Printf("%s\n", c)
+				}
+			}
+			// fmt.Print("\n")
 		} else {
 			todo.SetContext(args[0])
 		}

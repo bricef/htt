@@ -4,7 +4,20 @@ import (
 	"bufio"
 	"io"
 	"log"
+	"regexp/syntax"
+	"strings"
 )
+
+// StringTofilename will convert an arbitrary string into a valid filename
+func StringToFilename(raw string) string {
+	return strings.Map(func(c rune) rune {
+		if syntax.IsWordChar(c) {
+			return c
+		} else {
+			return '_'
+		}
+	}, raw)
+}
 
 /*
  *	Logging helpers and prettifiers
@@ -16,22 +29,22 @@ func DieOnError(message string, err error) {
 }
 
 func Info(args ...interface{}) {
-	args = append([]interface{}{"ℹ️  "}, args...)
+	args = append([]interface{}{"ℹ️ "}, args...)
 	log.Println(args...)
 }
 
 func Fatal(args ...interface{}) {
-	args = append([]interface{}{"☠️  "}, args...)
+	args = append([]interface{}{"☠️ "}, args...)
 	log.Fatal(args...)
 }
 
 func Failure(args ...interface{}) {
-	args = append([]interface{}{"❌  "}, args...)
+	args = append([]interface{}{"❌ "}, args...)
 	log.Println(args...)
 }
 
 func Success(args ...interface{}) {
-	args = append([]interface{}{"✅  "}, args...)
+	args = append([]interface{}{"✅ "}, args...)
 	log.Println(args...)
 }
 

@@ -17,7 +17,6 @@ var (
 	ConfigKeyConfigPath   = "config_path"
 	ConfigKeyDataDir      = "data_path"
 	ConfigKeyRemoteName   = "remote_name"
-	ConfigKeyTodoFileName = "todo_file"
 	ConfigKeyRepoURL      = "backing_repo_url"
 	ConfigKeyFilePatterns = "file_match_patterns"
 	ConfigKeyAuthorName   = "author_name"
@@ -25,13 +24,15 @@ var (
 	ConfigKeySSHKeyFile   = "ssh_key_file"
 
 	// Default values
-	DefaultHomeDir        = ".hypothetical"
-	DefaultDataDirName    = "data"
-	DefaultRemoteName     = "origin"
-	DefaultTodoFileName   = "todo.txt"
-	DefaultFilePatterns   = []string{"todo.txt", "done.txt", "report.txt"}
-	DefaultCommitterName  = "Hypothetical Tracker"
-	DefaultCommitterEmail = "tracker-client@hypothetical.co"
+	DefaultContext         = "todo"
+	DefaultHomeDir         = ".hypothetical"
+	DefaultDataDirName     = "data"
+	DefaultRemoteName      = "origin"
+	DefaultFileExtension   = ".txt"
+	DefaultContextFileName = ".context"
+	DefaultFilePatterns    = []string{"todo.txt", "done.txt", "report.txt"}
+	DefaultCommitterName   = "Hypothetical Tracker"
+	DefaultCommitterEmail  = "tracker-client@hypothetical.co"
 )
 
 // Get a config variale by name

@@ -2,6 +2,7 @@ package todo
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"path"
@@ -20,8 +21,36 @@ func ensurePath(filename string) {
 	utils.DieOnError("Could not ensure path "+path.Dir(filename)+": ", err)
 }
 
+func SetContext(raw string) {
+	context := utils.StringToFilename(raw)
+	if context == "" {
+		utils.Fatal("Can't use an empty context.")
+	}
+	contextStoreFilePath := path.Join(vars.Get(vars.ConfigKeyDataDir), vars.DefaultContextFileName)
+
+	err := ioutil.WriteFile(contextStoreFilePath, []byte(context), 0666)
+	utils.DieOnError("Failed to open context persistance file: ", err)
+}
+
+func ContextToFilePath(context string) string {
+	return path.Join(vars.Get(vars.ConfigKeyDataDir), GetContext()+vars.DefaultFileExtension)
+}
+
+func GetContext() string {
+	contextStoreFilePath := path.Join(vars.Get(vars.ConfigKeyDataDir), vars.DefaultContextFileName)
+	context := vars.DefaultContext
+
+	if _, err := os.Stat(contextStoreFilePath); err == nil {
+		content, err := ioutil.ReadFile(contextStoreFilePath)
+		utils.DieOnError("Failed to open context persistance file: ", err)
+		context = string(content)
+	}
+
+	return context
+}
+
 func todoFilePath() string {
-	path := path.Join(vars.Get(vars.ConfigKeyDataDir), vars.Get(vars.ConfigKeyTodoFileName))
+	path := path.Join(vars.Get(vars.ConfigKeyDataDir), GetContext()+vars.DefaultFileExtension)
 	return path
 }
 

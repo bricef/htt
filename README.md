@@ -24,5 +24,6 @@ Use "ht [command] --help" for more information about a command.
 
 ## Todo
 
+- [ ] Check if repo exists. If it doesn't clone it first.
 - [ ] Handle case when local repo is behind remote. (Rebase? Merge? How?)
 - [ ] Set up interactive cli

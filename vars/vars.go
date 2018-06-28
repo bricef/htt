@@ -30,7 +30,7 @@ var (
 	DefaultRemoteName      = "origin"
 	DefaultFileExtension   = ".txt"
 	DefaultContextFileName = ".context"
-	DefaultFilePatterns    = []string{"todo.txt", "done.txt", "report.txt"}
+	DefaultFilePatterns    = []string{"*.txt", ".context"}
 	DefaultCommitterName   = "Hypothetical Tracker"
 	DefaultCommitterEmail  = "tracker-client@hypothetical.co"
 )

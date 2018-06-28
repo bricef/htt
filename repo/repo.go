@@ -164,16 +164,52 @@ func PushChanges(repo *git.Repository, hash plumbing.Hash) (PushDetails, error) 
 	}, nil
 }
 
+func ensureDirectory(dir string) {
+
+}
+
+func repoExists(dir string) bool {
+
+}
+
+func remoteExists(remoteURL string) bool {
+
+}
+
+func cloneRepo(remoteURL string, directory string) {
+
+}
+
+func createRepo(dataDir string) {
+
+}
+
+func getRepo() *git.Repository {
+	return &git.Repository{}
+}
+
 // Sync will attempt to sync the local repo to the remote repo.
 // Sync will fail is the remote repo is further ahead.
 // TODO: handle remote repo ahead gracefully
 func Sync() {
 
-	// get repo
-	r := EnsureAndGetDataRepo(vars.Get(vars.ConfigKeyDataDir))
+	dataDir := vars.Get(vars.ConfigKeyDataDir)
+	remoteRepoURL := vars.Get(vars.ConfigKeyRepoURL)
+
+	ensureDirectory(dataDir)
+
+	if !repoExists(dataDir) {
+		if remoteExists(remoteRepoURL) {
+			cloneRepo(remoteRepoURL, dataDir)
+		} else {
+			createRepo(dataDir)
+		}
+	}
+
+	r := getRepo()
 
 	// Ensure we have a master
-	EnsureOriginRemote(r, vars.Get(vars.ConfigKeyRepoURL))
+	EnsureOriginRemote(r, remoteRepoURL)
 
 	// Create commit
 	hash, err := CreateCommitFromChanges(r, "Commiting state via tracker client sync")

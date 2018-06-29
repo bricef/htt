@@ -48,7 +48,7 @@ Use "htt [command] --help" for more information about a command.
 - UX
   - [x] Add 'do' action
   - [ ] Add 'Add to' action
-  - [ ] Add 'switch' action (context alias)
+  - [x] Add 'switch' action (context alias)
   - [ ] Enable short commands
 - Timelogging
   - [ ] Add 'work on' action

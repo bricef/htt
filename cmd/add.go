@@ -8,9 +8,10 @@ import (
 )
 
 var add = &cobra.Command{
-	Use:   "add",
-	Short: "Add an item to the default task list",
-	Args:  cobra.MinimumNArgs(1),
+	Use:     "add [task to add]",
+	Aliases: []string{"a"},
+	Short:   "Add an item to the current context list",
+	Args:    cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		todo.AddTodo(strings.Join(args, " "))
 		todo.Show(todo.GetTodos())

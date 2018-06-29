@@ -38,9 +38,21 @@ Use "htt [command] --help" for more information about a command.
 
 ## Todo
 
-- [ ] Check if repo exists. If it doesn't clone it first
-- [ ] Show active and other contexts on `show`
+
+- [x] Show active and other contexts on `show`
 - [ ] Delegate full editing to other program (todotxt-machine, say)
-- [ ] Handle case when local repo is behind remote. (Rebase? Merge? How?)
-- [ ] Set up interactive cli
-- [ ] Set up packaging for release. (see https://github.com/goreleaser/goreleaser)
+- Repos
+  - [ ] Check if repo exists. If it doesn't clone it first
+  - [ ] Handle case when local repo is behind remote. (Rebase? Merge? How?)
+  - [ ] Add 'status' action which shows sync status
+- UX
+  - [ ] Add 'do' action
+  - [ ] Add 'Add to' action
+  - [ ] Add 'switch' action (context alias)
+  - [ ] Enable short commands
+- Timelogging
+  - [ ] Add 'work on' action
+  - [ ] Add 'add+workon' action ('log' ?)
+- Production grade
+  - [ ] Set up interactive cli
+  - [ ] Set up packaging for release. (see https://github.com/goreleaser/goreleaser)

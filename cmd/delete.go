@@ -20,7 +20,7 @@ var delete = &cobra.Command{
 		todo.Delete(t)
 		fmt.Printf("Deleted task: " + t.Entry + "\n")
 		fmt.Print("---")
-		todo.Show(todo.GetTodos())
+		// todo.Show(todo.GetTodos())
 	},
 }
 

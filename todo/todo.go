@@ -63,6 +63,14 @@ func todoFile() *os.File {
 
 	return f
 }
+func contextFile(context string) *os.File {
+	todoFile := ContextToFilePath(context)
+	ensurePath(todoFile)
+	f, err := os.OpenFile(todoFile, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
+	utils.DieOnError("Could not open file: "+todoFile+": ", err)
+
+	return f
+}
 
 func getTags(entry string) []string {
 	return getPrefixedWords("#", entry)
@@ -101,7 +109,11 @@ type Task struct {
 
 // AddTodo will add an item to the default todo list
 func AddTodo(todo string) {
-	f := todoFile()
+	AddToContext(GetCurrentContext(), todo)
+}
+
+func AddToContext(context string, todo string) {
+	f := contextFile(context)
 
 	defer f.Close()
 

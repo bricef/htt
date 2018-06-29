@@ -47,9 +47,13 @@ Use "htt [command] --help" for more information about a command.
   - [ ] Add 'status' action which shows sync status
 - UX
   - [x] Add 'do' action
-  - [ ] Add 'Add to' action
+  - [x] Add 'Add to' action
   - [x] Add 'switch' action (context alias)
   - [ ] Enable short commands
+  - [ ] deduplicate
+  - [ ] increase priority
+  - [ ] decrease priority
+  - [ ] report
 - Timelogging
   - [ ] Add 'work on' action
   - [ ] Add 'add+workon' action ('log' ?)

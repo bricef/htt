@@ -14,15 +14,10 @@ var add = &cobra.Command{
 	Args:    cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		todo.AddTodo(strings.Join(args, " "))
-		todo.Show(todo.GetTodos())
+		// todo.Show(todo.GetTodos())
 	},
 }
 
 func init() {
 	RootCmd.AddCommand(add)
-	// deduplicate
-	// up-pri
-	// down-pri
-	// do
-	// report
 }

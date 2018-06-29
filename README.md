@@ -46,7 +46,7 @@ Use "htt [command] --help" for more information about a command.
   - [ ] Handle case when local repo is behind remote. (Rebase? Merge? How?)
   - [ ] Add 'status' action which shows sync status
 - UX
-  - [ ] Add 'do' action
+  - [x] Add 'do' action
   - [ ] Add 'Add to' action
   - [ ] Add 'switch' action (context alias)
   - [ ] Enable short commands

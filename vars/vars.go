@@ -25,6 +25,7 @@ var (
 
 	// Default values
 	DefaultContext         = "todo"
+	DefaultDoneFileName    = "done"
 	DefaultHomeDir         = ".hypothetical"
 	DefaultDataDirName     = "data"
 	DefaultRemoteName      = "origin"

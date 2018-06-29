@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/hypotheticalco/tracker-client/utils"
 	"github.com/hypotheticalco/tracker-client/vars"
@@ -43,7 +44,7 @@ func GetCurrentContext() string {
 	if _, err := os.Stat(contextStoreFilePath); err == nil {
 		content, err := ioutil.ReadFile(contextStoreFilePath)
 		utils.DieOnError("Failed to open context persistance file: ", err)
-		context = string(content)
+		context = strings.TrimSpace(string(content))
 	}
 
 	return context
@@ -176,12 +177,28 @@ func GetContexts() []string {
 	for _, info := range fileinfos {
 		filename := info.Name()
 		if strings.HasSuffix(filename, vars.DefaultFileExtension) && filename != "done.txt" {
-
 			context := strings.TrimSuffix(filename, vars.DefaultFileExtension)
 			contexts = append(contexts, context)
-
 		}
 	}
 	return contexts
+}
 
+func appendDone(entry string) {
+	doneFilePath := path.Join(vars.Get(vars.ConfigKeyDataDir), vars.DefaultDoneFileName+vars.DefaultFileExtension)
+	println("doneFilePath: " + doneFilePath)
+
+	f, err := os.OpenFile(doneFilePath, os.O_APPEND|os.O_WRONLY, 0600)
+	utils.DieOnError("Failed to open done file for writing: ", err)
+
+	_, err = f.WriteString(strings.TrimSpace(entry) + "\n")
+	utils.DieOnError("Failed to archive todo", err)
+}
+
+func CompleteTask(id int) {
+	t := GetTodoID(id)
+	doneEntry := fmt.Sprintf("x %s %s", time.Now().Format("2006-01-02"), t.Entry)
+	fmt.Printf(">%s<\n", doneEntry)
+	appendDone(doneEntry) // append before delete so we don't loose data.
+	Delete(t)
 }

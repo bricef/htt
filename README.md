@@ -49,7 +49,7 @@ Use "htt [command] --help" for more information about a command.
   - [x] Add 'do' action
   - [x] Add 'Add to' action
   - [x] Add 'switch' action (context alias)
-  - [ ] Enable short commands
+  - [x] Enable short commands
   - [ ] deduplicate
   - [ ] increase priority
   - [ ] decrease priority

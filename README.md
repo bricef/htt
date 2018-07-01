@@ -55,7 +55,7 @@ Use "htt [command] --help" for more information about a command.
   - [ ] decrease priority
   - [ ] report
 - Timelogging
-  - [ ] Add 'work on' action
+  - [x] Add 'work on' action
   - [ ] Add 'add+workon' action ('log' ?)
 - Production grade
   - [ ] Set up interactive cli

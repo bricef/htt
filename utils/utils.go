@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"io"
 	"log"
+	"os"
+	"path"
 	"regexp/syntax"
 	"strings"
 )
@@ -66,4 +68,9 @@ func (l *LineScanner) Scan() bool {
 		l.Line++
 	}
 	return ok
+}
+
+func EnsurePath(filename string) {
+	err := os.MkdirAll(path.Dir(filename), 0700)
+	DieOnError("Could not ensure path "+path.Dir(filename)+": ", err)
 }

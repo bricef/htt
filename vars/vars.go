@@ -29,6 +29,7 @@ var (
 	DefaultHomeDir         = ".hypothetical"
 	DefaultDataDirName     = "data"
 	DefaultRemoteName      = "origin"
+	DefaultTimelogDirName  = "timelogs"
 	DefaultFileExtension   = ".txt"
 	DefaultContextFileName = ".context"
 	DefaultFilePatterns    = []string{"*.txt", ".context"}

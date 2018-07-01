@@ -17,11 +17,6 @@ import (
  * Util functions
  */
 
-func ensurePath(filename string) {
-	err := os.MkdirAll(path.Dir(filename), 0700)
-	utils.DieOnError("Could not ensure path "+path.Dir(filename)+": ", err)
-}
-
 func SetContext(raw string) {
 	context := utils.StringToFilename(raw)
 	if context == "" {
@@ -57,7 +52,7 @@ func todoFilePath() string {
 
 func todoFile() *os.File {
 	todoFile := todoFilePath()
-	ensurePath(todoFile)
+	utils.EnsurePath(todoFile)
 	f, err := os.OpenFile(todoFile, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
 	utils.DieOnError("Could not open file: "+todoFile+": ", err)
 
@@ -65,7 +60,7 @@ func todoFile() *os.File {
 }
 func contextFile(context string) *os.File {
 	todoFile := ContextToFilePath(context)
-	ensurePath(todoFile)
+	utils.EnsurePath(todoFile)
 	f, err := os.OpenFile(todoFile, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
 	utils.DieOnError("Could not open file: "+todoFile+": ", err)
 

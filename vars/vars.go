@@ -32,9 +32,9 @@ var (
 	DefaultTimelogDirName  = "timelogs"
 	DefaultFileExtension   = ".txt"
 	DefaultContextFileName = ".context"
-	DefaultFilePatterns    = []string{"*.txt", ".context"}
 	DefaultCommitterName   = "Hypothetical Tracker"
 	DefaultCommitterEmail  = "tracker-client@hypothetical.co"
+	DefaultFilePatterns    = []string{"*" + DefaultFileExtension, ".context", DefaultTimelogDirName, ".gitignore"}
 )
 
 // Get a config variale by name

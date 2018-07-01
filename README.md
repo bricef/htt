@@ -56,7 +56,7 @@ Use "htt [command] --help" for more information about a command.
   - [ ] report
 - Timelogging
   - [x] Add 'work on' action
-  - [ ] Add 'add+workon' action ('log' ?)
+  - [x] Add 'add+workon' action ('log' ?)
 - Production grade
   - [ ] Set up interactive cli
   - [ ] Set up packaging for release. (see https://github.com/goreleaser/goreleaser)

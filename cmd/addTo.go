@@ -9,7 +9,7 @@ import (
 
 var addTo = &cobra.Command{
 	Use:   "addTo [task to add]",
-	Short: "Add an item to a specified context list",
+	Short: "Add an item to a specified tasklist",
 	Args:  cobra.MinimumNArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		context := args[0]

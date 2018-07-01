@@ -10,7 +10,7 @@ import (
 var add = &cobra.Command{
 	Use:     "add [task to add]",
 	Aliases: []string{"a"},
-	Short:   "Add an item to the current context list",
+	Short:   "Add an item to the current tasklist",
 	Args:    cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		todo.AddTodo(strings.Join(args, " "))

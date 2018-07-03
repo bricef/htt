@@ -60,3 +60,9 @@ Use "htt [command] --help" for more information about a command.
 - Production grade
   - [ ] Set up interactive cli
   - [ ] Set up packaging for release. (see https://github.com/goreleaser/goreleaser)
+
+- [ ] Create a todotxt line parser (https://github.com/todotxt/todo.txt)
+      - https://github.com/alecthomas/participle
+      - https://github.com/mna/pigeon
+      - https://github.com/prataprc/goparsec
+      - https://github.com/vektah/goparsify

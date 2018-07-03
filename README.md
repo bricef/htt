@@ -61,11 +61,14 @@ Use "htt [command] --help" for more information about a command.
   - https://github.com/vektah/goparsify
   - https://github.com/pointlander/peg
 
+## Production grade
+
+- [ ] Set up packaging for release. (see https://github.com/goreleaser/goreleaser)
+- [ ] Set up CI
 
 ## Future
 
 - [ ] Set up interactive cli (see https://github.com/c-bata/go-prompt)
-- [ ] Set up packaging for release. (see https://github.com/goreleaser/goreleaser)
 - UI. Either:
   - [ ] Set up a CLI GUI like todotxt-machine (using https://github.com/jroimartin/gocui or https://github.com/gizak/termui) 
   - [ ] Delegate full editing to other program (https://github.com/AnthonyDiGirolamo/todotxt-machine)

@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bufio"
+	"errors"
 	"io"
 	"log"
 	"os"
@@ -73,4 +74,13 @@ func (l *LineScanner) Scan() bool {
 func EnsurePath(filename string) {
 	err := os.MkdirAll(path.Dir(filename), 0700)
 	DieOnError("Could not ensure path "+path.Dir(filename)+": ", err)
+}
+
+func StringSliceIndex(slice []string, item string) (int, error) {
+	for i, s := range slice {
+		if s == item {
+			return i, nil
+		}
+	}
+	return 0, errors.New("Could not find item in slice")
 }

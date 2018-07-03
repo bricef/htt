@@ -30,6 +30,7 @@ same context.`,
 			// fmt.Print("\n")
 		} else {
 			todo.SetContext(args[0])
+			println("Now using context: " + args[0])
 		}
 	},
 }

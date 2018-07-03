@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -54,8 +55,9 @@ var edit = &cobra.Command{
 			utils.Info("New entry was identical or empty. No actions taken.")
 		} else {
 			todo.Replace(t.Line, newEntry)
+			fmt.Printf("Before: %s\n", t.Entry)
+			fmt.Printf("After:  %s\n", newEntry)
 		}
-
 	},
 }
 

@@ -54,6 +54,8 @@ Use "htt [command] --help" for more information about a command.
   - [ ] increase priority
   - [ ] decrease priority
   - [ ] report
+  - [ ] archive context
+  - [ ] archive todo
 - [ ] Create a todotxt line parser (https://github.com/todotxt/todo.txt)
   - https://github.com/alecthomas/participle
   - https://github.com/mna/pigeon

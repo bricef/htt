@@ -8,18 +8,6 @@ import (
 	parsec "github.com/prataprc/goparsec"
 )
 
-type TodoParser struct {
-	ast        *parsec.AST
-	rootParser parsec.Parser
-}
-
-func (parser TodoParser) Parse(text string) parsec.Queryable {
-	scanner := parsec.NewScanner([]byte(text))
-	rootQueriable, _ := parser.ast.Parsewith(parser.rootParser, scanner)
-	//parser.ast.Reset()
-	return rootQueriable
-}
-
 func prettyprint(w io.Writer, prefix string, node parsec.Queryable) {
 	if node.IsTerminal() {
 		fmt.Fprintf(w, "%v*%v: %q\n", prefix, node.GetName(), node.GetValue())
@@ -31,11 +19,28 @@ func prettyprint(w io.Writer, prefix string, node parsec.Queryable) {
 	}
 }
 
-func (parser TodoParser) Prettyprint(node parsec.Queryable) {
+// Parser will parse todo entries
+type Parser struct {
+	ast        *parsec.AST
+	rootParser parsec.Parser
+}
+
+// Parse will parse a todo entry into a queryable interface
+// FUTURE: Will return a parsed todo.Tasks
+func (parser Parser) Parse(text string) parsec.Queryable {
+	scanner := parsec.NewScanner([]byte(text))
+	rootQueriable, _ := parser.ast.Parsewith(parser.rootParser, scanner)
+	//parser.ast.Reset()
+	return rootQueriable
+}
+
+// Prettyprint the parsed AST
+func (parser Parser) Prettyprint(node parsec.Queryable) {
 	prettyprint(os.Stdout, "", node)
 }
 
-func NewTodoParser() *TodoParser {
+//NewTodoParser creates a new Parser
+func NewTodoParser() *Parser {
 	ast := parsec.NewAST("TODO", 1000)
 
 	tag := ast.OrdChoice("TAG", nil,
@@ -81,7 +86,7 @@ func NewTodoParser() *TodoParser {
 		),
 		ast.Many("WORDS", nil, token),
 	)
-	return &TodoParser{
+	return &Parser{
 		ast:        ast,
 		rootParser: TODO,
 	}

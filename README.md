@@ -56,12 +56,6 @@ Use "htt [command] --help" for more information about a command.
   - [ ] report
   - [ ] archive context
   - [ ] archive todo
-- [ ] Create a todotxt line parser (https://github.com/todotxt/todo.txt)
-  - https://github.com/alecthomas/participle
-  - https://github.com/mna/pigeon
-  - https://github.com/prataprc/goparsec
-  - https://github.com/vektah/goparsify
-  - https://github.com/pointlander/peg
 
 ## Production grade
 
@@ -85,3 +79,9 @@ Use "htt [command] --help" for more information about a command.
 - [x] Add 'work on' action
 - [x] Add 'add+workon' action ('log' ?)
 - [x] Show active and other contexts on `show`
+- [x] Create a todotxt line parser (https://github.com/todotxt/todo.txt)
+  - https://github.com/alecthomas/participle
+  - https://github.com/mna/pigeon
+  - https://github.com/prataprc/goparsec
+  - https://github.com/vektah/goparsify
+  - https://github.com/pointlander/peg

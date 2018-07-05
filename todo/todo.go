@@ -193,7 +193,6 @@ func GetContexts() []string {
 
 func appendDone(entry string) {
 	doneFilePath := path.Join(vars.Get(vars.ConfigKeyDataDir), vars.DefaultDoneFileName+vars.DefaultFileExtension)
-	println("doneFilePath: " + doneFilePath)
 
 	f, err := os.OpenFile(doneFilePath, os.O_APPEND|os.O_WRONLY, 0600)
 	utils.DieOnError("Failed to open done file for writing: ", err)

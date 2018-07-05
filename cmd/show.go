@@ -7,8 +7,9 @@ import (
 )
 
 var show = &cobra.Command{
-	Use:   "show [search terms]",
-	Short: "Show the default tasklist.",
+	Use:     "show [search terms]",
+	Aliases: []string{"s"},
+	Short:   "Show the default tasklist.",
 	Long: `Show the default tasklist. You can filter the task list using 
 search terms. Search terms will be matched fuzzily.`,
 	Run: func(cmd *cobra.Command, args []string) {

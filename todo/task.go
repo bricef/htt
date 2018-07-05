@@ -71,7 +71,7 @@ func NewTask(raw string) *Task {
 	}
 
 	// entry       string // This is the task without priority, annotations, completion mark or created/completed dates
-	words := pu.Filter(parser.QueryOne("WORDS").GetChildren(), func(n parsec.Queryable) bool {
+	words := pu.Select(parser.QueryOne("WORDS").GetChildren(), func(n parsec.Queryable) bool {
 		if n.GetName() != "KVPAIR" { //exclude kvpairs
 			return true
 		}

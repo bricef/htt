@@ -83,6 +83,7 @@ func MapNodes(nodes []parsec.Queryable, fn func(parsec.Queryable) string) []stri
 }
 
 func Filter(nodes []parsec.Queryable, fn func(parsec.Queryable) bool) []parsec.Queryable {
+func Select(nodes []parsec.Queryable, fn func(parsec.Queryable) bool) []parsec.Queryable {
 	ns := []parsec.Queryable{}
 	for _, n := range nodes {
 		if fn(n) {

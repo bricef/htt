@@ -84,7 +84,9 @@ func taskListFromFile(filename string) []*Task {
 	for scanner.Scan() {
 		raw := strings.TrimSpace(string(scanner.Text()))
 		if raw != "" {
-			tasks = append(tasks, NewTask(raw))
+			t := NewTask(raw)
+			t.Line = scanner.Line
+			tasks = append(tasks, t)
 		}
 	}
 	return tasks

@@ -204,8 +204,9 @@ func appendDone(entry string) {
 
 func CompleteTask(id int) {
 	t := GetTodoID(id)
-	doneEntry := fmt.Sprintf("x %s %s", time.Now().Format("2006-01-02"), t.Entry)
-	fmt.Printf(">%s<\n", doneEntry)
+	context := GetCurrentContext()
+	doneEntry := fmt.Sprintf("x %s %s context:context", time.Now().Format("2006-01-02"), t.Entry, context)
+	fmt.Printf("Completed: %s\n", t.Entry)
 	appendDone(doneEntry) // append before delete so we don't loose data.
 	Delete(t)
 }

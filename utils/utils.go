@@ -51,6 +51,11 @@ func Success(args ...interface{}) {
 	log.Println(args...)
 }
 
+func Warning(args ...interface{}) {
+	args = append([]interface{}{"⚠️ "}, args...)
+	log.Println(args...)
+}
+
 /*
  * 	Line scanner that keeps track of which line
  */

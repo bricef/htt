@@ -10,7 +10,7 @@ import (
 var context = &cobra.Command{
 	Use:     "context [context]",
 	Short:   "Change the context for tasks",
-	Aliases: []string{"switch"},
+	Aliases: []string{"switch", "c"},
 	Long: `This will change the default context for todos. Note that 
 the only supported characters are [A-Za-z_]. Other 
 characters will be replaced by underscores. This 

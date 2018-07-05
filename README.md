@@ -30,10 +30,14 @@ Available Commands:
   delete         Delete the item specified
   do             Complete a task
   edit           Edit the item specified using $EDITOR
+  editDone       Open the done file using $EDITOR
   help           Help about any command
   log            Log an entry to the time log.
+  pri+           increase the priority for the selected task
+  pri-           Decrease the priority for the selected task
   replace        Replace an item with a new entry
   show           Show the default tasklist.
+  status         Show the status of the tasklist and time log
   sync           Sync the data to the backend manually
   workon         Log that work has began on numbered item.
 

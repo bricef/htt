@@ -126,8 +126,8 @@ func GetTodos() []Task {
 // Filter will filter out any tasks that do not match the serach terms
 // More than one search term can be given
 // TODO: Implement
-func Filter(tasks []Task, terms []string) []Task {
-	utils.Failure("`todo.Filter` is not Implemented. Returning unfiltered list.")
+func Filter(tasks []Task, filter FilterSpec) []Task {
+	utils.Warning("`todo.Filter` is not Implemented. Returning unfiltered list.")
 	return tasks
 }
 
@@ -161,13 +161,23 @@ func Delete(task Task) {
 	setTodos(newTodos)
 }
 
+type FilterSpec struct{}
+
+//TODO: Implement
+func terms2FilterSpec(terms []string) FilterSpec {
+	return FilterSpec{}
+}
+
 // Show will print out the tasks given
-func Show(tasks []Task) {
+func Show(context string, terms []string) {
 	ts := GetTodos()
+	filterSpec := terms2FilterSpec(terms)
+	tasks := Filter(ts, filterSpec)
+	println("")
 	for _, todo := range tasks {
 		fmt.Printf("%3d %s\n", todo.Line, todo.Entry)
 	}
-	fmt.Printf("--- (%s): %d of %d tasks shown ---\n", GetCurrentContext(), len(tasks), len(ts))
+	fmt.Printf("\n--- (%s): %d of %d tasks shown ---\n", GetCurrentContext(), len(tasks), len(ts))
 }
 
 func Replace(id int, entry string) {

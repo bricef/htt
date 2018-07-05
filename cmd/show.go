@@ -16,7 +16,7 @@ search terms. Search terms will be matched fuzzily.`,
 		if len(args) < 0 {
 			utils.Failure("Filtering is not yet implemented. Showing without filter applied.")
 		}
-		todo.Show(todo.GetTodos())
+		todo.Show(todo.GetCurrentContext(), args)
 	},
 }
 

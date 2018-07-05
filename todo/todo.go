@@ -126,9 +126,14 @@ func GetTodos() []Task {
 // Filter will filter out any tasks that do not match the serach terms
 // More than one search term can be given
 // TODO: Implement
-func Filter(tasks []Task, filter FilterSpec) []Task {
-	utils.Warning("`todo.Filter` is not Implemented. Returning unfiltered list.")
-	return tasks
+func FilterTasks(tasks []Task, predicate func(Task) bool) []Task {
+	ts := []Task{}
+	for _, t := range tasks {
+		if predicate(t) {
+			ts = append(ts, t)
+		}
+	}
+	return ts
 }
 
 // GetTodoID will get a given todo by ID (ID is an idex from 1)
@@ -161,11 +166,10 @@ func Delete(task Task) {
 	setTodos(newTodos)
 }
 
-type FilterSpec struct{}
-
 //TODO: Implement
-func terms2FilterSpec(terms []string) FilterSpec {
-	return FilterSpec{}
+func terms2predicate(terms []string) func(Task) bool {
+	utils.Warning("Parsing search terms is not yet supported.")
+	return func(t Task) bool { return true }
 }
 
 // Show will print out the tasks given
@@ -174,8 +178,7 @@ func Show(context string, terms []string) {
 	tasks := []Task{}
 
 	if terms != nil {
-		filterSpec := terms2FilterSpec(terms)
-		tasks = Filter(ts, filterSpec)
+		tasks = FilterTasks(ts, terms2predicate(terms))
 	} else {
 		tasks = ts
 	}

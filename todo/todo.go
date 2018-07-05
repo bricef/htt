@@ -171,8 +171,15 @@ func terms2FilterSpec(terms []string) FilterSpec {
 // Show will print out the tasks given
 func Show(context string, terms []string) {
 	ts := GetTodos()
-	filterSpec := terms2FilterSpec(terms)
-	tasks := Filter(ts, filterSpec)
+	tasks := []Task{}
+
+	if terms != nil {
+		filterSpec := terms2FilterSpec(terms)
+		tasks = Filter(ts, filterSpec)
+	} else {
+		tasks = ts
+	}
+
 	println("")
 	for _, todo := range tasks {
 		fmt.Printf("%3d %s\n", todo.Line, todo.Entry)

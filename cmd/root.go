@@ -13,6 +13,6 @@ var RootCmd = &cobra.Command{
 		println(cmd.Short)
 		println("For help and usage, use -h, --help or help")
 		//cmd.Usage()
-		todo.Show(todo.GetCurrentContext(), []string{})
+		todo.Show(todo.GetCurrentContext(), nil)
 	},
 }

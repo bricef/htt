@@ -19,12 +19,13 @@ func prettyprint(w io.Writer, prefix string, node parsec.Queryable) {
 	}
 }
 
-// Parser will parse todo entries
+// Parser utility object
 type Parser struct {
 	ast        *parsec.AST
 	rootParser parsec.Parser
 }
 
+// NewParser Creates a new Parser convenience object from goparsec primitives
 func NewParser(ast *parsec.AST, root parsec.Parser) *Parser {
 	return &Parser{
 		ast:        ast,
@@ -32,7 +33,7 @@ func NewParser(ast *parsec.AST, root parsec.Parser) *Parser {
 	}
 }
 
-// Parse will parse a todo entry into a queryable interface
+// Parse a string
 // FUTURE: Will return a parsed todo.Tasks
 func (p *Parser) Parse(text string) parsec.Queryable {
 	scanner := parsec.NewScanner([]byte(text))
@@ -50,6 +51,8 @@ func (p *Parser) Prettyprint(node parsec.Queryable) {
 	prettyprint(os.Stdout, "", node)
 }
 
+// Query the AST using goparsec's query language
+// See https://prataprc.github.io/astquery.io/ for language spec.
 func (p *Parser) Query(q string) []parsec.Queryable {
 	ch := make(chan parsec.Queryable, 100)
 	p.ast.Query(q, ch)
@@ -60,6 +63,9 @@ func (p *Parser) Query(q string) []parsec.Queryable {
 	return nodes
 }
 
+// QueryOne queries the AST using goparsec's query language
+// QueryOne will only return the first matching item, even if there are more.
+// See https://prataprc.github.io/astquery.io/ for language spec.
 func (p *Parser) QueryOne(q string) parsec.Queryable {
 	ch := make(chan parsec.Queryable, 100)
 	p.ast.Query(q, ch)
@@ -70,10 +76,12 @@ func (p *Parser) QueryOne(q string) parsec.Queryable {
 	return nil
 }
 
+// NodeToValue is a utility function to be used in higher order functions
 func NodeToValue(n parsec.Queryable) string {
 	return n.GetValue()
 }
 
+// MapNodes will map the nodes using the function fn
 func MapNodes(nodes []parsec.Queryable, fn func(parsec.Queryable) string) []string {
 	vs := []string{}
 	for _, n := range nodes {
@@ -82,7 +90,8 @@ func MapNodes(nodes []parsec.Queryable, fn func(parsec.Queryable) string) []stri
 	return vs
 }
 
-func Filter(nodes []parsec.Queryable, fn func(parsec.Queryable) bool) []parsec.Queryable {
+// Select will filter out the nodes based on a predicate.
+// Items matching the predicate will be preserved.
 func Select(nodes []parsec.Queryable, fn func(parsec.Queryable) bool) []parsec.Queryable {
 	ns := []parsec.Queryable{}
 	for _, n := range nodes {
@@ -92,3 +101,5 @@ func Select(nodes []parsec.Queryable, fn func(parsec.Queryable) bool) []parsec.Q
 	}
 	return ns
 }
+
+// Godammit, I miss generics.

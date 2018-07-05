@@ -177,7 +177,7 @@ func Show(context string, terms []string) {
 	ts := GetTodos()
 	tasks := []Task{}
 
-	if terms != nil {
+	if terms != nil && len(terms) > 0 {
 		tasks = FilterTasks(ts, terms2predicate(terms))
 	} else {
 		tasks = ts

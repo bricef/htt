@@ -16,8 +16,8 @@ var replace = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		id, err := strconv.Atoi(args[0])
 		utils.DieOnError("Supplied argument '"+args[0]+"' was not an integer: ", err)
-		newEntry := strings.Join(args[1:], " ")
-		todo.Replace(id, newEntry)
+		raw := strings.Join(args[1:], " ")
+		todo.Replace(id, todo.NewTask(raw))
 		// todo.Show(todo.GetTodos())
 	},
 }

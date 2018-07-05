@@ -76,30 +76,18 @@ func getPrefixedWords(prefix string, entry string) []string {
 	return []string{}
 }
 
-func taskListFromFile(filename string) []Task {
+func taskListFromFile(filename string) []*Task {
 	f := todoFile()
 
-	var tasks []Task
+	var tasks []*Task
 	scanner := utils.NewLineScanner(f)
 	for scanner.Scan() {
-		entry := strings.TrimSpace(string(scanner.Text()))
-		if entry != "" {
-			tasks = append(tasks, Task{
-				Line:  scanner.Line,
-				Entry: entry,
-				Tags:  getTags(entry),
-			})
+		raw := strings.TrimSpace(string(scanner.Text()))
+		if raw != "" {
+			tasks = append(tasks, NewTask(raw))
 		}
 	}
 	return tasks
-}
-
-// Task represents a task in a todo list.
-// for tasks that is stable even though they might be filtered.
-type Task struct {
-	Line  int
-	Entry string
-	Tags  []string
 }
 
 // AddTodo will add an item to the default todo list
@@ -119,15 +107,15 @@ func AddToContext(context string, todo string) {
 }
 
 // GetTodos will add the todos according to the serach terms
-func GetTodos() []Task {
+func GetTodos() []*Task {
 	return taskListFromFile(todoFilePath())
 }
 
 // Filter will filter out any tasks that do not match the serach terms
 // More than one search term can be given
 // TODO: Implement
-func FilterTasks(tasks []Task, predicate func(Task) bool) []Task {
-	ts := []Task{}
+func FilterTasks(tasks []*Task, predicate func(*Task) bool) []*Task {
+	ts := []*Task{}
 	for _, t := range tasks {
 		if predicate(t) {
 			ts = append(ts, t)
@@ -137,7 +125,7 @@ func FilterTasks(tasks []Task, predicate func(Task) bool) []Task {
 }
 
 // GetTodoID will get a given todo by ID (ID is an idex from 1)
-func GetTodoID(index int) Task {
+func GetTodoID(index int) *Task {
 	ts := GetTodos()
 	if index > len(ts) {
 		utils.Fatal("Item selected is outside of range")
@@ -145,7 +133,7 @@ func GetTodoID(index int) Task {
 	return ts[index-1]
 }
 
-func setTodos(tasks []Task) {
+func setTodos(tasks []*Task) {
 	originalPath := todoFilePath()
 	backupPath := originalPath + ".bak"
 	err := os.Rename(originalPath, backupPath)
@@ -154,28 +142,28 @@ func setTodos(tasks []Task) {
 	f := todoFile()
 	defer f.Close()
 	for _, task := range tasks {
-		_, err := f.WriteString(task.Entry + "\n")
+		_, err := f.WriteString(task.ToString() + "\n")
 		utils.DieOnError("Failed to write todo to file", err)
 	}
 }
 
 // Delete will remove the given task from the task list
-func Delete(task Task) {
+func Delete(task *Task) {
 	todos := GetTodos()
 	newTodos := append(todos[:task.Line-1], todos[task.Line:]...)
 	setTodos(newTodos)
 }
 
 //TODO: Implement
-func terms2predicate(terms []string) func(Task) bool {
+func terms2predicate(terms []string) func(*Task) bool {
 	utils.Warning("Parsing search terms is not yet supported.")
-	return func(t Task) bool { return true }
+	return func(t *Task) bool { return true }
 }
 
 // Show will print out the tasks given
 func Show(context string, terms []string) {
 	ts := GetTodos()
-	tasks := []Task{}
+	tasks := []*Task{}
 
 	if terms != nil && len(terms) > 0 {
 		tasks = FilterTasks(ts, terms2predicate(terms))
@@ -185,14 +173,14 @@ func Show(context string, terms []string) {
 
 	println("")
 	for _, todo := range tasks {
-		fmt.Printf("%3d %s\n", todo.Line, todo.Entry)
+		fmt.Printf("%3d %s\n", todo.Line, todo.ToString())
 	}
 	fmt.Printf("\n--- (%s): %d of %d tasks shown ---\n", GetCurrentContext(), len(tasks), len(ts))
 }
 
-func Replace(id int, entry string) {
+func Replace(id int, t *Task) {
 	todos := GetTodos()
-	todos[id-1].Entry = entry
+	todos[id-1] = t
 	setTodos(todos)
 }
 
@@ -215,21 +203,20 @@ func DoneFilePath() string {
 	return path.Join(vars.Get(vars.ConfigKeyDataDir), vars.DefaultDoneFileName+vars.DefaultFileExtension)
 }
 
-func appendDone(entry string) {
+func appendDone(t *Task) {
 	doneFilePath := DoneFilePath()
 
 	f, err := os.OpenFile(doneFilePath, os.O_APPEND|os.O_WRONLY, 0600)
 	utils.DieOnError("Failed to open done file for writing: ", err)
 
-	_, err = f.WriteString(strings.TrimSpace(entry) + "\n")
+	_, err = f.WriteString(strings.TrimSpace(t.ToString()) + "\n")
 	utils.DieOnError("Failed to archive todo", err)
 }
 
 func CompleteTask(id int) {
 	t := GetTodoID(id)
-	context := GetCurrentContext()
-	doneEntry := fmt.Sprintf("x %s %s context:%s", time.Now().Format("2006-01-02"), t.Entry, context)
-	fmt.Printf("Completed: %s\n", t.Entry)
+	doneEntry := t.Do(GetCurrentContext(), time.Now())
+	fmt.Printf("Completed: %s\n", t.ToString())
 	appendDone(doneEntry) // append before delete so we don't loose data.
 	Delete(t)
 }

@@ -33,7 +33,7 @@ var edit = &cobra.Command{
 		name := f.Name() // save the name so we cn reopen the file
 		defer os.Remove(name)
 
-		_, err = f.WriteString(t.Entry + "\n")
+		_, err = f.WriteString(t.ToString() + "\n")
 		utils.DieOnError("Failed to write entry into temp file: ", err)
 		f.Close() // close the file to let editor have at it
 
@@ -51,13 +51,13 @@ var edit = &cobra.Command{
 		content, err := ioutil.ReadFile(name)
 		utils.DieOnError("Failed to read the temp file after editing: ", err)
 
-		newEntry := strings.TrimSpace(string(content))
-		if newEntry == t.Entry || newEntry == "" {
+		raw := strings.TrimSpace(string(content))
+		if raw == t.ToString() || raw == "" {
 			utils.Info("New entry was identical or empty. No actions taken.")
 		} else {
-			todo.Replace(t.Line, newEntry)
-			fmt.Printf("Before: %s\n", t.Entry)
-			fmt.Printf("After:  %s\n", newEntry)
+			todo.Replace(t.Line, todo.NewTask(raw))
+			fmt.Printf("Before: %s\n", t.ToString())
+			fmt.Printf("After:  %s\n", raw)
 		}
 	},
 }

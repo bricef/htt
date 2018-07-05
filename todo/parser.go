@@ -1,68 +1,71 @@
 package todo
 
 import (
-	"fmt"
-	"io"
-	"os"
+	"errors"
+	"time"
 
+	"github.com/hypotheticalco/tracker-client/parseutils"
+	"github.com/hypotheticalco/tracker-client/utils"
 	parsec "github.com/prataprc/goparsec"
 )
 
-func prettyprint(w io.Writer, prefix string, node parsec.Queryable) {
-	if node.IsTerminal() {
-		fmt.Fprintf(w, "%v*%v: %q\n", prefix, node.GetName(), node.GetValue())
-		return
+func customPriority(name string, s parsec.Scanner, node parsec.Queryable) parsec.Queryable {
+	t := parsec.NewTerminal(name, string(node.GetValue()[1]), s.GetCursor())
+	t.SetAttribute("class", "term")
+	return t
+}
+
+func customCompleted(name string, s parsec.Scanner, node parsec.Queryable) parsec.Queryable {
+	t := parsec.NewTerminal(name, "x", s.GetCursor())
+	t.SetAttribute("class", "term")
+	return t
+}
+
+func dateValidation(name string, s parsec.Scanner, node parsec.Queryable) parsec.Queryable {
+	_, err := time.Parse("2006-01-02", node.GetValue())
+	if err != nil { // Not a valid date in the format specified
+		utils.Failure("Could not parse give date: ", err)
+		return nil
 	}
-	fmt.Fprintf(w, "%v%v @ %v\n", prefix, node.GetName(), node.GetPosition())
-	for _, child := range node.GetChildren() {
-		prettyprint(w, prefix+"  ", child)
+	return node
+}
+
+func KVPAIR2String(node parsec.Queryable) (string, string, error) {
+	if node.GetName() != "KVPAIR" { // annoying we can't use the type system for this.
+		return "", "", errors.New("Tried to parse something other than a KVPAIR")
 	}
+	key := node.GetChildren()[0].GetValue()
+	value := node.GetChildren()[2].GetValue()
+	return key, value, nil
 }
 
-// Parser will parse todo entries
-type Parser struct {
-	ast        *parsec.AST
-	rootParser parsec.Parser
-}
-
-// Parse will parse a todo entry into a queryable interface
-// FUTURE: Will return a parsed todo.Tasks
-func (parser Parser) Parse(text string) parsec.Queryable {
-	scanner := parsec.NewScanner([]byte(text))
-	rootQueriable, _ := parser.ast.Parsewith(parser.rootParser, scanner)
-	//parser.ast.Reset()
-	return rootQueriable
-}
-
-// Prettyprint the parsed AST
-func (parser Parser) Prettyprint(node parsec.Queryable) {
-	prettyprint(os.Stdout, "", node)
-}
+var kvpairKeyRegexp = `[^#@+:][A-Za-z0-9!"#$%&'()*+,\-./;<=>?@[\\\]^_{|}~]*`
+var kvpairValueRegexp = `[A-Za-z0-9!"#$%&'()*+,\-./;<=>?@[\\\]^_{|}~]+`
 
 //NewTodoParser creates a new Parser
-func NewTodoParser() *Parser {
-	ast := parsec.NewAST("TODO", 1000)
+func NewTodoParser() *parseutils.Parser {
+	g := parsec.NewAST("TODO", 1000)
 
-	tag := ast.OrdChoice("TAG", nil,
+	tag := g.OrdChoice("TAG", nil,
 		parsec.Token(`[+][[:graph:]]+`, "PLUSTAG"),
 		parsec.Token(`[@][[:graph:]]+`, "ATTAG"),
 		parsec.Token(`[#][[:graph:]]+`, "HASHTAG"),
 	)
 
-	kvPair := ast.And("KVPAIR", nil,
+	kvPair := g.And("KVPAIR", nil,
 		// we use this long regexp instead of :graph: to omit ':' There's probably a regexpy
 		// way of doing this better
-		parsec.Token(`[^#@+:][A-Za-z0-9!"#$%&'()*+,\-./;<=>?@[\\\]^_{|}~]*`, "KEY"),
+		parsec.Token(kvpairKeyRegexp, "KEY"),
 		parsec.TokenExact(":", "COLON"),
-		parsec.TokenExact(`[A-Za-z0-9!"#$%&'()*+,\-./;<=>?@[\\\]^_{|}~]+`, "VALUE"),
+		parsec.TokenExact(kvpairValueRegexp, "VALUE"),
 	)
 
-	word := ast.OrdChoice("WORD", nil,
+	word := g.OrdChoice("WORD", nil,
 		parsec.Token(`[^@#+][[:graph:]]*`, "WORD"),
 		parsec.Token(`[@#+]$`, "WORD"),
 	)
 
-	token := ast.OrdChoice("TOKEN", nil, kvPair, word, tag)
+	token := g.OrdChoice("TOKEN", nil, kvPair, word, tag)
 
 	createdDate := parsec.Token(`[0-9]{4}-[0-9]{2}-[0-9]{2}`, "CREATIONDATE")
 	completeDate := parsec.Token(`[0-9]{4}-[0-9]{2}-[0-9]{2}`, "COMPLETIONDATE")
@@ -71,23 +74,20 @@ func NewTodoParser() *Parser {
 
 	completeMark := parsec.Token(`x[[:space:]]+`, "COMPLETED")
 
-	TODO := ast.And("TODO", nil,
-		ast.OrdChoice("PREAMBLE", nil,
-			ast.And("PREAMBLE", nil,
-				completeMark,
-				ast.Maybe("PRIORITY", nil, priority),
-				ast.Maybe("COMPLETEDAT", nil, completeDate),
-				ast.Maybe("CREATEDAT", nil, createdDate),
+	TODO := g.And("TODO", nil,
+		g.OrdChoice("PREAMBLE", nil,
+			g.And("PREAMBLE", nil,
+				g.Maybe("COMPLETED", customCompleted, completeMark),
+				g.Maybe("PRIORITY", customPriority, priority),
+				g.Maybe("COMPLETEDAT", dateValidation, completeDate),
+				g.Maybe("CREATEDAT", dateValidation, createdDate),
 			),
-			ast.And("PREAMBLE", nil,
-				ast.Maybe("PRIORITY", nil, priority),
-				ast.Maybe("CREATEDAT", nil, createdDate),
+			g.And("PREAMBLE", nil,
+				g.Maybe("PRIORITY", customPriority, priority),
+				g.Maybe("CREATEDAT", nil, createdDate),
 			),
 		),
-		ast.Many("WORDS", nil, token),
+		g.Many("WORDS", nil, token),
 	)
-	return &Parser{
-		ast:        ast,
-		rootParser: TODO,
-	}
+	return parseutils.NewParser(g, TODO)
 }

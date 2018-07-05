@@ -18,7 +18,7 @@ var workOn = &cobra.Command{
 		id, err := strconv.Atoi(args[0])
 		utils.DieOnError("Supplied argument '"+args[0]+"' was not an integer: ", err)
 		t := todo.GetTodoID(id)
-		timelogs.AddEntry(t.Entry)
+		timelogs.AddEntry(t.ToString())
 	},
 }
 

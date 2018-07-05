@@ -18,7 +18,7 @@ var delete = &cobra.Command{
 		utils.DieOnError("Supplied argument '"+args[0]+"' was not an integer: ", err)
 		t := todo.GetTodoID(id)
 		todo.Delete(t)
-		fmt.Printf("Deleted task: " + t.Entry + "\n")
+		fmt.Printf("Deleted task: " + t.ToString() + "\n")
 		fmt.Print("---")
 		// todo.Show(todo.GetTodos())
 	},

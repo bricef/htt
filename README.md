@@ -51,11 +51,12 @@ Use "htt [command] --help" for more information about a command.
   - [ ] Add 'status' action which shows sync status
 - UX
   - [ ] deduplicate
-  - [ ] increase priority
-  - [ ] decrease priority
   - [ ] report
   - [ ] archive context
   - [ ] archive todo
+- [ ] Fork goparsec to fix messed up API choices
+  - AST/Node distinction? 
+  - Simple querying
 
 ## Production grade
 
@@ -72,6 +73,9 @@ Use "htt [command] --help" for more information about a command.
 
 ## Done
 
+
+- [x] Action: increase priority
+- [x] Action: decrease priority
 - [x] Add 'do' action
 - [x] Add 'Add to' action
 - [x] Add 'switch' action (context alias)

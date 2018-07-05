@@ -14,9 +14,10 @@ import (
 )
 
 var edit = &cobra.Command{
-	Use:   "edit [item number]",
-	Short: "Edit the item specified using $EDITOR",
-	Args:  cobra.ExactArgs(1),
+	Use:     "edit [item number]",
+	Short:   "Edit the item specified using $EDITOR",
+	Args:    cobra.ExactArgs(1),
+	Aliases: []string{"e"},
 	Run: func(cmd *cobra.Command, args []string) {
 		editor, ok := os.LookupEnv("EDITOR")
 		if !ok || editor == "" {

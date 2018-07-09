@@ -8,7 +8,7 @@ import (
 )
 
 var workingOn = &cobra.Command{
-	Use:     "workingOn",
+	Use:     "workingon",
 	Short:   "Show the current active time log entry.",
 	Args:    cobra.NoArgs,
 	Aliases: []string{"wo"},

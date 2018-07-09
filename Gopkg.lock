@@ -2,6 +2,12 @@
 
 
 [[projects]]
+  name = "github.com/bricef/viper"
+  packages = ["."]
+  revision = "b5e8006cbee93ec955a89ab31e0e3ce3204f3736"
+  version = "v1.0.2"
+
+[[projects]]
   name = "github.com/emirpasic/gods"
   packages = [
     "containers",
@@ -36,16 +42,6 @@
     "json/token"
   ]
   revision = "ef8a98b0bbce4a65b5aa4c368430a80ddc533168"
-
-[[projects]]
-  branch = "master"
-  name = "github.com/hypotheticalco/tracker-client"
-  packages = [
-    "cmd",
-    "models",
-    "vars"
-  ]
-  revision = "f68697533210f1cb6176087051099d73a1595dfb"
 
 [[projects]]
   name = "github.com/inconshreveable/mousetrap"
@@ -96,6 +92,12 @@
   version = "v1.2.0"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/prataprc/goparsec"
+  packages = ["."]
+  revision = "3db61e7995f1cbb8b5caf54557dddd14ce8ed7d1"
+
+[[projects]]
   name = "github.com/sergi/go-diff"
   packages = ["diffmatchpatch"]
   revision = "1744e2970ca51c86172c8190fadad617561ed6e7"
@@ -135,12 +137,6 @@
   version = "v1.0.1"
 
 [[projects]]
-  name = "github.com/spf13/viper"
-  packages = ["."]
-  revision = "b5e8006cbee93ec955a89ab31e0e3ce3204f3736"
-  version = "v1.0.2"
-
-[[projects]]
   name = "github.com/src-d/gcfg"
   packages = [
     ".",
@@ -152,10 +148,10 @@
   version = "v1.3.0"
 
 [[projects]]
-  branch = "master"
   name = "github.com/xanzy/ssh-agent"
   packages = ["."]
-  revision = "ba9c9e33906f58169366275e3450db66139a31a9"
+  revision = "640f0ab560aeb89d523bb6ac322b1244d5c3796c"
+  version = "v0.2.0"
 
 [[projects]]
   branch = "master"
@@ -184,7 +180,7 @@
   branch = "master"
   name = "golang.org/x/net"
   packages = ["context"]
-  revision = "afe8f62b1d6bbd81f31868121a50b06d8188e1f9"
+  revision = "c21de06aaf072cea07f3a65d6970e5c7d8b6cd6d"
 
 [[projects]]
   branch = "master"
@@ -193,7 +189,7 @@
     "unix",
     "windows"
   ]
-  revision = "63fc586f45fe72d95d5240a5d5eb95e6503907d3"
+  revision = "1b2967e3c290b7c545b3db0deeda16e9be4f98a2"
 
 [[projects]]
   name = "golang.org/x/text"
@@ -282,6 +278,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "87f8d2311ac6c67a0b07be796c4d1c40be906a2ac7f6e95cc82ebf6ed78533c8"
+  inputs-digest = "50c0220367694b13cc0909b194c8576a96f3f57b026e878d0f13bae47f6c10a7"
   solver-name = "gps-cdcl"
   solver-version = 1

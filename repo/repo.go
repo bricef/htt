@@ -10,7 +10,6 @@ import (
 
 	"github.com/hypotheticalco/tracker-client/utils"
 	"github.com/hypotheticalco/tracker-client/vars"
-	"github.com/spf13/viper"
 	"gopkg.in/src-d/go-git.v4/plumbing"
 
 	git "gopkg.in/src-d/go-git.v4"
@@ -46,7 +45,7 @@ func EnsureAndGetDataRepo(path string) *git.Repository {
 // createOriginRemote creates a remote named Origin with the remoteURL
 func createOriginRemote(repo *git.Repository, remoteURL string) (*git.Remote, error) {
 	remote, err := repo.CreateRemote(&gitconfig.RemoteConfig{
-		Name:  viper.GetString(vars.ConfigKeyRemoteName),
+		Name:  vars.Get(vars.ConfigKeyRemoteName),
 		URLs:  []string{remoteURL},
 		Fetch: []gitconfig.RefSpec{"+refs/heads/*:refs/remotes/foobar/*"},
 	})
@@ -55,7 +54,7 @@ func createOriginRemote(repo *git.Repository, remoteURL string) (*git.Remote, er
 
 // EnsureOriginRemote will ensure that the data repository has a properly configured remote
 func EnsureOriginRemote(repo *git.Repository, remoteURL string) (*git.Remote, error) {
-	var remoteName = viper.GetString(vars.ConfigKeyRemoteName)
+	var remoteName = vars.Get(vars.ConfigKeyRemoteName)
 
 	// Get a remote
 	remote, err := repo.Remote(remoteName)
@@ -100,7 +99,7 @@ func CreateCommitFromChanges(repo *git.Repository, message string) (plumbing.Has
 	wt, err := repo.Worktree()
 	utils.DieOnError("Failed to gain access to the work tree: ", err)
 
-	patterns := viper.GetStringSlice(vars.ConfigKeyFilePatterns)
+	patterns := vars.GetSlice(vars.ConfigKeyFilePatterns)
 	for _, pattern := range patterns {
 		wt.AddGlob(pattern)
 	}
@@ -145,7 +144,7 @@ func getSSHAuth() *gitssh.PublicKeys {
 
 // PushChanges will Push changes in has to default remote repo.
 func PushChanges(repo *git.Repository, hash plumbing.Hash) (PushDetails, error) {
-	remote, err := repo.Remote(viper.GetString(vars.ConfigKeyRemoteName))
+	remote, err := repo.Remote(vars.Get(vars.ConfigKeyRemoteName))
 	utils.DieOnError("Failed to access remote when pushing: ", err)
 
 	err = remote.Push(&git.PushOptions{Auth: getSSHAuth()}) // use default options

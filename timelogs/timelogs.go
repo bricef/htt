@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hypotheticalco/tracker-client/todo"
+
 	"github.com/hypotheticalco/tracker-client/vars"
 
 	"github.com/hypotheticalco/tracker-client/utils"
@@ -50,5 +52,6 @@ func CurrentActive() string {
 	if len(lines) == 0 {
 		return "*NOTHING*"
 	}
-	return lines[len(lines)-1]
+	t := todo.NewTask(lines[len(lines)-1])
+	return t.Entry()
 }

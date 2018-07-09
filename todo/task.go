@@ -200,3 +200,7 @@ func (t *Task) RemoveAnnotation(key string) *Task {
 	t.rebuild()
 	return t
 }
+
+func (t *Task) Entry() string {
+	return t.entry
+}

@@ -15,6 +15,6 @@ var RootCmd = &cobra.Command{
 		fmt.Println(cmd.Short)
 		fmt.Println("For help and usage, use -h, --help or help")
 		//cmd.Usage()
-		todo.Show(todo.GetCurrentContext(), args)
+		todo.Show(todo.GetCurrentContext(), []string{})
 	},
 }

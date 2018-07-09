@@ -2,12 +2,6 @@
 
 
 [[projects]]
-  name = "github.com/bricef/viper"
-  packages = ["."]
-  revision = "b5e8006cbee93ec955a89ab31e0e3ce3204f3736"
-  version = "v1.0.2"
-
-[[projects]]
   name = "github.com/emirpasic/gods"
   packages = [
     "containers",
@@ -135,6 +129,12 @@
   packages = ["."]
   revision = "583c0c0531f06d5278b7d917446061adc344b5cd"
   version = "v1.0.1"
+
+[[projects]]
+  name = "github.com/spf13/viper"
+  packages = ["."]
+  revision = "b5e8006cbee93ec955a89ab31e0e3ce3204f3736"
+  version = "v1.0.2"
 
 [[projects]]
   name = "github.com/src-d/gcfg"
@@ -278,6 +278,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "50c0220367694b13cc0909b194c8576a96f3f57b026e878d0f13bae47f6c10a7"
+  inputs-digest = "f0ac494b66c1185dd4a21cafa0ad0461c691559f0e417162ee46b6b559acba56"
   solver-name = "gps-cdcl"
   solver-version = 1

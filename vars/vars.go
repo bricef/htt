@@ -1,7 +1,7 @@
 package vars
 
 import (
-	"github.com/bricef/viper"
+	"github.com/spf13/viper"
 )
 
 var (

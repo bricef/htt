@@ -13,11 +13,11 @@ import (
 	"github.com/hypotheticalco/tracker-client/utils"
 )
 
-func currentLogFilePath() string {
-	return logFilePath(time.Now())
+func CurrentLogFilePath() string {
+	return LogFilePath(time.Now())
 }
 
-func logFilePath(t time.Time) string {
+func LogFilePath(t time.Time) string {
 	logFilePath := path.Join(vars.Get(vars.ConfigKeyDataDir), vars.DefaultTimelogDirName, t.Format("2006-01-02.log"))
 	return logFilePath
 }
@@ -25,7 +25,7 @@ func logFilePath(t time.Time) string {
 func AddEntry(entry string) {
 	now := time.Now()
 
-	currentLog := currentLogFilePath()
+	currentLog := CurrentLogFilePath()
 	utils.EnsurePath(currentLog)
 
 	f, err := os.OpenFile(currentLog, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
@@ -39,7 +39,7 @@ func AddEntry(entry string) {
 }
 
 func Show() {
-	bytes, err := ioutil.ReadFile(currentLogFilePath())
+	bytes, err := ioutil.ReadFile(CurrentLogFilePath())
 	utils.DieOnError("Failed to read today's log file. Could be you haven't created an entry yet. ", err)
 
 	print(string(bytes))

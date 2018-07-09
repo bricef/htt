@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/hypotheticalco/tracker-client/timelogs"
 	"github.com/spf13/cobra"
 )
@@ -11,7 +13,7 @@ var workingOn = &cobra.Command{
 	Args:    cobra.NoArgs,
 	Aliases: []string{"wo"},
 	Run: func(cmd *cobra.Command, args []string) {
-		println(timelogs.CurrentActive())
+		fmt.Printf(timelogs.CurrentActive())
 	},
 }
 

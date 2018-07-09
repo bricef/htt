@@ -171,7 +171,7 @@ func Show(context string, terms []string) {
 		tasks = ts
 	}
 
-	println("")
+	fmt.Println("")
 	for _, todo := range tasks {
 		fmt.Printf("%3d %s\n", todo.Line, todo.ToString())
 	}

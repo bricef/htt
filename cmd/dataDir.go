@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/hypotheticalco/tracker-client/vars"
 	"github.com/spf13/cobra"
 )
@@ -10,7 +12,7 @@ var dataDir = &cobra.Command{
 	Short: "Outputs the currently configured datadir",
 	Args:  cobra.ExactArgs(0),
 	Run: func(cmd *cobra.Command, args []string) {
-		println(vars.Get(vars.ConfigKeyDataDir))
+		fmt.Println(vars.Get(vars.ConfigKeyDataDir))
 	},
 }
 

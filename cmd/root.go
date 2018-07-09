@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/hypotheticalco/tracker-client/todo"
 	"github.com/spf13/cobra"
 )
@@ -10,8 +12,8 @@ var RootCmd = &cobra.Command{
 	Use:   "htt",
 	Short: "Hypothetical Tasks & Time Tracker is a todo list manager and time tracker",
 	Run: func(cmd *cobra.Command, args []string) {
-		println(cmd.Short)
-		println("For help and usage, use -h, --help or help")
+		fmt.Println(cmd.Short)
+		fmt.Println("For help and usage, use -h, --help or help")
 		//cmd.Usage()
 		todo.Show(todo.GetCurrentContext(), args)
 	},

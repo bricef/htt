@@ -36,7 +36,7 @@ func TestStuff(t *testing.T) {
 	parser := NewTodoParser()
 
 	for i, todo := range examples {
-		println()
+		fmt.Println()
 		fmt.Printf("[%v]: %s\n", i, todo)
 		node := parser.Parse(todo)
 		parser.Prettyprint(node)

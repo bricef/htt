@@ -5,4 +5,7 @@ bin/htt: htt/main.go cmd/* todo/* vars/* repo/* utils/*
 clean:
 	rm -rf bin
 
-.PHONY: clean
+install:
+	go get github.com/hypotheticalco/tracker-client/htt
+
+.PHONY: clean install

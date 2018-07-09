@@ -40,7 +40,10 @@ func KVPAIR2String(node parsec.Queryable) (string, string, error) {
 }
 
 var kvpairKeyRegexp = `[^#@+:][A-Za-z0-9!"#$%&'()*+,\-./;<=>?@[\\\]^_{|}~]*`
-var kvpairValueRegexp = `[A-Za-z0-9!"#$%&'()*+,\-./;<=>?@[\\\]^_{|}~]+`
+
+// Note that unlike the standard, we allow ':' in the value.
+// This is so that ISO timestamps can be used
+var kvpairValueRegexp = `[A-Za-z0-9!"#$%&'()*+,\-./;<=>?@[\\\]^_{|}~:]+`
 
 //NewTodoParser creates a new Parser
 func NewTodoParser() *parseutils.Parser {

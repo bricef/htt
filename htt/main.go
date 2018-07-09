@@ -9,7 +9,7 @@ import (
 	commands "github.com/hypotheticalco/tracker-client/cmd"
 	vars "github.com/hypotheticalco/tracker-client/vars"
 	homedir "github.com/mitchellh/go-homedir"
-	"github.com/spf13/viper"
+	"github.com/bricef/viper"
 )
 
 func main() {

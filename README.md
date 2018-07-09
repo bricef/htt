@@ -56,6 +56,7 @@ Use "htt [command] --help" for more information about a command.
 - UX
   - [ ] deduplicate
   - [ ] report
+  - [ ] Add "Where is <>?" command
   - [ ] archive context
   - [ ] archive todo
 - [ ] Fork goparsec to fix messed up API choices

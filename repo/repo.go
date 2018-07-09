@@ -99,7 +99,7 @@ func CreateCommitFromChanges(repo *git.Repository, message string) (plumbing.Has
 	wt, err := repo.Worktree()
 	utils.DieOnError("Failed to gain access to the work tree: ", err)
 
-	patterns := vars.GetSlice(vars.ConfigKeyFilePatterns)
+	patterns := vars.GetStringSlice(vars.ConfigKeyFilePatterns)
 	for _, pattern := range patterns {
 		wt.AddGlob(pattern)
 	}

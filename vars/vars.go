@@ -42,3 +42,7 @@ var (
 func Get(name string) string {
 	return viper.GetString(name)
 }
+
+func GetStringSlice(name string) []string {
+	return viper.GetStringSlice(name)
+}

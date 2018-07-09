@@ -44,3 +44,11 @@ func Show() {
 
 	print(string(bytes))
 }
+
+func CurrentActive() string {
+	lines := utils.ReadLines(CurrentLogFilePath())
+	if len(lines) == 0 {
+		return "*NOTHING*"
+	}
+	return lines[len(lines)-1]
+}

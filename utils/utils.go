@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"path"
 	"regexp/syntax"
 	"strings"
@@ -88,4 +89,22 @@ func StringSliceIndex(slice []string, item string) (int, error) {
 		}
 	}
 	return 0, errors.New("Could not find item in slice")
+}
+
+func EditFilePath(filepath string) {
+	editor, ok := os.LookupEnv("EDITOR")
+	if !ok || editor == "" {
+		Fatal("$EDITOR variable is empty or not set. Could not edit task.")
+	}
+
+	proc := exec.Command(editor, filepath)
+	proc.Stdin = os.Stdin
+	proc.Stdout = os.Stdout
+	proc.Stderr = os.Stderr
+
+	err := proc.Start()
+	DieOnError("Failed to start the editor: ", err)
+
+	err = proc.Wait()
+	DieOnError("Error running editor: ", err)
 }

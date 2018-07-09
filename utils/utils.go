@@ -77,6 +77,22 @@ func (l *LineScanner) Scan() bool {
 	return ok
 }
 
+func ReadLines(filepath string) []string {
+
+	f, err := os.OpenFile(filepath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
+	DieOnError("Could not open file: "+filepath+": ", err)
+
+	var lines []string
+
+	scanner := NewLineScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(string(scanner.Text()))
+		lines = append(lines, line)
+	}
+	return lines
+
+}
+
 func EnsurePath(filename string) {
 	err := os.MkdirAll(path.Dir(filename), 0700)
 	DieOnError("Could not ensure path "+path.Dir(filename)+": ", err)

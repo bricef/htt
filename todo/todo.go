@@ -77,15 +77,13 @@ func getPrefixedWords(prefix string, entry string) []string {
 }
 
 func taskListFromFile(filename string) []*Task {
-	f := todoFile()
-
+	lines := utils.ReadLines(filename)
 	var tasks []*Task
-	scanner := utils.NewLineScanner(f)
-	for scanner.Scan() {
-		raw := strings.TrimSpace(string(scanner.Text()))
-		if raw != "" {
-			t := NewTask(raw)
-			t.Line = scanner.Line
+
+	for i, line := range lines {
+		if line != "" {
+			t := NewTask(line)
+			t.Line = i
 			tasks = append(tasks, t)
 		}
 	}

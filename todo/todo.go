@@ -127,10 +127,10 @@ func FilterTasks(tasks []*Task, predicate func(*Task) bool) []*Task {
 // GetTodoID will get a given todo by ID (ID is an idex from 1)
 func GetTodoID(index int) *Task {
 	ts := GetTodos()
-	if index > len(ts) {
+	if index > len(ts) || index < 0 {
 		utils.Fatal("Item selected is outside of range")
 	}
-	return ts[index-1]
+	return ts[index]
 }
 
 func setTodos(tasks []*Task) {
@@ -150,7 +150,7 @@ func setTodos(tasks []*Task) {
 // Delete will remove the given task from the task list
 func Delete(task *Task) {
 	todos := GetTodos()
-	newTodos := append(todos[:task.Line-1], todos[task.Line:]...)
+	newTodos := append(todos[:task.Line], todos[task.Line+1:]...)
 	setTodos(newTodos)
 }
 
@@ -180,7 +180,7 @@ func Show(context string, terms []string) {
 
 func Replace(id int, t *Task) {
 	todos := GetTodos()
-	todos[id-1] = t
+	todos[id] = t
 	setTodos(todos)
 }
 

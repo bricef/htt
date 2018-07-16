@@ -37,6 +37,11 @@ func main() {
 	viper.AddConfigPath(".")
 	viper.AddConfigPath(trackerDir)
 
+	// global flags
+	var nocolor = false
+	commands.RootCmd.PersistentFlags().BoolVarP(&nocolor, vars.NoColorFlag, "", false, "Disable color output for coloured commands")
+	viper.BindPFlag(vars.NoColorFlag, commands.RootCmd.PersistentFlags().Lookup(vars.NoColorFlag))
+
 	err = viper.ReadInConfig()
 	if err != nil {
 		fmt.Println("Can't read config:", err)

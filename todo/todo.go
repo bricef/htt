@@ -173,7 +173,11 @@ func Show(context string, terms []string) {
 
 	fmt.Println("")
 	for _, todo := range tasks {
-		fmt.Printf("%3d %s\n", todo.Line, todo.ToString())
+		if vars.GetBool(vars.ConfigKeyDisableColor) {
+			fmt.Printf("%3d %s\n", todo.Line, todo.ToString())
+		} else {
+			fmt.Printf("%3d %s\n", todo.Line, todo.ColorString())
+		}
 	}
 	fmt.Printf("\n--- (%s): %d of %d tasks shown ---\n", GetCurrentContext(), len(tasks), len(ts))
 }

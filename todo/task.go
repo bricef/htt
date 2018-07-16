@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fatih/color"
 	pu "github.com/hypotheticalco/tracker-client/parseutils"
 	"github.com/hypotheticalco/tracker-client/utils"
 	parsec "github.com/prataprc/goparsec"
@@ -24,11 +25,11 @@ type Task struct {
 	entry       string              // This is the task without priority, annotations, completion mark or created/completed dates
 	Tags        map[string][]string // { "@": ["abc", "def"], "#": ["foo"]}
 	Annotations map[string]string
+	parser      *pu.Parser
 }
 
 var (
 	priorities = []string{"A", "B", "C", "D", "E", "F"}
-	parser     = NewTodoParser()
 )
 
 // Creates a new task from a raw string
@@ -39,6 +40,9 @@ func NewTask(raw string) *Task {
 	t := &Task{}
 
 	t.raw = raw
+
+	parser := NewTodoParser()
+	t.parser = parser
 
 	parser.Parse(raw)
 
@@ -203,4 +207,34 @@ func (t *Task) RemoveAnnotation(key string) *Task {
 
 func (t *Task) Entry() string {
 	return t.entry
+}
+
+func (t *Task) ColorString() string { // doesn't feel like it should belong here, but nvm
+	// raw         string
+	// Line        int
+	// Completed   bool
+	// Priority    string
+	// CompletedAt time.Time
+	// CreatedAt   time.Time
+	// entry       string
+	// Tags        map[string][]string
+	// Annotations map[string]string
+
+	type lineColorFn func(a string, args ...interface{}) string
+	var lineColor lineColorFn
+	switch t.Priority {
+	case "A":
+		lineColor = color.New(color.FgRed).SprintfFunc()
+	case "B":
+		lineColor = color.New(color.FgYellow).SprintfFunc()
+	case "C":
+		lineColor = color.New(color.FgGreen).SprintfFunc()
+	default:
+		lineColor = color.New(color.FgWhite).SprintfFunc()
+	}
+
+	b := bytes.NewBuffer([]byte{})
+	b.WriteString(fmt.Sprintf("%s", lineColor(t.raw)))
+
+	return b.String()
 }

@@ -5,8 +5,10 @@ import (
 )
 
 var (
+	// Fixed values that I don't want stringly typed
 	ConfigFileName = "config"
 	ProductName    = "tracker"
+	NoColorFlag    = "no-color"
 
 	// Config variable names for viper
 	// A little more verbose than using directly, but
@@ -22,6 +24,7 @@ var (
 	ConfigKeyAuthorName   = "author_name"
 	ConfigKeyAuthorEmail  = "author_email"
 	ConfigKeySSHKeyFile   = "ssh_key_file"
+	ConfigKeyDisableColor = NoColorFlag
 
 	// Default values
 	DefaultContext         = "todo"
@@ -41,6 +44,10 @@ var (
 // because vars.Get is shorter than viper.GetString
 func Get(name string) string {
 	return viper.GetString(name)
+}
+
+func GetBool(name string) bool {
+	return viper.GetBool(name)
 }
 
 func GetStringSlice(name string) []string {

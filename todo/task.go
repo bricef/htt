@@ -177,6 +177,7 @@ func (t *Task) ToString() string {
 }
 
 func (t *Task) Do(context string, when time.Time) *Task {
+	t.Completed = true
 	t.CompletedAt = when
 	t.Annotate("context", context)
 	t.rebuild()

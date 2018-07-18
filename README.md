@@ -48,7 +48,8 @@ Use "htt [command] --help" for more information about a command.
 ```
 
 ## Todo
-
+- QA
+  - [ ] Write intergation tests for htt. Make sure that mutating actions work as intended
 - Repos
   - [ ] Check if repo exists. If it doesn't clone it first
   - [ ] Handle case when local repo is behind remote. (Rebase? Merge? How?)

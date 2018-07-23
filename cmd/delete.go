@@ -19,8 +19,6 @@ var delete = &cobra.Command{
 		t := todo.GetTodoID(id)
 		todo.Delete(t)
 		fmt.Printf("Deleted task: " + t.ToString() + "\n")
-		fmt.Print("---")
-		// todo.Show(todo.GetTodos())
 	},
 }
 

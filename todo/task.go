@@ -110,16 +110,16 @@ func (t *Task) rebuild() *Task {
 		b.WriteString("x ")
 	}
 
-	if t.Priority != "" {
-		b.WriteString(fmt.Sprintf("(%s) ", t.Priority))
-	}
-
 	if !t.CompletedAt.Equal(time.Time{}) {
 		b.WriteString(t.CompletedAt.Format("2006-01-02 "))
 	}
 
 	if !t.CreatedAt.Equal(time.Time{}) {
 		b.WriteString(t.CreatedAt.Format("2006-01-02 "))
+	}
+
+	if t.Priority != "" {
+		b.WriteString(fmt.Sprintf("(%s) ", t.Priority))
 	}
 
 	if t.entry != "" {

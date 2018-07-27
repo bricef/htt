@@ -60,6 +60,8 @@ Use "htt [command] --help" for more information about a command.
   - [ ] Add "Where is <>?" command
   - [ ] archive context
   - [ ] archive todo
+  - [ ] Query language
+  - [ ] interval output
 - [ ] Fork goparsec to fix messed up API choices
   - AST/Node distinction? 
   - Simple querying

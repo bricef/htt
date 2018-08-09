@@ -101,5 +101,14 @@ func Select(nodes []parsec.Queryable, fn func(parsec.Queryable) bool) []parsec.Q
 	}
 	return ns
 }
-
 // Godammit, I miss generics.
+
+// Transform will apply a parsec.Queryable -> parsec.Queryable mapper to a tree, dealing with
+// setting the children properly and returning the root node. This can be used to transform an
+// AST or for side effects.
+func Transform(node parsec.Queryable, fn func(node parsec.Queryable) parsec.Queryable) parsec.Queryable {
+	newNode := fn(node)
+	for i n := range node.GetChildren() {
+		newNode.
+	}
+}

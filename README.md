@@ -56,6 +56,8 @@ Use "htt [command] --help" for more information about a command.
   - [ ] Add 'status' action which shows sync status
 - UX
   - [ ] deduplicate
+  - [ ] Add "log@" command to log at a particular time
+  - [ ] Review jrnl command to see if we can take inspiration from this
   - [ ] report
   - [ ] Add "Where is <>?" command
   - [ ] archive context

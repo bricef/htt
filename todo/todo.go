@@ -108,7 +108,11 @@ func AddToContext(context string, todo string) {
 
 // GetTodos will add the todos according to the serach terms
 func GetTodos() []*Task {
-	return taskListFromFile(todoFilePath())
+	return GetTodosForContext(GetCurrentContext())
+}
+
+func GetTodosForContext(context string) []*Task {
+	return taskListFromFile(ContextToFilePath(context))
 }
 
 // Filter will filter out any tasks that do not match the serach terms
@@ -162,7 +166,7 @@ func terms2predicate(terms []string) func(*Task) bool {
 
 // Show will print out the tasks given
 func Show(context string, terms []string) {
-	ts := GetTodos()
+	ts := GetTodosForContext(context)
 	tasks := []*Task{}
 
 	if terms != nil && len(terms) > 0 {
@@ -179,7 +183,7 @@ func Show(context string, terms []string) {
 			fmt.Printf("%3d %s\n", todo.Line, todo.ColorString())
 		}
 	}
-	fmt.Printf("\n--- (%s): %d of %d tasks shown ---\n", GetCurrentContext(), len(tasks), len(ts))
+	fmt.Printf("\n--- (%s): %d of %d tasks shown ---\n", context, len(tasks), len(ts))
 }
 
 func Replace(id int, t *Task) {

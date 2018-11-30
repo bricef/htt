@@ -62,6 +62,7 @@ Use "htt [command] --help" for more information about a command.
   - [ ] Handle case when local repo is behind remote. (Rebase? Merge? How?)
   - [ ] Add 'status' action which shows sync status
 - UX
+  - [ ] Add "summary" command to show tasks and prioritoes across contexts
   - [ ] Change delete from removal to archival in separate file.
   - [ ] deduplicate
   - [ ] Add "log@" command to log at a particular time

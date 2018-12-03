@@ -109,3 +109,7 @@ Use "htt [command] --help" for more information about a command.
   - https://github.com/prataprc/goparsec
   - https://github.com/vektah/goparsify
   - https://github.com/pointlander/peg
+
+## Prior art
+
+- https://github.com/gammons/todolist Also in Go, similar idea with good query parsing

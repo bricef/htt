@@ -67,6 +67,7 @@ Use "htt [command] --help" for more information about a command.
   - [ ] Change delete from removal to archival in separate file.
   - [ ] Add `due:Friday` smart parsing
   - [ ] Add `due:"in two weeks"` smart parsing
+  - [ ] Enable showing in priority order
   - [ ] Add deduplicate command (smart with edit distance?)
   - [ ] Add "log@" command to log at a particular time
   - [ ] Review jrnl command to see if we can take inspiration from this

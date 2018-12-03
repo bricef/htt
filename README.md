@@ -61,13 +61,15 @@ Use "htt [command] --help" for more information about a command.
   - [ ] Check if repo exists. If it doesn't clone it first
   - [ ] Handle case when local repo is behind remote. (Rebase? Merge? How?)
   - [ ] Add 'status' action which shows sync status
+  - [ ] Commit on all modifications.
 - UX
   - [ ] Add "summary" command to show tasks and prioritoes across contexts
   - [ ] Change delete from removal to archival in separate file.
-  - [ ] deduplicate
+  - [ ] Add `due:Friday` smart parsing
+  - [ ] Add `due:"in two weeks"` smart parsing
+  - [ ] Add deduplicate command (smart with edit distance?)
   - [ ] Add "log@" command to log at a particular time
   - [ ] Review jrnl command to see if we can take inspiration from this
-  - [ ] report
   - [ ] Add "Where is <>?" command
   - [ ] archive context
   - [ ] archive todo
@@ -113,3 +115,4 @@ Use "htt [command] --help" for more information about a command.
 ## Prior art
 
 - https://github.com/gammons/todolist Also in Go, similar idea with good query parsing
+- Command line journaling: http://jrnl.sh/

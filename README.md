@@ -114,6 +114,6 @@ Use "htt [command] --help" for more information about a command.
   - https://github.com/pointlander/peg
 
 ## Prior art
-
+- https://github.com/google/go-github (Github API client)
 - https://github.com/gammons/todolist Also in Go, similar idea with good query parsing
 - Command line journaling: http://jrnl.sh/

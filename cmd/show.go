@@ -13,6 +13,8 @@ var show = &cobra.Command{
 	Long: `Show the default tasklist. You can filter the task list using 
 search terms. Search terms will be matched fuzzily.`,
 	Run: func(cmd *cobra.Command, args []string) {
+		utils.ClearScreen()
+
 		if len(args) < 0 {
 			utils.Failure("Filtering is not yet implemented. Showing without filter applied.")
 		}

@@ -48,3 +48,7 @@
 [[constraint]]
   branch = "master"
   name = "github.com/logrusorgru/aurora"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/buger/goterm"

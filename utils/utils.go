@@ -10,9 +10,11 @@ import (
 	"path"
 	"regexp/syntax"
 	"strings"
+
+	"github.com/buger/goterm"
 )
 
-// StringTofilename will convert an arbitrary string into a valid filename
+// StringToFilename will convert an arbitrary string into a valid filename
 func StringToFilename(raw string) string {
 	return strings.Map(func(c rune) rune {
 		if syntax.IsWordChar(c) {
@@ -26,6 +28,7 @@ func StringToFilename(raw string) string {
 /*
  *	Logging helpers and prettifiers
  */
+
 func DieOnError(message string, err error) {
 	if err != nil {
 		Fatal(message, err)
@@ -123,4 +126,10 @@ func EditFilePath(filepath string) {
 
 	err = proc.Wait()
 	DieOnError("Error running editor: ", err)
+}
+
+func ClearScreen() {
+	goterm.Clear()
+	goterm.MoveCursor(1, 1)
+	goterm.Flush()
 }

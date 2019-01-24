@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/hypotheticalco/tracker-client/todo"
+	"github.com/hypotheticalco/tracker-client/utils"
 	"github.com/hypotheticalco/tracker-client/vars"
 	"github.com/spf13/cobra"
 )
@@ -14,6 +15,8 @@ var get = &cobra.Command{
 	Short:   "Show tasks across lists.",
 	Long:    `Will show the high priority items across all contexts. The priority range defaults to "A", but can be specified through arguments`,
 	Run: func(cmd *cobra.Command, args []string) {
+		utils.ClearScreen()
+
 		priorities := args
 		if len(priorities) == 0 {
 			priorities = append(priorities, "A")

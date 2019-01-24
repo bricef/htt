@@ -2,6 +2,12 @@
 
 
 [[projects]]
+  branch = "master"
+  name = "github.com/buger/goterm"
+  packages = ["."]
+  revision = "c206103e1f37c0c6c5c039706305ea2aa6e8ad3b"
+
+[[projects]]
   name = "github.com/emirpasic/gods"
   packages = [
     "containers",
@@ -296,6 +302,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "52fcdada2ea396266778fda3fdcdba09a0042303319948d3699edc2c8d66e394"
+  inputs-digest = "af611a1232a5ecbfb140e59e8fd6c91da3f7940ea3abba3495c62eac86effd7b"
   solver-name = "gps-cdcl"
   solver-version = 1

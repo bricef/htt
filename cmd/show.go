@@ -15,8 +15,8 @@ search terms. Search terms will be matched fuzzily.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// utils.ClearScreen()
 
-		if len(args) < 0 {
-			utils.Failure("Filtering is not yet implemented. Showing without filter applied.")
+		if len(args) > 0 {
+			utils.Warning("Filtering is not yet implemented. Showing without filter applied.")
 		}
 		todo.Show(todo.GetCurrentContext(), args)
 	},

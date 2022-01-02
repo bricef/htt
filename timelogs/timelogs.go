@@ -14,6 +14,8 @@ import (
 	"github.com/bricef/htt/utils"
 )
 
+const TimestampLabel = "ts"
+
 func CurrentLogFilePath() string {
 	return LogFilePath(time.Now())
 }
@@ -32,13 +34,13 @@ func AddEntry(task *todo.Task) {
 	f, err := os.OpenFile(currentLog, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 	utils.DieOnError("Failed to open log file for writing: ", err)
 
-	task.Annotate("start", now.Format(time.RFC3339))
+	task.Annotate(TimestampLabel, now.Format(time.RFC3339))
 
 	// start:
 	// entryWithStart := fmt.Sprintf("start:%s %s \n", now.Format(time.RFC3339), strings.TrimSpace(entry))
 
 	_, err = f.WriteString(fmt.Sprintf("%v\n", task.ToString()))
-	fmt.Printf("Beginning: %v\n", task.RemoveAnnotation("start").ColorString())
+	fmt.Printf("Logging entry: %v\n", task.RemoveAnnotation(TimestampLabel).ColorString())
 	utils.DieOnError("Failed to write entry to log", err)
 }
 
@@ -55,13 +57,13 @@ func Show() {
 func ShowStatus() {
 	currentTask := CurrentActive()
 	if currentTask != nil {
-		startedAt := currentTask.Annotations["start"]
+		startedAt := currentTask.Annotations[TimestampLabel]
 		startTime, err := time.Parse(time.RFC3339, startedAt)
 		if err != nil {
 			utils.Fatal("Failed to parse log entry.")
 		}
 		duration := utils.HumanizeDuration(time.Since(startTime))
-		fmt.Printf("Currently working on: %v (%v) \n", currentTask.RemoveAnnotation("start").ColorString(), duration)
+		fmt.Printf("Currently working on: %v (%v) \n", currentTask.RemoveAnnotation(TimestampLabel).ColorString(), duration)
 	} else {
 		fmt.Printf("Not currently working on any task.\n")
 	}
@@ -78,7 +80,7 @@ func CurrentActive() *todo.Task {
 
 func CurrentDuration() time.Duration {
 	currentTask := CurrentActive()
-	startedAt := currentTask.Annotations["start"]
+	startedAt := currentTask.Annotations[TimestampLabel]
 	startTime, err := time.Parse(time.RFC3339, startedAt)
 	if err != nil {
 		utils.Fatal("Failed to parse log entry.")

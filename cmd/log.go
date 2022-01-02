@@ -18,7 +18,7 @@ var LogCommand = &cobra.Command{
 }
 
 var Add = &cobra.Command{
-	Use:     "start [entry]",
+	Use:     "add [entry]",
 	Short:   "Log an entry to the time log.",
 	Args:    cobra.MinimumNArgs(1),
 	Aliases: []string{"+"},
@@ -67,8 +67,26 @@ var Active = &cobra.Command{
 
 		fmt.Printf(
 			"Working on: %s (%s)\n",
-			current.RemoveAnnotation("start").ColorString(),
+			current.RemoveAnnotation(timelogs.TimestampLabel).ColorString(),
 			utils.HumanizeDuration(timelogs.CurrentDuration()))
+	},
+}
+
+var Start = &cobra.Command{
+	Use:   "start",
+	Short: "Start the timelog for the day.",
+	Args:  cobra.NoArgs,
+	Run: func(cmd *cobra.Command, args []string) {
+		timelogs.AddEntry(todo.NewTask(("@start")))
+	},
+}
+
+var End = &cobra.Command{
+	Use:   "end",
+	Short: "End the timelog for the day.",
+	Args:  cobra.NoArgs,
+	Run: func(cmd *cobra.Command, args []string) {
+		timelogs.AddEntry(todo.NewTask(("@end")))
 	},
 }
 
@@ -78,6 +96,8 @@ func init() {
 	LogCommand.AddCommand(Edit)
 	LogCommand.AddCommand(Status)
 	LogCommand.AddCommand(Active)
+	LogCommand.AddCommand(Start)
+	LogCommand.AddCommand(End)
 
 	RootCmd.AddCommand(LogCommand)
 }

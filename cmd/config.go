@@ -3,15 +3,22 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/bricef/htt/todo"
 	"github.com/bricef/htt/utils"
+	"github.com/bricef/htt/vars"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	yaml "gopkg.in/yaml.v2"
 )
 
-var config = &cobra.Command{
+var Config = &cobra.Command{
 	Use:   "config",
-	Short: "Prints out the current configuration in YAML",
+	Short: "Manage configuration.",
+}
+
+var Print = &cobra.Command{
+	Use:   "yaml",
+	Short: "Prints out the current configuration in YAML.",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		c := viper.AllSettings()
@@ -21,6 +28,28 @@ var config = &cobra.Command{
 	},
 }
 
+var Directory = &cobra.Command{
+	Use:   "where-data",
+	Short: "Outputs the currently configured data directory.",
+	Args:  cobra.NoArgs,
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println(vars.Get(vars.ConfigKeyDataDir))
+	},
+}
+
+var Context = &cobra.Command{
+	Use:   "context",
+	Short: "Output the current context.",
+	Args:  cobra.NoArgs,
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println(todo.GetCurrentContext())
+	},
+}
+
 func init() {
-	RootCmd.AddCommand(config)
+	Config.AddCommand(Print)
+	Config.AddCommand(Directory)
+	Config.AddCommand(Context)
+
+	RootCmd.AddCommand(Config)
 }

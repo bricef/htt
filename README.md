@@ -14,38 +14,21 @@ Which will make the `htt` command available.
 
 ```shell
 $ htt help
-Hypothetical Tasks & Time Tracker is a todo list manager and time tracker
+htt is a command line todo list manager and time tracker
 
 Usage:
   htt [flags]
   htt [command]
 
 Available Commands:
-  add            Add an item to the current tasklist
-  addLog         Add an entry to the current tasklist and immediately start working on it.
-  addTo          Add an item to a specified tasklist
-  config         Prints out the current configuration in YAML
-  context        Change the context for tasks
-  currentContext Outputs the current context
-  dataDir        Outputs the currently configured datadir
-  delete         Delete the item specified
-  do             Complete a task
-  edit           Edit the item specified using $EDITOR
-  editDone       Open the done file using $EDITOR
-  editLog        Open the current time log file using $EDITOR
-  get            Show tasks across lists.
-  help           Help about any command
-  log            Log an entry to the time log.
-  pri+           increase the priority for the selected task
-  pri-           Decrease the priority for the selected task
-  random         Select an item at random from the tasklist
-  replace        Replace an item with a new entry
-  show           Show the default tasklist.
-  showLog        Show the day's time log.
-  status         Show the status of the tasklist and time log
-  sync           Sync the data to the backend manually
-  workingon      Show the current active time log entry.
-  workon         Log that work has began on numbered item.
+  completion  Generate the autocompletion script for the specified shell
+  config      Manage configuration.
+  help        Help about any command
+  log         Manage the activity log.
+  status      Show the status of the tasklist and time log.
+  sync        Sync the data to the backend manually.
+  todo        Manage todo lists.
+  workon      Log that work has began on numbered item in the current context.
 
 Flags:
   -h, --help       help for htt

@@ -23,7 +23,7 @@ func LogFilePath(t time.Time) string {
 	return logFilePath
 }
 
-func AddEntry(entry string) {
+func AddEntry(task *todo.Task) {
 	now := time.Now().UTC()
 
 	currentLog := CurrentLogFilePath()
@@ -32,21 +32,39 @@ func AddEntry(entry string) {
 	f, err := os.OpenFile(currentLog, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 	utils.DieOnError("Failed to open log file for writing: ", err)
 
-	task := todo.NewTask(entry)
 	task.Annotate("start", now.Format(time.RFC3339))
 
 	// start:
 	// entryWithStart := fmt.Sprintf("start:%s %s \n", now.Format(time.RFC3339), strings.TrimSpace(entry))
 
 	_, err = f.WriteString(fmt.Sprintf("%v\n", task.ToString()))
+	fmt.Printf("Beginning: %v\n", task.RemoveAnnotation("start").ColorString())
 	utils.DieOnError("Failed to write entry to log", err)
 }
 
 func Show() {
 	bytes, err := ioutil.ReadFile(CurrentLogFilePath())
-	utils.DieOnError("Failed to read today's log file. Could be you haven't created an entry yet. ", err)
+
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Today's timelog does not yet exist. Add an entry.")
+	}
 
 	print(string(bytes))
+}
+
+func ShowStatus() {
+	currentTask := CurrentActive()
+	if currentTask != nil {
+		startedAt := currentTask.Annotations["start"]
+		startTime, err := time.Parse(time.RFC3339, startedAt)
+		if err != nil {
+			utils.Fatal("Failed to parse log entry.")
+		}
+		duration := utils.HumanizeDuration(time.Since(startTime))
+		fmt.Printf("Currently working on: %v (%v) \n", currentTask.RemoveAnnotation("start").ColorString(), duration)
+	} else {
+		fmt.Printf("Not currently working on any task.\n")
+	}
 }
 
 func CurrentActive() *todo.Task {
@@ -56,4 +74,15 @@ func CurrentActive() *todo.Task {
 	}
 	t := todo.NewTask(lines[len(lines)-1])
 	return t
+}
+
+func CurrentDuration() time.Duration {
+	currentTask := CurrentActive()
+	startedAt := currentTask.Annotations["start"]
+	startTime, err := time.Parse(time.RFC3339, startedAt)
+	if err != nil {
+		utils.Fatal("Failed to parse log entry.")
+	}
+	return time.Since(startTime)
+
 }

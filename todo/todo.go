@@ -11,6 +11,7 @@ import (
 
 	"github.com/bricef/htt/utils"
 	"github.com/bricef/htt/vars"
+	"github.com/fatih/color"
 )
 
 /*
@@ -22,7 +23,7 @@ func SetContext(raw string) {
 	if context == "" {
 		utils.Fatal("Can't use an empty context.")
 	}
-	contextStoreFilePath := path.Join(vars.Get(vars.ConfigKeyDataDir), vars.DefaultContextFileName)
+	contextStoreFilePath := path.Join(vars.Get(vars.ConfigKeyTrackerDir), vars.DefaultContextFileName)
 
 	err := ioutil.WriteFile(contextStoreFilePath, []byte(context), 0666)
 	utils.DieOnError("Failed to open context persistance file: ", err)
@@ -33,7 +34,7 @@ func ContextToFilePath(context string) string {
 }
 
 func GetCurrentContext() string {
-	contextStoreFilePath := path.Join(vars.Get(vars.ConfigKeyDataDir), vars.DefaultContextFileName)
+	contextStoreFilePath := path.Join(vars.Get(vars.ConfigKeyTrackerDir), vars.DefaultContextFileName)
 	context := vars.DefaultContext
 
 	if _, err := os.Stat(contextStoreFilePath); err == nil {
@@ -132,6 +133,9 @@ func FilterTasks(tasks []*Task, predicate func(*Task) bool) []*Task {
 // GetTodoID will get a given todo by ID (ID is an idex from 1)
 func GetTodoID(index int) *Task {
 	ts := GetTodos()
+	if len(ts) == 0 {
+		utils.Fatal("Task list was empty")
+	}
 	if index > len(ts) || index < 0 {
 		utils.Fatal("Item selected is outside of range")
 	}
@@ -176,6 +180,11 @@ func Show(context string, terms []string) {
 		tasks = ts
 	}
 
+	if len(tasks) == 0 {
+		fmt.Printf("Context is empty.\n")
+		return
+	}
+
 	fmt.Println("")
 	for _, todo := range tasks {
 		if vars.GetBool(vars.ConfigKeyDisableColor) {
@@ -184,7 +193,33 @@ func Show(context string, terms []string) {
 			fmt.Printf("%3d %s\n", todo.Line, todo.ColorString())
 		}
 	}
-	fmt.Printf("\n--- (%s): %d of %d tasks shown ---\n", context, len(tasks), len(ts))
+	if vars.GetBool(vars.ConfigKeyDisableColor) {
+		fmt.Printf("\n(%s): %d of %d tasks shown\n", context, len(tasks), len(ts))
+	} else {
+		fmt.Printf("\n(%s): %d of %d tasks shown\n", color.GreenString(context), len(tasks), len(ts))
+	}
+}
+
+func ShowStatus() {
+	current := GetCurrentContext()
+	contexts := GetContexts()
+
+	fmt.Printf("Available Contexts: ")
+	for _, c := range contexts {
+		if vars.GetBool(vars.ConfigKeyDisableColor) {
+			fmt.Printf("%s ", c)
+		} else {
+			fmt.Printf("%s ", color.WhiteString(c))
+		}
+	}
+	fmt.Println()
+	if vars.GetBool(vars.ConfigKeyDisableColor) {
+		fmt.Printf("Current Context: %s\n", current)
+	} else {
+		fmt.Printf("Current Context: %s\n", color.GreenString(current))
+	}
+
+	Show(current, []string{})
 }
 
 func Replace(id int, t *Task) {
@@ -194,13 +229,13 @@ func Replace(id int, t *Task) {
 }
 
 func GetContexts() []string {
-	fileinfos, err := ioutil.ReadDir(vars.Get(vars.ConfigKeyDataDir))
+	files, err := os.ReadDir(vars.Get(vars.ConfigKeyDataDir))
 	utils.DieOnError("Failed to list contexts", err)
 
 	contexts := []string{}
-	for _, info := range fileinfos {
-		filename := info.Name()
-		if strings.HasSuffix(filename, vars.DefaultFileExtension) && filename != "done.txt" {
+	for _, file := range files {
+		filename := file.Name()
+		if !file.IsDir() && strings.HasSuffix(filename, vars.DefaultFileExtension) && filename != "done.txt" {
 			context := strings.TrimSuffix(filename, vars.DefaultFileExtension)
 			contexts = append(contexts, context)
 		}
@@ -214,12 +249,13 @@ func DoneFilePath() string {
 
 func appendDone(t *Task) {
 	doneFilePath := DoneFilePath()
+	utils.EnsurePath(doneFilePath)
 
-	f, err := os.OpenFile(doneFilePath, os.O_APPEND|os.O_WRONLY, 0600)
+	f, err := os.OpenFile(doneFilePath, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 	utils.DieOnError("Failed to open done file for writing: ", err)
 
 	_, err = f.WriteString(strings.TrimSpace(t.ToString()) + "\n")
-	utils.DieOnError("Failed to archive todo", err)
+	utils.DieOnError("Failed to archive todo: ", err)
 }
 
 func CompleteTask(id int) {

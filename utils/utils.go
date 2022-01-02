@@ -44,7 +44,7 @@ func Info(args ...interface{}) {
 }
 
 func Fatal(args ...interface{}) {
-	args = append([]interface{}{"☠️ "}, args...)
+	args = append([]interface{}{"❌ "}, args...)
 	log.Fatal(args...)
 }
 

@@ -4,8 +4,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/hypotheticalco/tracker-client/parseutils"
-	"github.com/hypotheticalco/tracker-client/utils"
+	"github.com/bricef/htt/parseutils"
+	"github.com/bricef/htt/utils"
 	parsec "github.com/prataprc/goparsec"
 )
 

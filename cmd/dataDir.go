@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/hypotheticalco/tracker-client/vars"
+	"github.com/bricef/htt/vars"
 	"github.com/spf13/cobra"
 )
 

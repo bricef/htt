@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/hypotheticalco/tracker-client/timelogs"
+	"github.com/bricef/htt/timelogs"
 	"github.com/spf13/cobra"
 )
 

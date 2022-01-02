@@ -6,6 +6,6 @@ clean:
 	rm -rf bin
 
 install:
-	go get github.com/hypotheticalco/tracker-client/htt
+	go get github.com/bricef/htt/htt
 
 .PHONY: clean install

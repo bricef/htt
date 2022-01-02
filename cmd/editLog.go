@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"github.com/hypotheticalco/tracker-client/timelogs"
-	"github.com/hypotheticalco/tracker-client/utils"
+	"github.com/bricef/htt/timelogs"
+	"github.com/bricef/htt/utils"
 	"github.com/spf13/cobra"
 )
 

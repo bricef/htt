@@ -3,8 +3,8 @@ package cmd
 import (
 	"strings"
 
-	"github.com/hypotheticalco/tracker-client/timelogs"
-	"github.com/hypotheticalco/tracker-client/todo"
+	"github.com/bricef/htt/timelogs"
+	"github.com/bricef/htt/todo"
 	"github.com/spf13/cobra"
 )
 

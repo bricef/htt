@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/hypotheticalco/tracker-client/todo"
+	"github.com/bricef/htt/todo"
 	"github.com/spf13/cobra"
 )
 

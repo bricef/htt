@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hypotheticalco/tracker-client/utils"
-	"github.com/hypotheticalco/tracker-client/vars"
+	"github.com/bricef/htt/utils"
+	"github.com/bricef/htt/vars"
 )
 
 /*

@@ -5,8 +5,8 @@ import (
 	"math/rand"
 	"time"
 
-	"github.com/hypotheticalco/tracker-client/todo"
-	"github.com/hypotheticalco/tracker-client/vars"
+	"github.com/bricef/htt/todo"
+	"github.com/bricef/htt/vars"
 	"github.com/spf13/cobra"
 )
 

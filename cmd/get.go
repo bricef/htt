@@ -3,9 +3,9 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/hypotheticalco/tracker-client/todo"
-	"github.com/hypotheticalco/tracker-client/utils"
-	"github.com/hypotheticalco/tracker-client/vars"
+	"github.com/bricef/htt/todo"
+	"github.com/bricef/htt/utils"
+	"github.com/bricef/htt/vars"
 	"github.com/spf13/cobra"
 )
 

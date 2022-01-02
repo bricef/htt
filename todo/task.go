@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/fatih/color"
-	pu "github.com/hypotheticalco/tracker-client/parseutils"
-	"github.com/hypotheticalco/tracker-client/utils"
+	pu "github.com/bricef/htt/parseutils"
+	"github.com/bricef/htt/utils"
 	parsec "github.com/prataprc/goparsec"
 )
 

@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hypotheticalco/tracker-client/todo"
+	"github.com/bricef/htt/todo"
 
-	"github.com/hypotheticalco/tracker-client/vars"
+	"github.com/bricef/htt/vars"
 
-	"github.com/hypotheticalco/tracker-client/utils"
+	"github.com/bricef/htt/utils"
 )
 
 func CurrentLogFilePath() string {

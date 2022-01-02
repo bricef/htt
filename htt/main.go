@@ -6,8 +6,8 @@ import (
 	"os"
 	"path"
 
-	commands "github.com/hypotheticalco/tracker-client/cmd"
-	vars "github.com/hypotheticalco/tracker-client/vars"
+	commands "github.com/bricef/htt/cmd"
+	vars "github.com/bricef/htt/vars"
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/spf13/viper"
 )

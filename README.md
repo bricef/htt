@@ -5,7 +5,7 @@
 If you have Go properly installed and configured, you may install the client using `go get`:
 
 ```
-go get github.com/hypotheticalco/tracker-client/htt
+go get github.com/bricef/htt/htt
 ```
 
 Which will make the `htt` command available.

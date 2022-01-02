@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hypotheticalco/tracker-client/todo"
-	"github.com/hypotheticalco/tracker-client/utils"
+	"github.com/bricef/htt/todo"
+	"github.com/bricef/htt/utils"
 	"github.com/spf13/cobra"
 )
 

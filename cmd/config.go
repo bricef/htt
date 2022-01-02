@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/hypotheticalco/tracker-client/utils"
+	"github.com/bricef/htt/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	yaml "gopkg.in/yaml.v2"

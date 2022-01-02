@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/hypotheticalco/tracker-client/repo"
+	"github.com/bricef/htt/repo"
 	"github.com/spf13/cobra"
 )
 

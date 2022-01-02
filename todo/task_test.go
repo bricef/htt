@@ -16,13 +16,13 @@ func stringsEqualOrFail(a string, b string) func(t *testing.T) {
 func TestTaskCreation(t *testing.T) {
 
 	t.Run("Entry parsed for simple tasks",
-		stringsEqualOrFail(NewTask("Hello World").Entry, "Hello World"))
+		stringsEqualOrFail(NewTask("Hello World").Entry(), "Hello World"))
 
 	t.Run("A single tag is parsed",
 		stringsEqualOrFail(NewTask("Hello World @foo").Tags["@"][0], "@foo"))
 
 	t.Run("Annotations are absent from parsed entry",
-		stringsEqualOrFail(NewTask("Hello tag:val World").Entry, "Hello World"))
+		stringsEqualOrFail(NewTask("Hello tag:val World").Entry(), "Hello World"))
 
 	t.Run("Annotation values available",
 		stringsEqualOrFail(NewTask("Hello tag:val World").Annotations["tag"], "val"))

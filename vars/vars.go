@@ -29,14 +29,14 @@ var (
 	// Default values
 	DefaultContext         = "todo"
 	DefaultDoneFileName    = "done"
-	DefaultHomeDir         = ".hypothetical"
+	DefaultHomeDir         = ".htt"
 	DefaultDataDirName     = "data"
 	DefaultRemoteName      = "origin"
 	DefaultTimelogDirName  = "timelogs"
 	DefaultFileExtension   = ".txt"
 	DefaultContextFileName = ".context"
-	DefaultCommitterName   = "Hypothetical Tracker"
-	DefaultCommitterEmail  = "tracker-client@hypothetical.co"
+	DefaultCommitterName   = "Hyper Time Tracker"
+	DefaultCommitterEmail  = "htt@fractallambda.com"
 	DefaultFilePatterns    = []string{"*" + DefaultFileExtension, ".context", DefaultTimelogDirName, ".gitignore"}
 )
 

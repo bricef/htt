@@ -3,13 +3,16 @@ package utils
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"io"
 	"log"
+	"math"
 	"os"
 	"os/exec"
 	"path"
 	"regexp/syntax"
 	"strings"
+	"time"
 
 	"github.com/buger/goterm"
 )
@@ -132,4 +135,15 @@ func ClearScreen() {
 	goterm.Clear()
 	goterm.MoveCursor(1, 1)
 	goterm.Flush()
+}
+
+func HumanizeDuration(d time.Duration) string {
+	if d.Minutes() < 1 {
+		return d.Round(time.Second).String()
+	} else if d.Hours() < 1 {
+		return fmt.Sprintf("%vm", d.Round(time.Minute).Minutes())
+	} else if d.Hours() < 24 {
+		return fmt.Sprintf("%vh%vm", d.Truncate(time.Hour).Hours(), math.Mod(d.Truncate(time.Minute).Minutes(), 60.0))
+	}
+	return d.String()
 }

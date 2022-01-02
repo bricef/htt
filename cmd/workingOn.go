@@ -13,7 +13,7 @@ var workingOn = &cobra.Command{
 	Args:    cobra.NoArgs,
 	Aliases: []string{"wo"},
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Printf(timelogs.CurrentActive())
+		fmt.Printf(timelogs.CurrentActive().Entry())
 	},
 }
 

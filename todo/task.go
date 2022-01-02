@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fatih/color"
 	pu "github.com/bricef/htt/parseutils"
 	"github.com/bricef/htt/utils"
+	"github.com/fatih/color"
 	parsec "github.com/prataprc/goparsec"
 )
 
@@ -20,8 +20,8 @@ type Task struct {
 	Line        int
 	Completed   bool
 	Priority    string
-	CompletedAt time.Time
-	CreatedAt   time.Time
+	CompletedOn time.Time
+	CreatedOn   time.Time
 	entry       string              // This is the task without priority, annotations, completion mark or created/completed dates
 	Tags        map[string][]string // { "@": ["abc", "def"], "#": ["foo"]}
 	Annotations map[string]string
@@ -63,7 +63,7 @@ func NewTask(raw string) *Task {
 	if completedAt != nil {
 		date, err := time.Parse("2006-01-02", completedAt.GetValue())
 		utils.DieOnError("Failed to parse date after parsing. Something is seriously wrong. ", err)
-		t.CompletedAt = date
+		t.CompletedOn = date
 	}
 
 	// CreatedAt   time.Time
@@ -71,7 +71,7 @@ func NewTask(raw string) *Task {
 	if createdAt != nil {
 		date, err := time.Parse("2006-01-02", createdAt.GetValue())
 		utils.DieOnError("Failed to parse date after parsing. Something is seriously wrong. ", err)
-		t.CreatedAt = date
+		t.CreatedOn = date
 	}
 
 	// entry       string // This is the task without priority, annotations, completion mark or created/completed dates
@@ -110,12 +110,12 @@ func (t *Task) rebuild() *Task {
 		b.WriteString("x ")
 	}
 
-	if !t.CompletedAt.Equal(time.Time{}) {
-		b.WriteString(t.CompletedAt.Format("2006-01-02 "))
+	if !t.CompletedOn.Equal(time.Time{}) {
+		b.WriteString(t.CompletedOn.Format("2006-01-02 "))
 	}
 
-	if !t.CreatedAt.Equal(time.Time{}) {
-		b.WriteString(t.CreatedAt.Format("2006-01-02 "))
+	if !t.CreatedOn.Equal(time.Time{}) {
+		b.WriteString(t.CreatedOn.Format("2006-01-02 "))
 	}
 
 	if t.Priority != "" {
@@ -178,7 +178,7 @@ func (t *Task) ToString() string {
 
 func (t *Task) Do(context string, when time.Time) *Task {
 	t.Completed = true
-	t.CompletedAt = when
+	t.CompletedOn = when
 	t.Annotate("context", context)
 	t.rebuild()
 	return t
@@ -210,18 +210,9 @@ func (t *Task) Entry() string {
 	return t.entry
 }
 
-func (t *Task) ColorString() string { // doesn't feel like it should belong here, but nvm
-	// raw         string
-	// Line        int
-	// Completed   bool
-	// Priority    string
-	// CompletedAt time.Time
-	// CreatedAt   time.Time
-	// entry       string
-	// Tags        map[string][]string
-	// Annotations map[string]string
+type lineColorFn func(a string, args ...interface{}) string
 
-	type lineColorFn func(a string, args ...interface{}) string
+func (t *Task) ColorFn() lineColorFn {
 	var lineColor lineColorFn
 	switch t.Priority {
 	case "A":
@@ -234,8 +225,26 @@ func (t *Task) ColorString() string { // doesn't feel like it should belong here
 		lineColor = color.New(color.FgWhite).SprintfFunc()
 	}
 
+	return lineColor
+}
+
+func (t *Task) ColoredEntry() string {
+	return t.ColorFn()(t.entry)
+}
+
+func (t *Task) ColorString() string { // doesn't feel like it should belong here, but nvm
+	// raw         string
+	// Line        int
+	// Completed   bool
+	// Priority    string
+	// CompletedAt time.Time
+	// CreatedAt   time.Time
+	// entry       string
+	// Tags        map[string][]string
+	// Annotations map[string]string
+
 	b := bytes.NewBuffer([]byte{})
-	b.WriteString(fmt.Sprintf("%s", lineColor(t.raw)))
+	b.WriteString(t.ColorFn()(t.raw))
 
 	return b.String()
 }

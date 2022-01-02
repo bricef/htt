@@ -77,6 +77,7 @@ func getPrefixedWords(prefix string, entry string) []string {
 }
 
 func taskListFromFile(filename string) []*Task {
+	utils.EnsurePath(filename)
 	lines := utils.ReadLines(filename)
 	var tasks []*Task
 

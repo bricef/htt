@@ -106,6 +106,7 @@ func AddToContext(context string, todo string) {
 	if err != nil {
 		log.Fatal(err)
 	}
+	fmt.Printf("%v added to %v.\n", todo, context)
 }
 
 // GetTodos will add the todos according to the serach terms

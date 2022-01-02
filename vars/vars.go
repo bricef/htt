@@ -7,7 +7,6 @@ import (
 var (
 	// Fixed values that I don't want stringly typed
 	ConfigFileName = "config"
-	ProductName    = "tracker"
 	NoColorFlag    = "no-color"
 
 	// Config variable names for viper

@@ -20,7 +20,7 @@ func main() {
 	}
 
 	// default values
-	trackerDir := path.Join(homeDir, vars.DefaultHomeDir, vars.ProductName)
+	trackerDir := path.Join(homeDir, vars.DefaultHomeDir)
 
 	viper.SetDefault(vars.ConfigKeyTrackerDir, trackerDir)
 	viper.SetDefault(vars.ConfigKeyConfigPath, path.Join(trackerDir, vars.ConfigFileName+".yaml"))

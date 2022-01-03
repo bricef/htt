@@ -1,5 +1,9 @@
 # Hypothetical Tasks & Time Tracker (htt)
 
+## About
+
+`htt` is a [Todo.txt](http://todotxt.org/) compatible command line todo list manager and time tracker.
+
 ## Installation
 
 If you have Go properly installed and configured, you may install the client using `go get`:
@@ -12,7 +16,7 @@ Which will make the `htt` command available.
 
 ## Usage
 
-```shell
+```
 $ htt help
 htt is a command line todo list manager and time tracker
 
@@ -46,7 +50,6 @@ Use "htt [command] --help" for more information about a command.
   - [ ] Add 'status' action which shows sync status
   - [ ] Commit on all modifications.
 - UX
-  - [ ] Add "summary" command to show tasks and prioritoes across contexts
   - [ ] Change delete from removal to archival in separate file.
   - [ ] Add `due:Friday` smart parsing
   - [ ] Add `due:"in two weeks"` smart parsing
@@ -79,7 +82,7 @@ Use "htt [command] --help" for more information about a command.
 
 ## Done
 
-
+- [x] Add "summary" command to show tasks and prioritoes across contexts
 - [x] Action: increase priority
 - [x] Action: decrease priority
 - [x] Add 'do' action

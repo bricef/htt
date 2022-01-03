@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"strconv"
-
 	"github.com/bricef/htt/timelogs"
 	"github.com/bricef/htt/todo"
 	"github.com/bricef/htt/utils"
@@ -15,11 +13,10 @@ var Begin = &cobra.Command{
 	Args:    cobra.MinimumNArgs(1),
 	Aliases: []string{"wo"},
 	Run: func(cmd *cobra.Command, args []string) {
-		id, err := strconv.Atoi(args[0])
-		utils.DieOnError("Supplied argument '"+args[0]+"' was not an integer: ", err)
-		t := todo.GetTodoID(id)
+		ctx := todo.GetCurrentContext()
+		t, err := ctx.GetTaskByStrId(args[0])
+		utils.DieOnError("Could not find specified task.", err)
 		timelogs.AddEntry(t)
-
 	},
 }
 

@@ -9,6 +9,7 @@ import (
 
 	pu "github.com/bricef/htt/parseutils"
 	"github.com/bricef/htt/utils"
+	"github.com/bricef/htt/vars"
 	"github.com/fatih/color"
 	parsec "github.com/prataprc/goparsec"
 )
@@ -16,7 +17,7 @@ import (
 // Task represents a task in a todo list.
 // for tasks that is stable even though they might be filtered.
 type Task struct {
-	raw         string // This is the entire line, including all parsed items, as it would appear in the file
+	Raw         string // This is the entire line, including all parsed items, as it would appear in the file
 	Line        int
 	Completed   bool
 	Priority    string
@@ -39,7 +40,7 @@ func NewTask(raw string) *Task {
 	}
 	t := &Task{}
 
-	t.raw = raw
+	t.Raw = raw
 
 	parser := NewTodoParser()
 	t.parser = parser
@@ -131,7 +132,7 @@ func (t *Task) rebuild() *Task {
 		b.WriteString(fmt.Sprintf("%s:%s ", k, v))
 	}
 
-	t.raw = strings.TrimSpace(b.String())
+	t.Raw = strings.TrimSpace(b.String())
 	return t
 }
 
@@ -172,14 +173,18 @@ func (t *Task) DecreasePriority() *Task {
 	return t.SetPriority(priorities[i+1])
 }
 
-func (t *Task) ToString() string {
-	return t.raw
+func (t *Task) String() string {
+	if vars.GetBool(vars.ConfigKeyDisableColor) {
+		return t.Raw
+	} else {
+		return t.ColorString()
+	}
 }
 
-func (t *Task) Do(context string, when time.Time) *Task {
+func (t *Task) Do(context *Context, when time.Time) *Task {
 	t.Completed = true
 	t.CompletedOn = when
-	t.Annotate("context", context)
+	t.Annotate("context", context.Name)
 	t.rebuild()
 	return t
 }
@@ -244,7 +249,7 @@ func (t *Task) ColorString() string { // doesn't feel like it should belong here
 	// Annotations map[string]string
 
 	b := bytes.NewBuffer([]byte{})
-	b.WriteString(t.ColorFn()(t.raw))
+	b.WriteString(t.ColorFn()(t.Raw))
 
 	return b.String()
 }

@@ -47,7 +47,7 @@ func main() {
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			// Config not found.
-			fmt.Println("Could not find a configuration file. Creating a default file at %v.", defaultConfigfilepath)
+			fmt.Println("Could not find a configuration file.\nCreating a default file at %v.", defaultConfigfilepath)
 			viper.WriteConfigAs(defaultConfigfilepath)
 		} else {
 			// Config file was found but another error was produced

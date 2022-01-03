@@ -87,6 +87,7 @@ func (c *Context) Sync() error {
 			return err //utils.DieOnError("Failed to write todo to file", err)
 		}
 	}
+	os.Remove(backupPath)
 	return nil
 }
 

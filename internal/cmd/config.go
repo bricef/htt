@@ -46,10 +46,20 @@ var Context = &cobra.Command{
 	},
 }
 
+var Where = &cobra.Command{
+	Use:   "dir",
+	Short: "Show the config directory",
+	Args:  cobra.NoArgs,
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println(vars.Get(vars.ConfigKeyTrackerDir))
+	},
+}
+
 func init() {
 	Config.AddCommand(Print)
 	Config.AddCommand(Directory)
 	Config.AddCommand(Context)
+	Config.AddCommand(Where)
 
 	RootCmd.AddCommand(Config)
 }

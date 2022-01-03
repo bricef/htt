@@ -34,7 +34,7 @@ var (
 	DefaultTimelogDirName  = "timelogs"
 	DefaultFileExtension   = ".txt"
 	DefaultContextFileName = "current-context"
-	DefaultCommitterName   = "Hyper Time Tracker"
+	DefaultCommitterName   = "HTT"
 	DefaultCommitterEmail  = "htt@fractallambda.com"
 	DefaultFilePatterns    = []string{"*" + DefaultFileExtension, ".context", DefaultTimelogDirName, ".gitignore"}
 )

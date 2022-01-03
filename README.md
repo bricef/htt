@@ -41,6 +41,15 @@ Flags:
 Use "htt [command] --help" for more information about a command.
 ```
 
+## Tip 
+
+To make managing logs and todo easier, it might be worth adding the following aliases (or similar) to your terminal:
+
+```shell
+alias t="htt t"
+alias jnl="htt l"
+```
+
 ## Todo
 - QA
   - [ ] Write intergation tests for htt. Make sure that mutating actions work as intended
@@ -50,6 +59,7 @@ Use "htt [command] --help" for more information about a command.
   - [ ] Add 'status' action which shows sync status
   - [ ] Commit on all modifications.
 - UX
+  - [ ] Enable managing contexts (archive, delete, merge)
   - [ ] Change delete from removal to archival in separate file.
   - [ ] Add `due:Friday` smart parsing
   - [ ] Add `due:"in two weeks"` smart parsing

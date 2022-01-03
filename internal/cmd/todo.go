@@ -53,7 +53,7 @@ var addTo = &cobra.Command{
 
 var show = &cobra.Command{
 	Use:     "show",
-	Aliases: []string{"s", "ls"},
+	Aliases: []string{"s", "ls", "l"},
 	Short:   "Show the current tasklist.",
 	Long:    `Show the current tasklist.`,
 	Run: func(cmd *cobra.Command, args []string) {

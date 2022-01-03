@@ -1,11 +1,11 @@
 
 bin/htt: $(wildcard internal/**/*)
-	go build -o bin/htt cmd/htt.go
+	go build -o bin/htt cmd/htt/main.go
 
 clean:
 	rm -rf bin
 
 install:
-	go get github.com/bricef/htt/htt
+	go install github.com/bricef/htt/cmd/htt
 
 .PHONY: clean install

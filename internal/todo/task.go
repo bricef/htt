@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	pu "github.com/bricef/htt/parseutils"
-	"github.com/bricef/htt/utils"
-	"github.com/bricef/htt/vars"
+	pu "github.com/bricef/htt/internal/parseutils"
+	"github.com/bricef/htt/internal/utils"
+	"github.com/bricef/htt/internal/vars"
 	"github.com/fatih/color"
 	parsec "github.com/prataprc/goparsec"
 )

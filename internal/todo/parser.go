@@ -4,8 +4,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/bricef/htt/parseutils"
-	"github.com/bricef/htt/utils"
+	"github.com/bricef/htt/internal/parseutils"
+	"github.com/bricef/htt/internal/utils"
 	parsec "github.com/prataprc/goparsec"
 )
 

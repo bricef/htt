@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/bricef/htt/repo"
+	"github.com/bricef/htt/internal/repo"
 	"github.com/spf13/cobra"
 )
 

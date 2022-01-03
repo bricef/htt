@@ -1,8 +1,8 @@
 package cmd
 
 import (
-	"github.com/bricef/htt/timelogs"
-	"github.com/bricef/htt/todo"
+	"github.com/bricef/htt/internal/timelogs"
+	"github.com/bricef/htt/internal/todo"
 	"github.com/spf13/cobra"
 )
 

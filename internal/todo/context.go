@@ -6,8 +6,8 @@ import (
 	"path"
 	"strconv"
 
-	"github.com/bricef/htt/utils"
-	"github.com/bricef/htt/vars"
+	"github.com/bricef/htt/internal/utils"
+	"github.com/bricef/htt/internal/vars"
 	"github.com/fatih/color"
 )
 

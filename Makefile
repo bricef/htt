@@ -1,6 +1,6 @@
 
-bin/htt: htt/main.go cmd/* todo/* vars/* repo/* utils/*
-	go build -o bin/htt htt/main.go
+bin/htt: $(wildcard internal/**/*)
+	go build -o bin/htt cmd/htt.go
 
 clean:
 	rm -rf bin

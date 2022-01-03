@@ -8,8 +8,8 @@ import (
 	"golang.org/x/crypto/ssh"
 	"gopkg.in/src-d/go-git.v4/plumbing/object"
 
-	"github.com/bricef/htt/utils"
-	"github.com/bricef/htt/vars"
+	"github.com/bricef/htt/internal/utils"
+	"github.com/bricef/htt/internal/vars"
 	"gopkg.in/src-d/go-git.v4/plumbing"
 
 	git "gopkg.in/src-d/go-git.v4"

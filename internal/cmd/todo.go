@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/bricef/htt/todo"
-	"github.com/bricef/htt/utils"
+	"github.com/bricef/htt/internal/todo"
+	"github.com/bricef/htt/internal/utils"
 	"github.com/spf13/cobra"
 )
 

@@ -3,9 +3,9 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/bricef/htt/todo"
-	"github.com/bricef/htt/utils"
-	"github.com/bricef/htt/vars"
+	"github.com/bricef/htt/internal/todo"
+	"github.com/bricef/htt/internal/utils"
+	"github.com/bricef/htt/internal/vars"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	yaml "gopkg.in/yaml.v2"

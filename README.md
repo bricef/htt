@@ -9,7 +9,7 @@
 If you have Go properly installed and configured, you may install the client using `go get`:
 
 ```
-go get github.com/bricef/htt/htt
+go install github.com/bricef/htt/cmd/htt
 ```
 
 Which will make the `htt` command available.

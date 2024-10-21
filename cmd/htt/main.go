@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"path"
+	"path/filepath"
 
 	commands "github.com/bricef/htt/internal/cmd"
 	"github.com/bricef/htt/internal/utils"
@@ -21,17 +21,17 @@ func main() {
 	}
 
 	// default values
-	trackerDir := path.Join(homeDir, vars.DefaultHomeDir)
-	defaultConfigfilepath := path.Join(trackerDir, vars.ConfigFileName+".yaml")
+	trackerDir := filepath.Join(homeDir, vars.DefaultHomeDir)
+	defaultConfigfilepath := filepath.Join(trackerDir, vars.ConfigFileName+".yaml")
 
 	viper.SetDefault(vars.ConfigKeyTrackerDir, trackerDir)
 	viper.SetDefault(vars.ConfigKeyConfigPath, defaultConfigfilepath)
-	viper.SetDefault(vars.ConfigKeyDataDir, path.Join(trackerDir, vars.DefaultDataDirName))
+	viper.SetDefault(vars.ConfigKeyDataDir, filepath.Join(trackerDir, vars.DefaultDataDirName))
 	viper.SetDefault(vars.ConfigKeyRemoteName, vars.DefaultRemoteName)
 	viper.SetDefault(vars.ConfigKeyFilePatterns, vars.DefaultFilePatterns)
 	viper.SetDefault(vars.ConfigKeyAuthorName, vars.DefaultCommitterName)
 	viper.SetDefault(vars.ConfigKeyAuthorEmail, vars.DefaultCommitterEmail)
-	viper.SetDefault(vars.ConfigKeySSHKeyFile, path.Join(homeDir, ".ssh", "id_rsa.pub"))
+	viper.SetDefault(vars.ConfigKeySSHKeyFile, filepath.Join(homeDir, ".ssh", "id_rsa.pub"))
 
 	// viper.WriteConfigAs("dump.yaml")
 
@@ -47,11 +47,18 @@ func main() {
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			// Config not found.
-			fmt.Println("Could not find a configuration file.\nCreating a default file at %v.", defaultConfigfilepath)
-			viper.WriteConfigAs(defaultConfigfilepath)
+			fmt.Printf("Could not find a configuration file.\nCreating a default file at %v.\n", defaultConfigfilepath)
+			err = os.MkdirAll(trackerDir, os.ModePerm)
+			if err != nil {
+				utils.Fatal("Failed to create config directory.")
+			}
+			err = viper.WriteConfigAs(defaultConfigfilepath)
+			if err != nil {
+				utils.Fatal("Failed to write default config file. ", err)
+			}
 		} else {
 			// Config file was found but another error was produced
-			utils.Fatal("An error occured while loading teh config. ", err)
+			utils.Fatal("An error occurred while loading the config. ", err)
 		}
 	}
 

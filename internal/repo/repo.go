@@ -5,16 +5,16 @@ import (
 	"io/ioutil"
 	"time"
 
+	"github.com/go-git/go-git/v5/plumbing/object"
 	"golang.org/x/crypto/ssh"
-	"gopkg.in/src-d/go-git.v4/plumbing/object"
 
 	"github.com/bricef/htt/internal/utils"
 	"github.com/bricef/htt/internal/vars"
-	"gopkg.in/src-d/go-git.v4/plumbing"
+	"github.com/go-git/go-git/v5/plumbing"
 
-	git "gopkg.in/src-d/go-git.v4"
-	gitconfig "gopkg.in/src-d/go-git.v4/config"
-	gitssh "gopkg.in/src-d/go-git.v4/plumbing/transport/ssh"
+	git "github.com/go-git/go-git/v5"
+	gitconfig "github.com/go-git/go-git/v5/config"
+	gitssh "github.com/go-git/go-git/v5/plumbing/transport/ssh"
 )
 
 var (

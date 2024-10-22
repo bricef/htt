@@ -1,5 +1,5 @@
 
-bin/htt: $(wildcard internal/**/*) cmd/htt/main.go
+bin/htt: $(wildcard internal/**/*) cmd/htt/main.go go.mod go.sum
 	go build -o bin/htt cmd/htt/main.go
 
 clean:

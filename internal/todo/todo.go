@@ -53,7 +53,7 @@ func taskListFromFile(filename string) []*Task {
 	return tasks
 }
 
-//TODO: Implement
+// TODO: Implement
 func terms2predicate(terms []string) func(*Task) bool {
 	utils.Warning("Parsing search terms is not yet supported.")
 	return func(t *Task) bool { return true }
@@ -65,11 +65,11 @@ func ShowStatus() {
 
 	fmt.Printf("Available Contexts: ")
 	for _, c := range contexts {
-		fmt.Printf("%s ", c.String())
+		fmt.Printf("%s ", c.ConsoleString())
 	}
 	fmt.Println()
 
-	fmt.Printf("Current Context: %s\n", current.String())
+	fmt.Printf("Current Context: %s\n", current.ConsoleString())
 
 	current.Show()
 }

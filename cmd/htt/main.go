@@ -48,10 +48,7 @@ func main() {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			// Config not found.
 			fmt.Printf("Could not find a configuration file.\nCreating a default file at %v.\n", defaultConfigfilepath)
-			err = os.MkdirAll(trackerDir, os.ModePerm)
-			if err != nil {
-				utils.Fatal("Failed to create config directory.")
-			}
+			utils.EnsurePath(defaultConfigfilepath)
 			err = viper.WriteConfigAs(defaultConfigfilepath)
 			if err != nil {
 				utils.Fatal("Failed to write default config file. ", err)

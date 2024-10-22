@@ -39,7 +39,7 @@ func AddEntry(task *todo.Task) {
 	// start:
 	// entryWithStart := fmt.Sprintf("start:%s %s \n", now.Format(time.RFC3339), strings.TrimSpace(entry))
 
-	_, err = f.WriteString(fmt.Sprintf("%v\n", task.String()))
+	_, err = f.WriteString(fmt.Sprintf("%v\n", task.ConsoleString()))
 	fmt.Printf("Logging entry: %v\n", task.RemoveAnnotation(TimestampLabel).ColorString())
 	utils.DieOnError("Failed to write entry to log", err)
 }

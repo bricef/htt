@@ -35,7 +35,7 @@ func (c *Context) Remove(task *Task) error {
 			return nil
 		}
 	}
-	return fmt.Errorf("Could not find task %v in list.", task.Raw)
+	return fmt.Errorf("could not find task %v in list", task.Raw)
 }
 
 func (c *Context) RemoveByStrId(strid string) error {
@@ -67,27 +67,32 @@ func (c *Context) File() *os.File {
 	contextPath := c.Filepath()
 	utils.EnsurePath(contextPath)
 	f, err := os.OpenFile(contextPath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
-	utils.DieOnError("Could not open file: "+contextPath+": ", err)
+	utils.DieOnError("Failed to create context file. ", err)
 	return f
 }
 
 func (c *Context) Sync() error {
-	originalPath := c.Filepath()
-	backupPath := c.Filepath() + ".bak"
-	err := os.Rename(originalPath, backupPath)
+	currentFilePath := c.Filepath()
+	_, err := os.Stat(c.Filepath())
 	if err != nil {
-		return err //utils.DieOnError("Could not create a backup file.", err)
+		// original file can't be accessed. Assume it hasn't been created.
+		utils.Info("Context file " + c.Filepath() + " doesn't exist and cannot be backed up.")
+	} else {
+		backupPath := c.Filepath() + ".bak"
+		err := os.Rename(currentFilePath, backupPath)
+		if err != nil {
+			utils.Fatal("Could not create a backup file.", err)
+		}
 	}
 
-	f := c.File()
-	defer f.Close()
+	workingFile := c.File()
+	defer workingFile.Close()
 	for _, task := range c.Tasks {
-		_, err := f.WriteString(task.String() + "\n")
+		_, err := fmt.Fprintln(workingFile, task.Raw)
 		if err != nil {
 			return err //utils.DieOnError("Failed to write todo to file", err)
 		}
 	}
-	os.Remove(backupPath)
 	return nil
 }
 
@@ -95,8 +100,8 @@ func (c *Context) GetTaskById(index int) (*Task, error) {
 	if len(c.Tasks) == 0 {
 		return nil, fmt.Errorf("Task list was empty")
 	}
-	if index > len(c.Tasks) || index < 0 {
-		return nil, fmt.Errorf("Item selected is outside of range")
+	if index > len(c.Tasks)-1 || index < 0 {
+		return nil, fmt.Errorf("item selected is outside of range")
 	}
 	return c.Tasks[index], nil
 }
@@ -115,7 +120,7 @@ func (c *Context) GetTaskIndex(task *Task) (int, error) {
 			return i, nil
 		}
 	}
-	return -1, fmt.Errorf("Could not find task in context.")
+	return -1, fmt.Errorf("could not find task in context")
 }
 
 func (c *Context) Replace(old *Task, new *Task) error {
@@ -127,7 +132,7 @@ func (c *Context) Replace(old *Task, new *Task) error {
 	return nil
 }
 
-func (c *Context) String() string {
+func (c *Context) ConsoleString() string {
 	if vars.GetBool(vars.ConfigKeyDisableColor) {
 		return c.Name
 	} else {
@@ -138,7 +143,7 @@ func (c *Context) String() string {
 func showTasks(ts []*Task) {
 	fmt.Println()
 	for _, todo := range ts {
-		fmt.Printf("%3d %s\n", todo.Line, todo.String())
+		fmt.Printf("%3d %s\n", todo.Line, todo.ConsoleString())
 	}
 	fmt.Println()
 
@@ -146,11 +151,11 @@ func showTasks(ts []*Task) {
 
 func (c *Context) Show() {
 	if len(c.Tasks) == 0 {
-		fmt.Printf("(%s): Context is empty.\n", c.String())
+		fmt.Printf("(%s): Context is empty.\n", c.ConsoleString())
 		return
 	}
 	showTasks(c.Tasks)
-	fmt.Printf("(%s): %d tasks\n", c.String(), len(c.Tasks))
+	fmt.Printf("(%s): %d tasks\n", c.ConsoleString(), len(c.Tasks))
 
 }
 
@@ -158,13 +163,13 @@ func (c *Context) ShowOnly(predicate func(*Task) bool) {
 	ts := c.Search(predicate)
 
 	if len(ts) == 0 {
-		fmt.Printf("(%s): No tasks matched query.\n", c.String())
+		fmt.Printf("(%s): No tasks matched query.\n", c.ConsoleString())
 		return
 	}
 
 	showTasks(ts)
 
-	fmt.Printf("(%s): %d out of %v tasks matched query.\n", c.String(), len(ts), len(c.Tasks))
+	fmt.Printf("(%s): %d out of %v tasks matched query.\n", c.ConsoleString(), len(ts), len(c.Tasks))
 }
 
 func (c *Context) Search(predicate func(*Task) bool) []*Task {

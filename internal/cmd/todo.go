@@ -34,7 +34,7 @@ var add = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		task := todo.NewTask(strings.Join(args, " "))
 		todo.GetCurrentContext().Add(task).Sync()
-		fmt.Printf("Added: %v\n", task.String())
+		fmt.Printf("Added: %v\n", task.ConsoleString())
 	},
 }
 
@@ -47,7 +47,7 @@ var addTo = &cobra.Command{
 		task := todo.NewTask(strings.Join(args[1:], " "))
 		context.Add(task)
 		context.Sync()
-		fmt.Printf("Added: %v to %v", task.String(), context.String())
+		fmt.Printf("Added: %v to %v", task.ConsoleString(), context.ConsoleString())
 	},
 }
 
@@ -102,13 +102,13 @@ var edit = &cobra.Command{
 		utils.DieOnError("Failed to read the temp file after editing: ", err)
 
 		raw := strings.TrimSpace(string(content))
-		if raw == oldTask.String() || raw == "" {
+		if raw == oldTask.ConsoleString() || raw == "" {
 			utils.Info("New entry was identical or empty. No actions taken.")
 		} else {
 			newTask := todo.NewTask(raw)
 			context.Replace(oldTask, newTask)
-			fmt.Printf("Before: %s\n", oldTask.String())
-			fmt.Printf("After:  %s\n", newTask.String())
+			fmt.Printf("Before: %s\n", oldTask.ConsoleString())
+			fmt.Printf("After:  %s\n", newTask.ConsoleString())
 		}
 	},
 }
@@ -122,7 +122,7 @@ var do = &cobra.Command{
 		t, err := todo.CompleteTask(args[0])
 		utils.DieOnError("Failed to complete the task.", err)
 
-		fmt.Printf("Completed: %s\n", t.String())
+		fmt.Printf("Completed: %s\n", t.ConsoleString())
 	},
 }
 
@@ -153,7 +153,7 @@ var delete = &cobra.Command{
 		err = context.Sync()
 		utils.DieOnError("Could not save current context.", err)
 
-		fmt.Printf("Deleted task: %v\n", task.String())
+		fmt.Printf("Deleted task: %v\n", task.ConsoleString())
 	},
 }
 
@@ -178,7 +178,7 @@ var move = &cobra.Command{
 		err = toContext.Sync()
 		utils.DieOnError("Could not save context.", err)
 
-		fmt.Printf("Moved %v from %v to %v.\n", task.String(), fromContext.String(), toContext.String())
+		fmt.Printf("Moved %v from %v to %v.\n", task.ConsoleString(), fromContext.ConsoleString(), toContext.ConsoleString())
 	},
 }
 
@@ -192,7 +192,7 @@ var random = &cobra.Command{
 		current := todo.GetCurrentContext()
 		task := current.Tasks[rand.Intn(len(current.Tasks))]
 
-		fmt.Println(task.String())
+		fmt.Println(task.ConsoleString())
 	},
 }
 
@@ -205,13 +205,13 @@ var priPlus = &cobra.Command{
 		oldTask, err := ctx.GetTaskByStrId(args[0])
 		utils.DieOnError("Could not find task specified.", err)
 
-		fmt.Printf("Before: %s\n", oldTask.String())
+		fmt.Printf("Before: %s\n", oldTask.ConsoleString())
 
 		newTask := oldTask.IncreasePriority()
 		ctx.Replace(oldTask, newTask)
 		ctx.Sync()
 
-		fmt.Printf("After:  %s\n", newTask.String())
+		fmt.Printf("After:  %s\n", newTask.ConsoleString())
 
 	},
 }
@@ -225,13 +225,13 @@ var priMinus = &cobra.Command{
 		oldTask, err := ctx.GetTaskByStrId(args[0])
 		utils.DieOnError("Could not find task specified.", err)
 
-		fmt.Printf("Before: %s\n", oldTask.String())
+		fmt.Printf("Before: %s\n", oldTask.ConsoleString())
 
 		newTask := oldTask.DecreasePriority()
 		ctx.Replace(oldTask, newTask)
 		ctx.Sync()
 
-		fmt.Printf("After:  %s\n", newTask.String())
+		fmt.Printf("After:  %s\n", newTask.ConsoleString())
 	},
 }
 
@@ -251,13 +251,13 @@ var priority = &cobra.Command{
 		oldTask, err := ctx.GetTaskByStrId(args[0])
 		utils.DieOnError("Could not find task specified.", err)
 
-		fmt.Printf("Before: %s\n", oldTask.String())
+		fmt.Printf("Before: %s\n", oldTask.ConsoleString())
 
 		newTask := oldTask.SetPriority(args[1])
 		ctx.Replace(oldTask, newTask)
 		ctx.Sync()
 
-		fmt.Printf("After:  %s\n", newTask.String())
+		fmt.Printf("After:  %s\n", newTask.ConsoleString())
 
 	},
 }
@@ -272,13 +272,13 @@ var replace = &cobra.Command{
 		oldTask, err := ctx.GetTaskByStrId(args[0])
 		utils.DieOnError("Could not find task specified.", err)
 
-		fmt.Printf("Before: %s\n", oldTask.String())
+		fmt.Printf("Before: %s\n", oldTask.ConsoleString())
 
 		newTask := todo.NewTask(strings.Join(args[1:], " "))
 		ctx.Replace(oldTask, newTask)
 		ctx.Sync()
 
-		fmt.Printf("After: %s\n", newTask.String())
+		fmt.Printf("After: %s\n", newTask.ConsoleString())
 	},
 }
 
@@ -295,7 +295,7 @@ same context.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) == 0 {
 			current := todo.GetCurrentContext()
-			fmt.Printf("%s\n", current.String())
+			fmt.Printf("%s\n", current.ConsoleString())
 			return
 		}
 

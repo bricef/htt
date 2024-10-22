@@ -84,9 +84,14 @@ func (l *LineScanner) Scan() bool {
 }
 
 func ReadLines(filepath string) []string {
+	// short circuit on file missing
+	_, err := os.Stat(filepath)
+	if err != nil {
+		return []string{}
+	}
 
 	f, err := os.OpenFile(filepath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
-	DieOnError("Could not open file: "+filepath+": ", err)
+	DieOnError("Could not open file while reading lines: ", err)
 
 	var lines []string
 

@@ -28,23 +28,23 @@ func TestTaskCreation(t *testing.T) {
 		stringsEqualOrFail(NewTask("Hello tag:val World").Annotations["tag"], "val"))
 
 	t.Run("Can change the priority",
-		stringsEqualOrFail(NewTask("(B) hello world").SetPriority("A").String(), "(A) hello world"))
+		stringsEqualOrFail(NewTask("(B) hello world").SetPriority("A").ConsoleString(), "(A) hello world"))
 
 	t.Run("Can increase the priority",
-		stringsEqualOrFail(NewTask("(B) hello world").IncreasePriority().String(), "(A) hello world"))
+		stringsEqualOrFail(NewTask("(B) hello world").IncreasePriority().ConsoleString(), "(A) hello world"))
 
 	t.Run("Can decrease the priority",
-		stringsEqualOrFail(NewTask("(A) hello world").DecreasePriority().String(), "(B) hello world"))
+		stringsEqualOrFail(NewTask("(A) hello world").DecreasePriority().ConsoleString(), "(B) hello world"))
 
 	t.Run("Can't decrease the priority past minimum",
-		stringsEqualOrFail(NewTask("(F) hello world").DecreasePriority().String(), "(F) hello world"))
+		stringsEqualOrFail(NewTask("(F) hello world").DecreasePriority().ConsoleString(), "(F) hello world"))
 
 	t.Run("Can't increase the priority past minimum",
-		stringsEqualOrFail(NewTask("(A) hello world").IncreasePriority().String(), "(A) hello world"))
+		stringsEqualOrFail(NewTask("(A) hello world").IncreasePriority().ConsoleString(), "(A) hello world"))
 
 	t.Run("Can add an annotation",
-		stringsEqualOrFail(NewTask("hello").Annotate("test", "123").String(), "hello test:123"))
+		stringsEqualOrFail(NewTask("hello").Annotate("test", "123").ConsoleString(), "hello test:123"))
 
 	t.Run("Can remove an annotation",
-		stringsEqualOrFail(NewTask("hello test:123").RemoveAnnotation("test").String(), "hello"))
+		stringsEqualOrFail(NewTask("hello test:123").RemoveAnnotation("test").ConsoleString(), "hello"))
 }

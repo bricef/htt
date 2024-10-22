@@ -2,13 +2,11 @@ package cmd
 
 import (
 	"fmt"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"os/exec"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/bricef/htt/internal/todo"
 	"github.com/bricef/htt/internal/utils"
@@ -78,7 +76,7 @@ var edit = &cobra.Command{
 		oldTask, err := context.GetTaskByStrId(args[0])
 		utils.DieOnError("Could not get task from context", err)
 
-		f, err := ioutil.TempFile("", "hypothetical-tracker-todo")
+		f, err := os.CreateTemp("", "hypothetical-tracker-todo")
 		utils.DieOnError("Failed to open temporary file: ", err)
 		name := f.Name() // save the name so we can reopen the file
 		defer os.Remove(name)
@@ -98,7 +96,7 @@ var edit = &cobra.Command{
 		err = proc.Wait()
 		utils.DieOnError("Error running editor: ", err)
 
-		content, err := ioutil.ReadFile(name)
+		content, err := os.ReadFile(name)
 		utils.DieOnError("Failed to read the temp file after editing: ", err)
 
 		raw := strings.TrimSpace(string(content))
@@ -187,7 +185,6 @@ var random = &cobra.Command{
 	Short: "Select an item at random from the tasklist",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		rand.Seed(time.Now().Unix())
 
 		current := todo.GetCurrentContext()
 		task := current.Tasks[rand.Intn(len(current.Tasks))]

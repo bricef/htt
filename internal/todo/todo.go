@@ -2,7 +2,6 @@ package todo
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"strings"
@@ -23,7 +22,7 @@ func SetCurrentContext(raw string) {
 	}
 	contextStoreFilePath := path.Join(vars.Get(vars.ConfigKeyTrackerDir), vars.DefaultContextFileName)
 
-	err := ioutil.WriteFile(contextStoreFilePath, []byte(context), 0666)
+	err := os.WriteFile(contextStoreFilePath, []byte(context), 0666)
 	utils.DieOnError("Failed to open context persistance file: ", err)
 }
 
@@ -31,13 +30,14 @@ func GetCurrentContext() *Context {
 	contextStoreFilePath := path.Join(vars.Get(vars.ConfigKeyTrackerDir), vars.DefaultContextFileName)
 	context := vars.DefaultContext
 	if _, err := os.Stat(contextStoreFilePath); err == nil {
-		content, err := ioutil.ReadFile(contextStoreFilePath)
+		content, err := os.ReadFile(contextStoreFilePath)
 		utils.DieOnError("Failed to open context persistance file: ", err)
 		context = strings.TrimSpace(string(content))
 	}
 	return NewContext(context).Read()
 }
 
+/*
 func taskListFromFile(filename string) []*Task {
 	utils.EnsurePath(filename)
 	lines := utils.ReadLines(filename)
@@ -52,12 +52,7 @@ func taskListFromFile(filename string) []*Task {
 	}
 	return tasks
 }
-
-// TODO: Implement
-func terms2predicate(terms []string) func(*Task) bool {
-	utils.Warning("Parsing search terms is not yet supported.")
-	return func(t *Task) bool { return true }
-}
+*/
 
 func ShowStatus() {
 	current := GetCurrentContext()

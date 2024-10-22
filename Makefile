@@ -8,4 +8,7 @@ clean:
 install:
 	go install github.com/bricef/htt/cmd/htt
 
-.PHONY: clean install
+check:
+	golangci-lint run
+
+.PHONY: clean install check

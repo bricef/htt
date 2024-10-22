@@ -2,7 +2,7 @@ package repo
 
 import (
 	"errors"
-	"io/ioutil"
+	"os"
 	"time"
 
 	"github.com/go-git/go-git/v5/plumbing/object"
@@ -18,7 +18,7 @@ import (
 )
 
 var (
-	WorkingTreeUnchanged = errors.New("No changes to relevant files")
+	ErrWorkingTreeUnchanged = errors.New("no changes to relevant files")
 )
 
 type PushDetails struct {
@@ -35,6 +35,9 @@ func EnsureAndGetDataRepo(path string) *git.Repository {
 	if err == git.ErrRepositoryNotExists {
 		utils.Info("Could not open repository. Attempting to create one instead.")
 		repo, err = git.PlainInit(path, false)
+		if err != nil {
+			utils.DieOnError("Fatal: Failed ot init a plain git directory: ", err)
+		}
 	} else if err != nil {
 		utils.DieOnError("Fatal: Ensuring a data repository failed: ", err)
 	}
@@ -81,14 +84,10 @@ func statusRequiresCommit(status git.Status) bool {
 		switch fileStatus.Worktree {
 		case git.Modified, git.Added, git.Deleted, git.Renamed, git.Copied:
 			return true
-		default:
-			break
 		}
 		switch fileStatus.Staging {
 		case git.Modified, git.Added, git.Deleted, git.Renamed, git.Copied:
 			return true
-		default:
-			break
 		}
 	}
 	return false
@@ -124,13 +123,13 @@ func CreateCommitFromChanges(repo *git.Repository, message string) (plumbing.Has
 		return hash, nil
 	}
 	// default to noop
-	return plumbing.Hash{}, WorkingTreeUnchanged
+	return plumbing.Hash{}, ErrWorkingTreeUnchanged
 
 }
 
 func getSSHAuth() *gitssh.PublicKeys {
 
-	sshKey, err := ioutil.ReadFile(vars.Get(vars.ConfigKeySSHKeyFile))
+	sshKey, err := os.ReadFile(vars.Get(vars.ConfigKeySSHKeyFile))
 	utils.DieOnError("Failed to read SSH Key: ", err)
 
 	signer, err := ssh.ParsePrivateKey([]byte(sshKey))
@@ -214,7 +213,7 @@ func Sync() {
 	// Create commit
 	hash, err := CreateCommitFromChanges(r, "Commiting state via tracker client sync")
 	if err != nil {
-		if err == WorkingTreeUnchanged {
+		if err == ErrWorkingTreeUnchanged {
 			utils.Info("No relevant changes to be commited")
 		} else {
 			utils.Fatal("Could not commit changes due to error: ", err)

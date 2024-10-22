@@ -2,7 +2,6 @@ package timelogs
 
 import (
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"time"
@@ -45,7 +44,7 @@ func AddEntry(task *todo.Task) {
 }
 
 func Show() {
-	bytes, err := ioutil.ReadFile(CurrentLogFilePath())
+	bytes, err := os.ReadFile(CurrentLogFilePath())
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Today's timelog does not yet exist. Add an entry.")

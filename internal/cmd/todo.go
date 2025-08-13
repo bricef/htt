@@ -134,7 +134,7 @@ var editDone = &cobra.Command{
 	},
 }
 
-var delete = &cobra.Command{
+var deleteTodo = &cobra.Command{
 	Use:     "delete <item index>",
 	Short:   "Delete the item specified",
 	Aliases: []string{"rm"},
@@ -339,7 +339,7 @@ func init() {
 	TodoCommand.AddCommand(edit)
 	TodoCommand.AddCommand(do)
 	TodoCommand.AddCommand(editDone)
-	TodoCommand.AddCommand(delete)
+	TodoCommand.AddCommand(deleteTodo)
 	TodoCommand.AddCommand(random)
 	TodoCommand.AddCommand(priPlus)
 	TodoCommand.AddCommand(priMinus)

@@ -51,6 +51,9 @@ alias jnl="htt l"
 ```
 
 ## Todo
+- Interactive Mode
+  - [x] Set up interactive mode with Bubbletea, bubbles and lipgloss
+  - [ ] Enable task action from interactive UI
 - QA
   - [ ] Write intergation tests for htt. Make sure that mutating actions work as intended
 - Repos

@@ -21,12 +21,14 @@ func main() {
 	}
 
 	// default values
-	trackerDir := filepath.Join(homeDir, vars.DefaultHomeDir)
-	defaultConfigfilepath := filepath.Join(trackerDir, vars.ConfigFileName+".yaml")
+	configDir := filepath.Join(homeDir, vars.DefaultConfigDir)
+	dataDir := filepath.Join(homeDir, vars.DefaultDataDir, vars.DefaultDataDirName)
 
-	viper.SetDefault(vars.ConfigKeyTrackerDir, trackerDir)
+	defaultConfigfilepath := filepath.Join(configDir, vars.ConfigFileName+".yaml")
+
+	viper.SetDefault(vars.ConfigKeyTrackerDir, dataDir)
 	viper.SetDefault(vars.ConfigKeyConfigPath, defaultConfigfilepath)
-	viper.SetDefault(vars.ConfigKeyDataDir, filepath.Join(trackerDir, vars.DefaultDataDirName))
+	viper.SetDefault(vars.ConfigKeyDataDir, dataDir)
 	viper.SetDefault(vars.ConfigKeyRemoteName, vars.DefaultRemoteName)
 	viper.SetDefault(vars.ConfigKeyFilePatterns, vars.DefaultFilePatterns)
 	viper.SetDefault(vars.ConfigKeyAuthorName, vars.DefaultCommitterName)
@@ -37,7 +39,7 @@ func main() {
 
 	viper.SetConfigName(vars.ConfigFileName)
 	viper.AddConfigPath(".")
-	viper.AddConfigPath(trackerDir)
+	viper.AddConfigPath(configDir)
 
 	// global flags
 	var nocolor = false

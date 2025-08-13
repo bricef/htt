@@ -28,8 +28,9 @@ var (
 	// Default values
 	DefaultContext         = "todo"
 	DefaultDoneFileName    = "done"
-	DefaultHomeDir         = ".htt"
+	DefaultDataDir         = ".htt"
 	DefaultDataDirName     = "data"
+	DefaultConfigDir       = ".config/htt"
 	DefaultRemoteName      = "origin"
 	DefaultTimelogDirName  = "timelogs"
 	DefaultFileExtension   = ".txt"

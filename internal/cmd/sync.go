@@ -23,8 +23,8 @@ of the todos and time tracking list. You can commit
 additional files in the git repository and they will also 
 be synced to the backend.
 
-In addition, you can retarget Hypothetical Tracker to use 
-yourown repository.`,
+In addition, you can re-target htt to use your own 
+repository.`,
 		Args: cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
 			repo.Sync()

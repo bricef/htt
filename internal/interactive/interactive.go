@@ -2,6 +2,7 @@ package interactive
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/bricef/htt/internal/todo"
 	tea "github.com/charmbracelet/bubbletea"
@@ -9,15 +10,20 @@ import (
 )
 
 type model struct {
-	context *todo.Context
-	cursor  int // which to-do list item our cursor is pointing at
-	width   int
-	height  int
+	context       *todo.Context
+	cursor        int // which to-do list item our cursor is pointing at
+	contexts      []*todo.Context
+	contextCursor int
+	width         int
+	height        int
 }
 
 func Model(ctx *todo.Context) model {
 	return model{
-		context: ctx,
+		context:       ctx,
+		cursor:        0,
+		contexts:      todo.GetContexts(),
+		contextCursor: 0,
 	}
 }
 
@@ -28,6 +34,7 @@ func (m model) Init() tea.Cmd {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -54,6 +61,37 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor++
 			}
 
+		case "ctrl+t", "right", "l":
+			// change context
+			if m.contextCursor < len(m.contexts)-1 {
+				m.contextCursor++
+				m.context = todo.NewContext(m.contexts[m.contextCursor].Name)
+				m.context.Read()
+			}
+
+		case "ctrl+shift+t", "left", "h":
+			// change context
+			if m.contextCursor > 0 {
+				m.contextCursor--
+				m.context = todo.NewContext(m.contexts[m.contextCursor].Name)
+				m.context.Read()
+			}
+
+		case "x":
+			// TODO: Log errors if any
+			t, err := m.context.GetTaskById(m.cursor)
+			if err != nil {
+				return m, tea.Quit
+			}
+			t.Do(m.context, time.Now())
+			err = todo.Move(t, m.context, todo.NewContext("done"))
+			if err != nil {
+				return m, tea.Quit
+			}
+			err = m.context.Sync()
+			if err != nil {
+				return m, tea.Quit
+			}
 		}
 	}
 
@@ -64,13 +102,39 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m model) View() string {
 
-	header := lipgloss.NewStyle().
-		Align(lipgloss.Center).
-		Bold(true).
+	menuitem := lipgloss.NewStyle().Padding(0, 2).Align(lipgloss.Center)
+	selected := lipgloss.NewStyle().
+		Inherit(menuitem).
+		Padding(0, 2).
 		Foreground(lipgloss.Color("#F45634")).
-		Width(m.width).
+		Background(lipgloss.Color("#FFFFFF")).
+		Bold(true)
+
+	menustr := ""
+	for i, context := range m.contexts {
+		if i == m.contextCursor {
+			menustr += selected.Render(context.Name)
+		} else {
+			menustr += menuitem.Render(context.Name)
+		}
+	}
+
+	title := lipgloss.NewStyle().
+		Align(lipgloss.Left).
+		Foreground(lipgloss.Color("#00FF00")).
+		Width(m.width / 2).
+		Render("htt")
+
+	menu := lipgloss.NewStyle().
+		Align(lipgloss.Right).
+		Width(m.width / 2).
+		Render(menustr)
+
+	header := lipgloss.NewStyle().
+		Align(lipgloss.Right).
 		Border(lipgloss.NormalBorder(), false, false, true, false).
-		Render("What should we buy at the market?")
+		Width(m.width).
+		Render(title + menu)
 
 	footer := lipgloss.NewStyle().
 		Align(lipgloss.Center).
@@ -81,7 +145,7 @@ func (m model) View() string {
 	content := lipgloss.NewStyle().
 		Width(m.width).
 		Height(m.height-lipgloss.Height(header)-lipgloss.Height(footer)).
-		Align(lipgloss.Center, lipgloss.Center)
+		Align(lipgloss.Left, lipgloss.Center)
 
 	s := ""
 
@@ -95,7 +159,7 @@ func (m model) View() string {
 		}
 
 		// Render the row
-		s += fmt.Sprintf("%s %s\n", cursor, choice.ConsoleString())
+		s += fmt.Sprintf("%s [ ] %s\n", cursor, choice.ConsoleString())
 	}
 
 	// Send the UI for rendering

@@ -116,3 +116,12 @@ alias jnl="htt l"
 - https://github.com/google/go-github (Github API client)
 - https://github.com/gammons/todolist Also in Go, similar idea with good query parsing
 - Command line journaling: http://jrnl.sh/
+- https://github.com/VladimirMarkelov/ttdl (terminal Todo List Manager in Rust)
+- https://github.com/hugokernel/todofi.sh (todotxt with [Rofi](https://github.com/davatorium/rofi))
+- https://xwmx.github.io/nb/
+- https://github.com/yuucu/todotui
+- https://codeberg.org/pter/pter
+- https://github.com/Fanteria/todotxt-tui
+- http://todotxt.org/
+- https://www.solidtime.io/ / https://github.com/solidtime-io/solidtime
+

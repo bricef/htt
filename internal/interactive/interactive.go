@@ -2,6 +2,7 @@ package interactive
 
 import (
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/bricef/htt/internal/todo"
@@ -19,17 +20,34 @@ type model struct {
 }
 
 func Model(ctx *todo.Context) model {
+	contexts := todo.GetContexts()
+	contexts = append(contexts, todo.NewContext("done"))
+	contexts = slices.Insert(contexts, 0, todo.NewContext("todo"))
+
+	selected := slices.IndexFunc(contexts, func(c *todo.Context) bool {
+		return c.Equals(ctx)
+	})
+
 	return model{
 		context:       ctx,
 		cursor:        0,
-		contexts:      todo.GetContexts(),
-		contextCursor: 0,
+		contexts:      contexts,
+		contextCursor: selected,
 	}
 }
 
 func (m model) Init() tea.Cmd {
 	// Just return `nil`, which means "no I/O right now, please."
 	return nil
+}
+
+func (m model) changeContext() {
+	name := m.contexts[m.contextCursor].Name
+	if name != "done" {
+		todo.SetCurrentContext(name)
+	}
+	m.context = todo.NewContext(name)
+	m.context.Read()
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -62,18 +80,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "ctrl+t", "right", "l":
-			// change context
 			if m.contextCursor < len(m.contexts)-1 {
 				m.contextCursor++
-				m.context = todo.NewContext(m.contexts[m.contextCursor].Name)
+				name := m.contexts[m.contextCursor].Name
+				if name != "done" {
+					todo.SetCurrentContext(name)
+				}
+				m.context = todo.NewContext(name)
 				m.context.Read()
 			}
 
 		case "ctrl+shift+t", "left", "h":
-			// change context
 			if m.contextCursor > 0 {
 				m.contextCursor--
-				m.context = todo.NewContext(m.contexts[m.contextCursor].Name)
+				name := m.contexts[m.contextCursor].Name
+				if name != "done" {
+					todo.SetCurrentContext(name)
+				}
+				m.context = todo.NewContext(name)
 				m.context.Read()
 			}
 
@@ -100,23 +124,33 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m model) View() string {
-
-	menuitem := lipgloss.NewStyle().Padding(0, 2).Align(lipgloss.Center)
-	selected := lipgloss.NewStyle().
-		Inherit(menuitem).
-		Padding(0, 2).
+func selected(l lipgloss.Style) lipgloss.Style {
+	return l.
 		Foreground(lipgloss.Color("#F45634")).
 		Background(lipgloss.Color("#FFFFFF")).
 		Bold(true)
+}
+
+func (m model) View() string {
+
+	menuitem := lipgloss.NewStyle().Padding(0, 2).Align(lipgloss.Center)
+	done := lipgloss.NewStyle().
+		Inherit(menuitem).
+		Padding(0, 2).
+		Foreground(lipgloss.Color("#00FF00"))
 
 	menustr := ""
 	for i, context := range m.contexts {
-		if i == m.contextCursor {
-			menustr += selected.Render(context.Name)
-		} else {
-			menustr += menuitem.Render(context.Name)
+		style := menuitem
+		if context.Name == "done" {
+			style = done
 		}
+		if i == m.contextCursor {
+			style = selected(style)
+		}
+
+		menustr += style.Render(context.Name)
+
 	}
 
 	title := lipgloss.NewStyle().

@@ -23,6 +23,10 @@ func NewContext(name string) *Context {
 	}
 }
 
+func (c *Context) Equals(other *Context) bool {
+	return c.Name == other.Name
+}
+
 func (c *Context) Add(t *Task) *Context {
 	c.Tasks = append(c.Tasks, t)
 	return c

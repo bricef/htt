@@ -6,6 +6,7 @@ toolchain go1.23.2
 
 require (
 	github.com/buger/goterm v1.0.3
+	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.6
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/fatih/color v1.13.0

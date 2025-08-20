@@ -20,6 +20,21 @@ type model struct {
 	height        int
 }
 
+type Binding struct {
+	action  Action
+	binding key.Binding
+}
+
+type ActionController []Binding
+
+func NewActionController() ActionController {
+	return make(ActionController, 0)
+}
+
+func (c ActionController) addBinding(action Action, binding key.Binding) ActionController {
+	return append(c, Binding{action, binding})
+}
+
 func Model(ctx *todo.Context) helpMode {
 	contexts := todo.GetContexts()
 	contexts = append(contexts, todo.NewContext("done"))

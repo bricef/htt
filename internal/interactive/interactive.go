@@ -1,8 +1,8 @@
 package interactive
 
 import (
+	"log"
 	"slices"
-	"time"
 
 	"github.com/bricef/htt/internal/todo"
 
@@ -18,24 +18,40 @@ type model struct {
 	contextCursor int
 	width         int
 	height        int
+	keys          KeyBindingController
 }
 
-type Binding struct {
-	action  Action
-	binding key.Binding
-}
+var controller = NewKeyBindingController().
+	AddShortBinding(Help, key.NewBinding(
+		key.WithKeys("?"),
+		key.WithHelp("?", "toggle help"),
+	)).
+	AddShortBinding(Quit, key.NewBinding(
+		key.WithKeys("q", "esc", "ctrl+c"),
+		key.WithHelp("q", "quit"),
+	)).
+	AddBinding(Do, key.NewBinding(
+		key.WithKeys("x"),
+		key.WithHelp("x", "do"),
+	)).
+	AddBinding(Up, key.NewBinding(
+		key.WithKeys("up", "k"),
+		key.WithHelp("↑/k", "move up"),
+	)).
+	AddBinding(Down, key.NewBinding(
+		key.WithKeys("down", "j"),
+		key.WithHelp("↓/j", "move down"),
+	)).
+	AddBinding(NextContext, key.NewBinding(
+		key.WithKeys("right", "l"),
+		key.WithHelp("→/l", "move right"),
+	)).
+	AddBinding(PreviousContext, key.NewBinding(
+		key.WithKeys("left", "h"),
+		key.WithHelp("←/h", "move left"),
+	))
 
-type ActionController []Binding
-
-func NewActionController() ActionController {
-	return make(ActionController, 0)
-}
-
-func (c ActionController) addBinding(action Action, binding key.Binding) ActionController {
-	return append(c, Binding{action, binding})
-}
-
-func Model(ctx *todo.Context) helpMode {
+func Model(ctx *todo.Context) model {
 	contexts := todo.GetContexts()
 	contexts = append(contexts, todo.NewContext("done"))
 	contexts = slices.Insert(contexts, 0, todo.NewContext("todo"))
@@ -44,29 +60,22 @@ func Model(ctx *todo.Context) helpMode {
 		return c.Equals(ctx)
 	})
 
-	return helpMode{
+	return model{
 		context:       ctx,
 		cursor:        0,
 		contexts:      contexts,
 		contextCursor: selected,
+		keys:          controller,
 	}
 }
 
-func (m helpMode) Init() tea.Cmd {
+func (m model) Init() tea.Cmd {
 	// Just return `nil`, which means "no I/O right now, please."
 	return nil
 }
 
-func (m helpMode) changeContext() {
-	name := m.contexts[m.contextCursor].Name
-	if name != "done" {
-		todo.SetCurrentContext(name)
-	}
-	m.context = todo.NewContext(name)
-	m.context.Read()
-}
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
-func (m helpMode) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
 	case tea.WindowSizeMsg:
@@ -75,70 +84,11 @@ func (m helpMode) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Is it a key press?
 	case tea.KeyMsg:
-
-		// Cool, what was the actual key pressed?
-		switch msg.String() {
-
-		// These keys should exit the program.
-		case "ctrl+c", "q":
-			return m, tea.Quit
-
-		// The "up" and "k" keys move the cursor up
-		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
-			}
-
-		// The "down" and "j" keys move the cursor down
-		case "down", "j":
-			if m.cursor < len(m.context.Tasks)-1 {
-				m.cursor++
-			}
-
-		case "ctrl+t", "right", "l":
-			if m.contextCursor < len(m.contexts)-1 {
-				m.contextCursor++
-				name := m.contexts[m.contextCursor].Name
-				if name != "done" {
-					todo.SetCurrentContext(name)
-				}
-				m.context = todo.NewContext(name)
-				m.context.Read()
-				m.cursor = 0
-			}
-
-		case "ctrl+shift+t", "left", "h":
-			if m.contextCursor > 0 {
-				m.contextCursor--
-				name := m.contexts[m.contextCursor].Name
-				if name != "done" {
-					todo.SetCurrentContext(name)
-				}
-				m.context = todo.NewContext(name)
-				m.context.Read()
-				m.cursor = 0
-			}
-
-		case "x":
-			// TODO: Log errors if any
-			t, err := m.context.GetTaskById(m.cursor)
-			if err != nil {
-				return m, tea.Quit
-			}
-			t.Do(m.context, time.Now())
-			err = todo.Move(t, m.context, todo.NewContext("done"))
-			if err != nil {
-				return m, tea.Quit
-			}
-			err = m.context.Sync()
-			if err != nil {
-				return m, tea.Quit
-			}
-		}
+		action := m.keys.GetAction(msg)
+		log.Printf("action: %s", action.description)
+		return action.Act(m)
 	}
 
-	// Return the updated model to the Bubble Tea runtime for processing.
-	// Note that we're not returning a command.
 	return m, nil
 }
 
@@ -149,59 +99,7 @@ func selected(l lipgloss.Style) lipgloss.Style {
 		Bold(true)
 }
 
-type keyMap struct {
-	Up    key.Binding
-	Down  key.Binding
-	Left  key.Binding
-	Right key.Binding
-	Help  key.Binding
-	Quit  key.Binding
-}
-
-// ShortHelp returns keybindings to be shown in the mini help view. It's part
-// of the key.Map interface.
-func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Help, k.Quit}
-}
-
-// FullHelp returns keybindings for the expanded help view. It's part of the
-// key.Map interface.
-func (k keyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{
-		{k.Up, k.Down, k.Left, k.Right}, // first column
-		{k.Help, k.Quit},                // second column
-	}
-}
-
-var keys = keyMap{
-	Up: key.NewBinding(
-		key.WithKeys("up", "k"),
-		key.WithHelp("↑/k", "move up"),
-	),
-	Down: key.NewBinding(
-		key.WithKeys("down", "j"),
-		key.WithHelp("↓/j", "move down"),
-	),
-	Left: key.NewBinding(
-		key.WithKeys("left", "h"),
-		key.WithHelp("←/h", "move left"),
-	),
-	Right: key.NewBinding(
-		key.WithKeys("right", "l"),
-		key.WithHelp("→/l", "move right"),
-	),
-	Help: key.NewBinding(
-		key.WithKeys("?"),
-		key.WithHelp("?", "toggle help"),
-	),
-	Quit: key.NewBinding(
-		key.WithKeys("q", "esc", "ctrl+c"),
-		key.WithHelp("q", "quit"),
-	),
-}
-
-func (m helpMode) View() string {
-
+func (m model) View() string {
 	menuitem := lipgloss.NewStyle().Padding(0, 2).Align(lipgloss.Center)
 	done := lipgloss.NewStyle().
 		Inherit(menuitem).
@@ -260,5 +158,4 @@ func (m helpMode) View() string {
 
 	// Send the UI for rendering
 	return lipgloss.JoinVertical(lipgloss.Top, header, content.Render(s), footer)
-
 }

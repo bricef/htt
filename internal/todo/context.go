@@ -17,10 +17,13 @@ type Context struct {
 }
 
 func NewContext(name string) *Context {
-	return &Context{
+
+	c := Context{
 		Name:  name,
 		Tasks: []*Task{},
 	}
+	c.Read()
+	return &c
 }
 
 func (c *Context) Equals(other *Context) bool {
@@ -29,6 +32,7 @@ func (c *Context) Equals(other *Context) bool {
 
 func (c *Context) Add(t *Task) *Context {
 	c.Tasks = append(c.Tasks, t)
+	c.Sync()
 	return c
 }
 
@@ -36,6 +40,7 @@ func (c *Context) Remove(task *Task) error {
 	for i, t := range c.Tasks {
 		if t == task {
 			c.Tasks = append(c.Tasks[:i], c.Tasks[i+1:]...)
+			c.Sync()
 			return nil
 		}
 	}
@@ -52,6 +57,7 @@ func (c *Context) RemoveByStrId(strid string) error {
 }
 
 func (c *Context) Read() *Context {
+	c.Tasks = []*Task{}
 	lines := utils.ReadLines(c.Filepath())
 	for i, line := range lines {
 		if line != "" {

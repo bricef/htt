@@ -9,17 +9,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-type Action int
-
-const (
-	Up Action = iota
-	Down
-	Left
-	Right
-	Help
-	Quit
-)
-
 type keyBindings map[Action]key.Binding
 
 func chunkBy[T any](items []T, chunkSize int) (chunks [][]T) {
@@ -29,59 +18,34 @@ func chunkBy[T any](items []T, chunkSize int) (chunks [][]T) {
 	return append(chunks, items)
 }
 
-func (k keyBindings) ShortHelp() []key.Binding {
-	return []key.Binding{k[Help], k[Quit]}
-}
-
-func (k keyBindings) FullHelp() [][]key.Binding {
-
-	// 4 columns
-	// last column is help and quit
-
-	len := len(k)
-	perCol := len / 4
-
-	chunks := chunkBy(k, perCol)
-
-	help := [][]key.Binding{}
-
-	for _, chunk := range chunks {
-		help = append(help, chunk)
-	}
-
-	help = append(help, []key.Binding{k[Help], k[Quit]})
-
-	return help
-}
-
-var keys = keyBindings{
-	Help: key.NewBinding(
-		key.WithKeys("?"),
-		key.WithHelp("?", "toggle help"),
-	),
-	Quit: key.NewBinding(
-		key.WithKeys("q", "esc", "ctrl+c"),
-		key.WithHelp("q", "quit"),
-	),
-	Bindings: []key.Binding{
-		key.NewBinding(
-			key.WithKeys("up", "k"),
-			key.WithHelp("↑/k", "move up"),
-		),
-		key.NewBinding(
-			key.WithKeys("down", "j"),
-			key.WithHelp("↓/j", "move down"),
-		),
-		key.NewBinding(
-			key.WithKeys("left", "h"),
-			key.WithHelp("←/h", "move left"),
-		),
-		key.NewBinding(
-			key.WithKeys("right", "l"),
-			key.WithHelp("→/l", "move right"),
-		),
-	},
-}
+// var keys = keyBindings{
+// 	Help: key.NewBinding(
+// 		key.WithKeys("?"),
+// 		key.WithHelp("?", "toggle help"),
+// 	),
+// 	Quit: key.NewBinding(
+// 		key.WithKeys("q", "esc", "ctrl+c"),
+// 		key.WithHelp("q", "quit"),
+// 	),
+// 	Bindings: []key.Binding{
+// 		key.NewBinding(
+// 			key.WithKeys("up", "k"),
+// 			key.WithHelp("↑/k", "move up"),
+// 		),
+// 		key.NewBinding(
+// 			key.WithKeys("down", "j"),
+// 			key.WithHelp("↓/j", "move down"),
+// 		),
+// 		key.NewBinding(
+// 			key.WithKeys("left", "h"),
+// 			key.WithHelp("←/h", "move left"),
+// 		),
+// 		key.NewBinding(
+// 			key.WithKeys("right", "l"),
+// 			key.WithHelp("→/l", "move right"),
+// 		),
+// 	},
+// }
 
 type helpMode struct {
 	keys       keyMap

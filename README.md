@@ -55,6 +55,7 @@ alias jnl="htt l"
   - [x] Set up interactive mode with Bubbletea, bubbles and lipgloss
   - [ ] Enable task action from interactive UI
   - [ ] Highlight tags KV and dates in task render
+  - [ ] Enable command mode
 - QA
   - [ ] Write intergation tests for htt. Make sure that mutating actions work as intended
 - Repos

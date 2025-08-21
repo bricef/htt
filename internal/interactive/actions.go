@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/bricef/htt/internal/todo"
+	"github.com/bricef/htt/internal/utils"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -76,7 +77,23 @@ var Do = mkAction("do", func(m model) (tea.Model, tea.Cmd) {
 var Quit = mkAction("quit", func(m model) (tea.Model, tea.Cmd) {
 	return m, tea.Quit
 })
-var Help = mkAction("toggle help", func(m model) (tea.Model, tea.Cmd) {
 
+var Help = mkAction("toggle help", func(m model) (tea.Model, tea.Cmd) {
+	m.showHelp = !m.showHelp
 	return m, nil
+})
+
+var EditFile = mkAction("edit file", func(m model) (tea.Model, tea.Cmd) {
+	utils.EditFilePath(m.context.Filepath())
+	m.context = m.context.Read()
+	return m, tea.ClearScreen
+})
+
+var NewTask = mkAction("new task", func(m model) (tea.Model, tea.Cmd) {
+
+	return m, tea.ClearScreen
+})
+
+var CommandMode = mkAction("command mode", func(m model) (tea.Model, tea.Cmd) {
+	return m, tea.ClearScreen
 })

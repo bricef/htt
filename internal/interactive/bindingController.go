@@ -66,7 +66,7 @@ func (k KeyBindingController) FullHelp() [][]key.Binding {
 	len := len(k.bindings)
 	perCol := len / 4
 
-	chunks := slices.Chunk(filter(k.bindings, func(b Binding) bool { return !b.short }), perCol)
+	chunks := slices.Chunk(k.bindings, perCol)
 
 	help := [][]key.Binding{}
 

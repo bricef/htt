@@ -10,13 +10,12 @@ import (
 const CURSOR = ">"
 
 var currentTask = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("#00FF00")).
-	Background(lipgloss.Color("#FFFFFF")).
-	Bold(true)
+	Foreground(foreground_color).
+	Background(selected_color)
 
 func RenderTask(task *todo.Task, selected bool) string {
 	if selected {
-		return currentTask.Render(task.ConsoleString())
+		return currentTask.Render(task.RawString())
 	}
 	return task.ConsoleString()
 }

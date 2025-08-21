@@ -18,8 +18,13 @@ var Interactive = &cobra.Command{
 	Aliases: []string{"i"},
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx := todo.GetCurrentContext()
-		p := tea.NewProgram(interactive.Model(ctx), tea.WithAltScreen())
-		if len(os.Getenv("DEBUG")) > 0 {
+		p := tea.NewProgram(
+			interactive.Model(ctx),
+			tea.WithAltScreen(),
+			tea.WithMouseCellMotion(),
+		)
+
+		{ // Log to file
 			f, err := tea.LogToFile("debug.log", "debug")
 			if err != nil {
 				fmt.Printf("Alas, there's been an error: %v", err)

@@ -88,6 +88,7 @@ type model struct {
 	height        int
 	keys          KeyBindingController
 	showHelp      bool
+	newTask       bool
 }
 
 var controller = NewKeyBindingController().
@@ -152,6 +153,7 @@ func Model(ctx *todo.Context) model {
 		contexts:      contexts,
 		contextCursor: selected,
 		keys:          controller,
+		newTask:       false,
 	}
 }
 

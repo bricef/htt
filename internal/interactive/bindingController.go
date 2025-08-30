@@ -24,33 +24,34 @@ type Binding struct {
 }
 
 type KeyBindingController struct {
-	bindings []Binding
+	stack   [][]Binding
+	current *[]Binding
 }
 
 func NewKeyBindingController() KeyBindingController {
+	stack := make([][]Binding, 1)
+	stack[0] = []Binding{}
+
 	return KeyBindingController{
-		bindings: []Binding{},
+		stack:   stack,
+		current: &stack[len(stack)-1],
 	}
 }
 
 func (c KeyBindingController) AddShortBinding(action *Action, binding key.Binding) KeyBindingController {
-	c.bindings = append(c.bindings, Binding{action, binding, true})
+	*c.current = append(*c.current, Binding{action, binding, true})
 	return c
 }
 
 func (c KeyBindingController) AddBinding(action *Action, binding key.Binding) KeyBindingController {
-	c.bindings = append(c.bindings, Binding{action, binding, false})
-	return c
-}
-
-func (c KeyBindingController) ClearBinding(action *Action) KeyBindingController {
-	c.bindings = filter(c.bindings, func(b Binding) bool { return b.action != action })
+	c.stack = append(c.stack, []Binding{{action, binding, false}})
 	return c
 }
 
 func (k KeyBindingController) ShortHelp() []key.Binding {
 	short := []key.Binding{}
-	for _, binding := range k.bindings {
+	active := k.GetActiveBindings()
+	for _, binding := range active {
 		if binding.short {
 			short = append(short, binding.binding)
 		}
@@ -58,15 +59,38 @@ func (k KeyBindingController) ShortHelp() []key.Binding {
 	return short
 }
 
+func (k KeyBindingController) Push() {
+	new_bindings := []Binding{}
+	k.stack = append(k.stack, new_bindings)
+	k.current = &new_bindings
+
+}
+
+func (k KeyBindingController) Pop() {
+	k.stack = k.stack[:len(k.stack)-1]
+	k.current = &k.stack[len(k.stack)-1]
+}
+
+func (k KeyBindingController) GetActiveBindings() []Binding {
+	collected := []Binding{}
+	for _, bindings := range k.stack {
+		collected = append(collected, bindings...)
+	}
+	return collected
+}
+
 func (k KeyBindingController) FullHelp() [][]key.Binding {
+
+	// Collect all active bindings
+	collected := k.GetActiveBindings()
 
 	// 4 columns
 	// last column is help and quit
 
-	len := len(k.bindings)
+	len := len(collected)
 	perCol := len / 4
 
-	chunks := slices.Chunk(k.bindings, perCol)
+	chunks := slices.Chunk(collected, perCol)
 
 	help := [][]key.Binding{}
 
@@ -84,7 +108,7 @@ func (k KeyBindingController) FullHelp() [][]key.Binding {
 }
 
 func (k KeyBindingController) GetAction(msg tea.KeyMsg) *Action {
-	for _, binding := range k.bindings {
+	for _, binding := range k.GetActiveBindings() {
 		if key.Matches(msg, binding.binding) {
 			return binding.action
 		}

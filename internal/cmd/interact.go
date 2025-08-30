@@ -11,6 +11,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+var debug = false
+
 var Interactive = &cobra.Command{
 	Use:     "interactive",
 	Short:   "Enter interactive mode",
@@ -24,7 +26,8 @@ var Interactive = &cobra.Command{
 			tea.WithMouseCellMotion(),
 		)
 
-		{ // Log to file
+		// Log to file
+		if debug {
 			f, err := tea.LogToFile("debug.log", "debug")
 			if err != nil {
 				fmt.Printf("Alas, there's been an error: %v", err)
@@ -40,5 +43,6 @@ var Interactive = &cobra.Command{
 }
 
 func init() {
+	Interactive.Flags().BoolVarP(&debug, "debug", "d", false, "Enable debug mode")
 	RootCmd.AddCommand(Interactive)
 }

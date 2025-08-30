@@ -70,8 +70,10 @@ func ShowStatus() {
 }
 
 func GetContexts() []*Context {
+	utils.EnsurePath(path.Join(vars.Get(vars.ConfigKeyDataDir), "bogus"))
+
 	files, err := os.ReadDir(vars.Get(vars.ConfigKeyDataDir))
-	utils.DieOnError("Failed to list contexts", err)
+	utils.DieOnError("Failed to list contexts: ", err)
 
 	contexts := []*Context{}
 	for _, file := range files {

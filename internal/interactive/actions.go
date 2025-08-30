@@ -90,7 +90,7 @@ var EditFile = mkAction("edit file", func(m model) (tea.Model, tea.Cmd) {
 })
 
 var NewTask = mkAction("new task", func(m model) (tea.Model, tea.Cmd) {
-
+	m.newTask = true
 	return m, tea.ClearScreen
 })
 

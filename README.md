@@ -50,6 +50,20 @@ alias t="htt t"
 alias jnl="htt l"
 ```
 
+## Development
+
+You can follow the logs created in debug.log:
+
+```shell
+$ go run cmd/htt/main.go i
+```
+
+in another shell
+
+```shell
+$ tail -f debug.log
+```
+
 ## Todo
 - Interactive Mode
   - [x] Set up interactive mode with Bubbletea, bubbles and lipgloss

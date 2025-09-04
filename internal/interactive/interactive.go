@@ -1,6 +1,8 @@
 package interactive
 
 import (
+	"fmt"
+	"image/color"
 	"log"
 	"slices"
 
@@ -9,7 +11,8 @@ import (
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/lipgloss/v2"
+
 	"github.com/lucasb-eyer/go-colorful"
 )
 
@@ -45,39 +48,45 @@ const (
 	TeaGreen      = "#cfe0c3"
 )
 
-const (
+var (
 	background_color = lipgloss.Color("#192b31")
 	foreground_color = lipgloss.Color(TeaGreen)
 	selected_color   = lipgloss.Color(Cerulean)
 	cursor_color     = lipgloss.Color(Verdigris)
 )
 
-func saturation(color lipgloss.Color, s float64) lipgloss.Color {
-	c, _ := colorful.Hex(string(color))
+func saturation(co color.Color, s float64) color.Color {
+	r, g, b, _ := co.RGBA()
+	c, _ := colorful.Hex(fmt.Sprintf("%02x%02x%02x", r, g, b))
 	h, l, _ := c.HSLuv()
 	c = colorful.HSLuv(h, s, l)
 	return lipgloss.Color(c.Hex())
 }
 
-func luminance(color lipgloss.Color, l float64) lipgloss.Color {
-	c, _ := colorful.Hex(string(color))
+func luminance(color color.Color, l float64) color.Color {
+	r, g, b, _ := color.RGBA()
+	c, _ := colorful.Hex(fmt.Sprintf("%02x%02x%02x", r, g, b))
 	h, _, s := c.HSLuv()
 	c = colorful.HSLuv(h, s, l)
 	return lipgloss.Color(c.Hex())
 }
 
-var color_subtle = lipgloss.AdaptiveColor{
-	Light: "#909090",
-	Dark:  "#626262",
-}
-var color_subtle_separator = lipgloss.AdaptiveColor{
-	Light: "#DDDADA",
-	Dark:  "#3C3C3C",
-}
-var color_subtle_desc = lipgloss.AdaptiveColor{
-	Light: "#B2B2B2",
-	Dark:  "#4A4A4A",
-}
+// var color_subtle = compat.AdaptiveColor{
+// 	Light: lipgloss.Color("#909090"),
+// 	Dark:  lipgloss.Color("#626262"),
+// }
+// var color_subtle_separator = compat.AdaptiveColor{
+// 	Light: lipgloss.Color("#DDDADA"),
+// 	Dark:  lipgloss.Color("#3C3C3C"),
+// }
+// var color_subtle_desc = compat.AdaptiveColor{
+// 	Light: lipgloss.Color("#B2B2B2"),
+// 	Dark:  lipgloss.Color("#4A4A4A"),
+// }
+
+var color_subtle = lipgloss.Color("#626262")
+var color_subtle_separator = lipgloss.Color("#3C3C3C")
+var color_subtle_desc = lipgloss.Color("#4A4A4A")
 
 type model struct {
 	context       *todo.Context
@@ -236,15 +245,15 @@ func (m model) View() string {
 
 	helpMenu := help.New()
 	helpMenu.ShowAll = m.showHelp
-	helpMenu.Styles = help.Styles{
-		ShortKey:       keyStyle,
-		ShortDesc:      descStyle,
-		ShortSeparator: sepStyle,
-		Ellipsis:       sepStyle,
-		FullKey:        keyStyle,
-		FullDesc:       descStyle,
-		FullSeparator:  sepStyle,
-	}
+	// helpMenu.Styles = help.Styles{
+	// 	ShortKey:       keyStyle,
+	// 	ShortDesc:      descStyle,
+	// 	ShortSeparator: sepStyle,
+	// 	Ellipsis:       sepStyle,
+	// 	FullKey:        keyStyle,
+	// 	FullDesc:       descStyle,
+	// 	FullSeparator:  sepStyle,
+	// }
 
 	footer := lipgloss.NewStyle().
 		Align(lipgloss.Center).
@@ -266,6 +275,32 @@ func (m model) View() string {
 		s += RenderTaskList(m.context.Tasks, m.cursor)
 	}
 
+	app := lipgloss.JoinVertical(lipgloss.Top, header, content.Render(s), footer)
+
+	// modal := ""
+	// canvas := lipgloss.NewCanvas(
+	// 	lipgloss.NewLayer(app),
+	// 	lipgloss.NewLayer(modal).Z(1),
+	// )
 	// Send the UI for rendering
-	return lipgloss.JoinVertical(lipgloss.Top, header, content.Render(s), footer)
+
+	// box := lipgloss.NewStyle().
+	// 	Width(10).
+	// 	Height(5).
+	// 	Border(lipgloss.NormalBorder())
+
+	// Make some layers.
+	// a := lipgloss.NewLayer(box.Render("Who wants marmalade?"))
+	// b := lipgloss.NewLayer(box.Render("I do!"))
+
+	// Put layers in a canvas.
+	canvas := lipgloss.NewCanvas(
+		lipgloss.NewLayer(app),
+	)
+
+	// Render it all out.
+	k := canvas.Render()
+	return k
 }
+
+// Charmtone palette: https://github.com/charmbracelet/x/blob/main/exp/charmtone/charmtone.go

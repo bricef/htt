@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/bricef/htt/internal/todo"
-	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/lipgloss/v2"
 )
 
 const CURSOR = ">"

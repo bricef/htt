@@ -170,6 +170,10 @@ func (t *Task) DecreasePriority() *Task {
 	return t.SetPriority(priorities[i+1])
 }
 
+func (t *Task) RawString() string {
+	return t.Raw
+}
+
 func (t *Task) ConsoleString() string {
 	if vars.GetBool(vars.ConfigKeyDisableColor) {
 		return t.Raw

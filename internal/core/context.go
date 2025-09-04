@@ -1,4 +1,4 @@
-package todo
+package core
 
 import (
 	"fmt"
@@ -6,6 +6,7 @@ import (
 	"path"
 	"strconv"
 
+	"github.com/bricef/htt/internal/todo"
 	"github.com/bricef/htt/internal/utils"
 	"github.com/bricef/htt/internal/vars"
 	"github.com/fatih/color"
@@ -13,34 +14,29 @@ import (
 
 type Context struct {
 	Name  string
-	Tasks []*Task
+	Tasks []*todo.Task
 }
 
 func NewContext(name string) *Context {
-
-	c := Context{
+	return &Context{
 		Name:  name,
-		Tasks: []*Task{},
+		Tasks: []*todo.Task{},
 	}
-	c.Read()
-	return &c
 }
 
 func (c *Context) Equals(other *Context) bool {
 	return c.Name == other.Name
 }
 
-func (c *Context) Add(t *Task) *Context {
+func (c *Context) Add(t *todo.Task) *Context {
 	c.Tasks = append(c.Tasks, t)
-	c.Sync()
 	return c
 }
 
-func (c *Context) Remove(task *Task) error {
+func (c *Context) Remove(task *todo.Task) error {
 	for i, t := range c.Tasks {
 		if t == task {
 			c.Tasks = append(c.Tasks[:i], c.Tasks[i+1:]...)
-			c.Sync()
 			return nil
 		}
 	}
@@ -57,11 +53,10 @@ func (c *Context) RemoveByStrId(strid string) error {
 }
 
 func (c *Context) Read() *Context {
-	c.Tasks = []*Task{}
 	lines := utils.ReadLines(c.Filepath())
 	for i, line := range lines {
 		if line != "" {
-			t := NewTask(line)
+			t := todo.NewTask(line)
 			t.Line = i
 			c.Add(t)
 		}
@@ -106,7 +101,7 @@ func (c *Context) Sync() error {
 	return nil
 }
 
-func (c *Context) GetTaskById(index int) (*Task, error) {
+func (c *Context) GetTaskById(index int) (*todo.Task, error) {
 	if len(c.Tasks) == 0 {
 		return nil, fmt.Errorf("Task list was empty")
 	}
@@ -116,7 +111,7 @@ func (c *Context) GetTaskById(index int) (*Task, error) {
 	return c.Tasks[index], nil
 }
 
-func (c *Context) GetTaskByStrId(strid string) (*Task, error) {
+func (c *Context) GetTaskByStrId(strid string) (*todo.Task, error) {
 	id, err := strconv.Atoi(strid)
 	if err != nil {
 		return nil, fmt.Errorf("Supplied argument '"+strid+"' was not an integer: ", err)
@@ -124,7 +119,7 @@ func (c *Context) GetTaskByStrId(strid string) (*Task, error) {
 	return c.GetTaskById(id)
 }
 
-func (c *Context) GetTaskIndex(task *Task) (int, error) {
+func (c *Context) GetTaskIndex(task *todo.Task) (int, error) {
 	for i, t := range c.Tasks {
 		if t == task {
 			return i, nil
@@ -133,7 +128,7 @@ func (c *Context) GetTaskIndex(task *Task) (int, error) {
 	return -1, fmt.Errorf("could not find task in context")
 }
 
-func (c *Context) Replace(old *Task, new *Task) error {
+func (c *Context) Replace(old *todo.Task, new *todo.Task) error {
 	index, err := c.GetTaskIndex(old)
 	if err != nil {
 		return err
@@ -150,7 +145,7 @@ func (c *Context) ConsoleString() string {
 	}
 }
 
-func showTasks(ts []*Task) {
+func showTasks(ts []*todo.Task) {
 	fmt.Println()
 	for _, todo := range ts {
 		fmt.Printf("%3d %s\n", todo.Line, todo.ConsoleString())
@@ -169,7 +164,7 @@ func (c *Context) Show() {
 
 }
 
-func (c *Context) ShowOnly(predicate func(*Task) bool) {
+func (c *Context) ShowOnly(predicate func(*todo.Task) bool) {
 	ts := c.Search(predicate)
 
 	if len(ts) == 0 {
@@ -182,8 +177,8 @@ func (c *Context) ShowOnly(predicate func(*Task) bool) {
 	fmt.Printf("(%s): %d out of %v tasks matched query.\n", c.ConsoleString(), len(ts), len(c.Tasks))
 }
 
-func (c *Context) Search(predicate func(*Task) bool) []*Task {
-	ts := []*Task{}
+func (c *Context) Search(predicate func(*todo.Task) bool) []*todo.Task {
+	ts := []*todo.Task{}
 	for _, t := range c.Tasks {
 		if predicate(t) {
 			ts = append(ts, t)

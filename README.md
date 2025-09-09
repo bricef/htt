@@ -65,6 +65,7 @@ $ tail -f debug.log
 ```
 
 ## Todo
+- [ ] Dedup - Find duplicate and similar tasks. See dedup example
 - Interactive Mode
   - [ ] Interactive: Enable task edit
   - [ ] Interact: Enable task highlighting by priority (Maybe just priority?)

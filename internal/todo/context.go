@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/bricef/htt/internal/utils"
 	"github.com/bricef/htt/internal/vars"
@@ -45,6 +47,13 @@ func (c *Context) Remove(task *Task) error {
 		}
 	}
 	return fmt.Errorf("could not find task %v in list", task.Raw)
+}
+
+func (c *Context) Sort() *Context {
+	slices.SortFunc(c.Tasks, func(i, j *Task) int {
+		return strings.Compare(i.Priority, j.Priority)
+	})
+	return c
 }
 
 func (c *Context) RemoveByStrId(strid string) error {

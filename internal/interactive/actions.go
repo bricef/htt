@@ -91,9 +91,71 @@ var EditFile = mkAction("edit file", func(m model) (tea.Model, tea.Cmd) {
 
 var NewTask = mkAction("new task", func(m model) (tea.Model, tea.Cmd) {
 	m.newTask = true
+	m.textInput.Focus()
+	m.textInput.Cursor.Blink = true
 	return m, tea.ClearScreen
 })
 
 var CommandMode = mkAction("command mode", func(m model) (tea.Model, tea.Cmd) {
+	return m, tea.ClearScreen
+})
+
+var CancelNewTask = mkAction("cancel new task", func(m model) (tea.Model, tea.Cmd) {
+	m.newTask = false
+	m.textInput.SetValue("")
+	m.textInput.Blur()
+	return m, tea.ClearScreen
+})
+
+var AddTask = mkAction("add task", func(m model) (tea.Model, tea.Cmd) {
+	m.newTask = false
+	if m.textInput.Value() == "" {
+		m.textInput.SetValue("")
+		m.textInput.Blur()
+		return m, tea.ClearScreen
+	}
+
+	task := todo.NewTask(m.textInput.Value())
+	m.context.Add(task)
+	m.context.Sync()
+	m.textInput.SetValue("")
+	m.textInput.Blur()
+	return m, tea.ClearScreen
+})
+
+var Delete = mkAction("delete", func(m model) (tea.Model, tea.Cmd) {
+	t, err := m.context.GetTaskById(m.cursor)
+	if err != nil {
+		return m, tea.Quit
+	}
+	err = m.context.Remove(t)
+	if err != nil {
+		return m, tea.Quit
+	}
+	m.context.Sync()
+	return m, tea.ClearScreen
+})
+
+var IncreasePriority = mkAction("increase priority", func(m model) (tea.Model, tea.Cmd) {
+	t, err := m.context.GetTaskById(m.cursor)
+	if err != nil {
+		return m, tea.Quit
+	}
+	t = t.IncreasePriority()
+	m.context.Replace(t, t)
+	m.context.Sort()
+	m.context.Sync()
+	return m, tea.ClearScreen
+})
+
+var DecreasePriority = mkAction("decrease priority", func(m model) (tea.Model, tea.Cmd) {
+	t, err := m.context.GetTaskById(m.cursor)
+	if err != nil {
+		return m, tea.Quit
+	}
+	t = t.DecreasePriority()
+	m.context.Replace(t, t)
+	m.context.Sort()
+	m.context.Sync()
 	return m, tea.ClearScreen
 })

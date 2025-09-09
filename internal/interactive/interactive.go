@@ -8,8 +8,17 @@ import (
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+<<<<<<< HEAD
 	"github.com/charmbracelet/lipgloss"
+||||||| parent of cd00e7d (Enable task interaction in interactive mode)
+	"github.com/charmbracelet/lipgloss/v2"
+
+=======
+	"github.com/charmbracelet/lipgloss"
+
+>>>>>>> cd00e7d (Enable task interaction in interactive mode)
 	"github.com/lucasb-eyer/go-colorful"
 )
 
@@ -89,6 +98,7 @@ type model struct {
 	keys          KeyBindingController
 	showHelp      bool
 	newTask       bool
+	textInput     textinput.Model
 }
 
 var controller = NewKeyBindingController().
@@ -107,6 +117,10 @@ var controller = NewKeyBindingController().
 	AddBinding(Do, key.NewBinding(
 		key.WithKeys("x"),
 		key.WithHelp("x", "do"),
+	)).
+	AddBinding(Delete, key.NewBinding(
+		key.WithKeys("d"),
+		key.WithHelp("d", "delete"),
 	)).
 	AddBinding(Up, key.NewBinding(
 		key.WithKeys("up", "k"),
@@ -129,23 +143,40 @@ var controller = NewKeyBindingController().
 		key.WithHelp("f", "edit file"),
 	)).
 	AddBinding(NewTask, key.NewBinding(
-		key.WithKeys("n"),
-		key.WithHelp("n", "new task"),
+		key.WithKeys("n", "a"),
+		key.WithHelp("n/a", "new task"),
+	)).
+	AddBinding(IncreasePriority, key.NewBinding(
+		key.WithKeys("+"),
+		key.WithHelp("+", "increase priority"),
+	)).
+	AddBinding(DecreasePriority, key.NewBinding(
+		key.WithKeys("-"),
+		key.WithHelp("-", "decrease priority"),
 	))
 
 func Model(ctx *todo.Context) model {
 	contexts := todo.GetContexts()
 	contexts = append(contexts, todo.NewContext("done"))
-	todoIndex := slices.IndexFunc(contexts, func(c *todo.Context) bool {
-		return c.Name == "todo"
-	})
-	if todoIndex == -1 {
-		contexts = slices.Insert(contexts, 0, todo.NewContext("todo"))
-	}
+	// todoIndex := slices.IndexFunc(contexts, func(c *todo.Context) bool {
+	// 	return c.Name == "todo"
+	// })
+	// if todoIndex == -1 {
+	// 	contexts = slices.Insert(contexts, 0, todo.NewContext("todo"))
+	// }
 
 	selected := slices.IndexFunc(contexts, func(c *todo.Context) bool {
 		return c.Equals(ctx)
 	})
+
+	ti := textinput.New()
+	ti.Placeholder = "(A) Do a thing for +project in @context"
+
+	ti.Prompt = "New Task > "
+	ti.PromptStyle = lipgloss.NewStyle().Foreground(cursor_color).Bold(true)
+	ti.TextStyle = lipgloss.NewStyle().Foreground(background_color).Background(foreground_color)
+	ti.PlaceholderStyle = ti.TextStyle.Foreground(color_subtle)
+	ti.Width = 100
 
 	return model{
 		context:       ctx,
@@ -154,6 +185,7 @@ func Model(ctx *todo.Context) model {
 		contextCursor: selected,
 		keys:          controller,
 		newTask:       false,
+		textInput:     ti,
 	}
 }
 
@@ -163,6 +195,7 @@ func (m model) Init() tea.Cmd {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
 
@@ -172,12 +205,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Is it a key press?
 	case tea.KeyMsg:
-		action := m.keys.GetAction(msg)
-		log.Printf("action: %s", action.description)
-		return action.Act(m)
+		if m.textInput.Focused() {
+			switch msg.Type {
+			case tea.KeyEnter:
+				return AddTask.Act(m)
+			case tea.KeyEsc:
+				return CancelNewTask.Act(m)
+			case tea.KeyCtrlC:
+				return m, tea.Quit
+			}
+			m.textInput, cmd = m.textInput.Update(msg)
+			return m, cmd
+		} else {
+			action := m.keys.GetAction(msg)
+			log.Printf("action: %s", action.description)
+			return action.Act(m)
+		}
 	}
 
-	return m, nil
+	return m, cmd
 }
 
 func selected(l lipgloss.Style) lipgloss.Style {
@@ -253,9 +299,14 @@ func (m model) View() string {
 		BorderForeground(color_subtle).
 		Render(helpMenu.View(m.keys))
 
+	addWidget := ""
+	if m.newTask {
+		addWidget = m.textInput.View()
+	}
+
 	content := baseStyle.
 		Width(m.width).
-		Height(m.height - lipgloss.Height(header) - lipgloss.Height(footer)).
+		Height(m.height - lipgloss.Height(header) - lipgloss.Height(addWidget) - lipgloss.Height(footer)).
 		Align(lipgloss.Left)
 
 	s := ""
@@ -266,6 +317,13 @@ func (m model) View() string {
 		s += RenderTaskList(m.context.Tasks, m.cursor)
 	}
 
-	// Send the UI for rendering
-	return lipgloss.JoinVertical(lipgloss.Top, header, content.Render(s), footer)
+	app := lipgloss.JoinVertical(
+		lipgloss.Top,
+		header,
+		content.Render(s),
+		addWidget,
+		footer,
+	)
+
+	return app
 }

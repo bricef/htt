@@ -66,9 +66,11 @@ $ tail -f debug.log
 
 ## Todo
 - Interactive Mode
-  - [x] Set up interactive mode with Bubbletea, bubbles and lipgloss
-  - [ ] Enable task action from interactive UI
-  - [ ] Highlight tags KV and dates in task render
+  - [ ] Interactive: Enable task edit
+  - [ ] Interact: Enable task highlighting by priority (Maybe just priority?)
+  - [ ] Interact: Highlight tags KV and dates in task render
+  - [ ] Interact: Add `created-on` tag for new tasks
+  - [ ] Interact: fix help menu column balance issue
   - [ ] Enable command mode
 - QA
   - [ ] Write intergation tests for htt. Make sure that mutating actions work as intended
@@ -110,7 +112,10 @@ $ tail -f debug.log
 - [ ] Create a GUI app layer (https://github.com/avelino/awesome-go#gui, https://github.com/murlokswarm/app, )
 
 ## Done
-
+- [x] Interactive: Add new task
+- [x] Interactive: Manage priorities
+- [x] Interactive: autosort task list 
+- [x] Set up interactive mode with Bubbletea, bubbles and lipgloss
 - [x] Add "summary" command to show tasks and prioritoes across contexts
 - [x] Action: increase priority
 - [x] Action: decrease priority

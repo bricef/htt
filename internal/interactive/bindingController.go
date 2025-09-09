@@ -88,9 +88,10 @@ func (k KeyBindingController) FullHelp() [][]key.Binding {
 	// last column is help and quit
 
 	len := len(collected)
+	// round up
 	perCol := len / 4
 
-	chunks := slices.Chunk(collected, perCol)
+	chunks := slices.Chunk(collected, perCol+1)
 
 	help := [][]key.Binding{}
 

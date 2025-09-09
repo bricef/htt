@@ -17,7 +17,7 @@ func RenderTask(task *todo.Task, selected bool) string {
 	if selected {
 		return currentTask.Render(task.RawString())
 	}
-	return task.ConsoleString()
+	return task.RawString()
 }
 
 func RenderTaskList(tasks []*todo.Task, cursor int) string {

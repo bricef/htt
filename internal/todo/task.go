@@ -30,7 +30,7 @@ type Task struct {
 }
 
 var (
-	priorities = []string{"A", "B", "C", "D", "E", "F"}
+	priorities = []string{"A", "B", "C", ""}
 )
 
 // Creates a new task from a raw string

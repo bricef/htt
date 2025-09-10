@@ -67,6 +67,7 @@ $ tail -f debug.log
 ## Todo
 - [ ] Dedup - Find duplicate and similar tasks. See dedup example
 - Interactive Mode
+  - [ ] Interact: implement pager for lists
   - [ ] Interactive: Enable task edit
   - [ ] Interact: Enable task highlighting by priority (Maybe just priority?)
   - [ ] Interact: Highlight tags KV and dates in task render

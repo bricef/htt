@@ -69,6 +69,7 @@ $ tail -f debug.log
 - Interactive Mode
   - [ ] Interact: implement pager for lists
   - [ ] Interactive: Enable task edit
+  - [ ] Interact: Move cursor with current task when changing priority
   - [ ] Interact: Enable task highlighting by priority (Maybe just priority?)
   - [ ] Interact: Highlight tags KV and dates in task render
   - [ ] Interact: Add `created-on` tag for new tasks

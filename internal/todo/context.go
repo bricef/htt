@@ -51,7 +51,15 @@ func (c *Context) Remove(task *Task) error {
 
 func (c *Context) Sort() *Context {
 	slices.SortFunc(c.Tasks, func(i, j *Task) int {
-		return strings.Compare(i.Priority, j.Priority)
+		var a string = i.Priority
+		var b string = j.Priority
+		if a == "" {
+			a = "Z"
+		}
+		if b == "" {
+			b = "Z"
+		}
+		return strings.Compare(a, b)
 	})
 	return c
 }

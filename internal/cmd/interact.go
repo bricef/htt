@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"github.com/bricef/htt/internal/interactive"
-	"github.com/bricef/htt/internal/todo"
 	"github.com/spf13/cobra"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -19,9 +18,8 @@ var Interactive = &cobra.Command{
 	Args:    cobra.NoArgs,
 	Aliases: []string{"i"},
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx := todo.GetCurrentContext()
 		p := tea.NewProgram(
-			interactive.Model(ctx),
+			interactive.App(),
 			tea.WithAltScreen(),
 			tea.WithMouseCellMotion(),
 		)

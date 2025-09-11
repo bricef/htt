@@ -9,32 +9,32 @@ import (
 )
 
 type Action struct {
-	act         func(m model) (tea.Model, tea.Cmd)
+	act         func(m app) (tea.Model, tea.Cmd)
 	description string
 }
 
-func (a *Action) Act(m model) (tea.Model, tea.Cmd) {
+func (a *Action) Act(m app) (tea.Model, tea.Cmd) {
 	return a.act(m)
 }
 
-func mkAction(description string, f func(m model) (tea.Model, tea.Cmd)) *Action {
+func mkAction(description string, f func(m app) (tea.Model, tea.Cmd)) *Action {
 	return &Action{act: f, description: description}
 }
 
-var Noop = mkAction("noop", func(m model) (tea.Model, tea.Cmd) { return m, nil })
-var Up = mkAction("move up", func(m model) (tea.Model, tea.Cmd) {
+var Noop = mkAction("noop", func(m app) (tea.Model, tea.Cmd) { return m, nil })
+var Up = mkAction("move up", func(m app) (tea.Model, tea.Cmd) {
 	if m.cursor > 0 {
 		m.cursor--
 	}
 	return m, nil
 })
-var Down = mkAction("move down", func(m model) (tea.Model, tea.Cmd) {
+var Down = mkAction("move down", func(m app) (tea.Model, tea.Cmd) {
 	if m.cursor < len(m.context.Tasks)-1 {
 		m.cursor++
 	}
 	return m, nil
 })
-var NextContext = mkAction("move right", func(m model) (tea.Model, tea.Cmd) {
+var NextContext = mkAction("move right", func(m app) (tea.Model, tea.Cmd) {
 	if m.contextCursor < len(m.contexts)-1 {
 		m.contextCursor++
 	}
@@ -44,7 +44,7 @@ var NextContext = mkAction("move right", func(m model) (tea.Model, tea.Cmd) {
 	m.cursor = 0
 	return m, nil
 })
-var PreviousContext = mkAction("move left", func(m model) (tea.Model, tea.Cmd) {
+var PreviousContext = mkAction("move left", func(m app) (tea.Model, tea.Cmd) {
 	if m.contextCursor > 0 {
 		m.contextCursor--
 	}
@@ -54,7 +54,7 @@ var PreviousContext = mkAction("move left", func(m model) (tea.Model, tea.Cmd) {
 	m.cursor = 0
 	return m, nil
 })
-var Do = mkAction("do", func(m model) (tea.Model, tea.Cmd) {
+var Do = mkAction("do", func(m app) (tea.Model, tea.Cmd) {
 	// this makes no sense if the current context is done
 	if m.context.Name == "done" {
 		return m, tea.Quit
@@ -74,40 +74,40 @@ var Do = mkAction("do", func(m model) (tea.Model, tea.Cmd) {
 	return m, nil
 })
 
-var Quit = mkAction("quit", func(m model) (tea.Model, tea.Cmd) {
+var Quit = mkAction("quit", func(m app) (tea.Model, tea.Cmd) {
 	return m, tea.Quit
 })
 
-var Help = mkAction("toggle help", func(m model) (tea.Model, tea.Cmd) {
+var Help = mkAction("toggle help", func(m app) (tea.Model, tea.Cmd) {
 	m.showHelp = !m.showHelp
 	return m, nil
 })
 
-var EditFile = mkAction("edit file", func(m model) (tea.Model, tea.Cmd) {
+var EditFile = mkAction("edit file", func(m app) (tea.Model, tea.Cmd) {
 	utils.EditFilePath(m.context.Filepath())
 	m.context = m.context.Read()
 	return m, tea.ClearScreen
 })
 
-var NewTask = mkAction("new task", func(m model) (tea.Model, tea.Cmd) {
+var NewTask = mkAction("new task", func(m app) (tea.Model, tea.Cmd) {
 	m.newTask = true
 	m.textInput.Focus()
 	m.textInput.Cursor.Blink = true
 	return m, tea.ClearScreen
 })
 
-var CommandMode = mkAction("command mode", func(m model) (tea.Model, tea.Cmd) {
+var CommandMode = mkAction("command mode", func(m app) (tea.Model, tea.Cmd) {
 	return m, tea.ClearScreen
 })
 
-var CancelNewTask = mkAction("cancel new task", func(m model) (tea.Model, tea.Cmd) {
+var CancelNewTask = mkAction("cancel new task", func(m app) (tea.Model, tea.Cmd) {
 	m.newTask = false
 	m.textInput.SetValue("")
 	m.textInput.Blur()
 	return m, tea.ClearScreen
 })
 
-var AddTask = mkAction("add task", func(m model) (tea.Model, tea.Cmd) {
+var AddTask = mkAction("add task", func(m app) (tea.Model, tea.Cmd) {
 	m.newTask = false
 	if m.textInput.Value() == "" {
 		m.textInput.SetValue("")
@@ -123,7 +123,7 @@ var AddTask = mkAction("add task", func(m model) (tea.Model, tea.Cmd) {
 	return m, tea.ClearScreen
 })
 
-var Delete = mkAction("delete", func(m model) (tea.Model, tea.Cmd) {
+var Delete = mkAction("delete", func(m app) (tea.Model, tea.Cmd) {
 	t, err := m.context.GetTaskById(m.cursor)
 	if err != nil {
 		return m, tea.Quit
@@ -136,7 +136,7 @@ var Delete = mkAction("delete", func(m model) (tea.Model, tea.Cmd) {
 	return m, tea.ClearScreen
 })
 
-var IncreasePriority = mkAction("increase priority", func(m model) (tea.Model, tea.Cmd) {
+var IncreasePriority = mkAction("increase priority", func(m app) (tea.Model, tea.Cmd) {
 	t, err := m.context.GetTaskById(m.cursor)
 	if err != nil {
 		return m, tea.Quit
@@ -148,7 +148,7 @@ var IncreasePriority = mkAction("increase priority", func(m model) (tea.Model, t
 	return m, tea.ClearScreen
 })
 
-var DecreasePriority = mkAction("decrease priority", func(m model) (tea.Model, tea.Cmd) {
+var DecreasePriority = mkAction("decrease priority", func(m app) (tea.Model, tea.Cmd) {
 	t, err := m.context.GetTaskById(m.cursor)
 	if err != nil {
 		return m, tea.Quit

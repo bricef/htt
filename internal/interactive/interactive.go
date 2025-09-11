@@ -1,7 +1,6 @@
 package interactive
 
 import (
-	"image/color"
 	"log"
 	"slices"
 
@@ -13,7 +12,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	lipgloss "github.com/charmbracelet/lipgloss"
-	"github.com/lucasb-eyer/go-colorful"
 )
 
 // {
@@ -40,63 +38,7 @@ import (
 // 	}
 // }
 
-const (
-	Gunmetal      = "#1f363d"
-	Cerulean      = "#40798c"
-	Verdigris     = "#70a9a1"
-	CambridgeBlue = "#9ec1a3"
-	TeaGreen      = "#cfe0c3"
-)
-
-var (
-	background_color = lipgloss.Color("#192b31")
-	foreground_color = lipgloss.Color(TeaGreen)
-	selected_color   = lipgloss.Color(Cerulean)
-	cursor_color     = lipgloss.Color(Verdigris)
-)
-
-func saturation(color color.Color, s float64) color.Color {
-	r, g, b, _ := color.RGBA()
-	c := colorful.Color{
-		R: float64(r) / 255,
-		G: float64(g) / 255,
-		B: float64(b) / 255,
-	}
-	h, l, _ := c.HSLuv()
-	c = colorful.HSLuv(h, s, l)
-	return lipgloss.Color(c.Hex())
-}
-
-func luminance(color color.Color, l float64) color.Color {
-	r, g, b, _ := color.RGBA()
-	c := colorful.Color{
-		R: float64(r) / 255,
-		G: float64(g) / 255,
-		B: float64(b) / 255,
-	}
-	h, _, s := c.HSLuv()
-	c = colorful.HSLuv(h, s, l)
-	return lipgloss.Color(c.Hex())
-}
-
-// var color_subtle = lipgloss.AdaptiveColor{
-// 	Light: "#909090",
-// 	Dark:  "#626262",
-// }
-// var color_subtle_separator = lipgloss.AdaptiveColor{
-// 	Light: "#DDDADA",
-// 	Dark:  "#3C3C3C",
-// }
-// var color_subtle_desc = lipgloss.AdaptiveColor{
-// 	Light: "#B2B2B2",
-// 	Dark:  "#4A4A4A",
-// }
-
-var color_subtle = lipgloss.Color("#626262")
-var color_subtle_separator = lipgloss.Color("#3C3C3C")
-var color_subtle_desc = lipgloss.Color("#4A4A4A")
-
-type model struct {
+type app struct {
 	context       *todo.Context
 	cursor        int // which to-do list item our cursor is pointing at
 	contexts      []*todo.Context
@@ -163,15 +105,16 @@ var controller = NewKeyBindingController().
 		key.WithHelp("-", "decrease priority"),
 	))
 
-func Model(ctx *todo.Context) model {
+func App() app {
+	ctx := todo.GetCurrentContext() // will return default or exit.
 	contexts := todo.GetContexts()
-	contexts = append(contexts, todo.NewContext("done"))
-	// todoIndex := slices.IndexFunc(contexts, func(c *todo.Context) bool {
-	// 	return c.Name == "todo"
-	// })
-	// if todoIndex == -1 {
-	// 	contexts = slices.Insert(contexts, 0, todo.NewContext("todo"))
-	// }
+
+	// Only append if it's not already in the list
+	if !slices.ContainsFunc(contexts, func(c *todo.Context) bool {
+		return c.Name == "done"
+	}) {
+		contexts = append(contexts, todo.NewContext("done"))
+	}
 
 	selected := slices.IndexFunc(contexts, func(c *todo.Context) bool {
 		return c.Equals(ctx)
@@ -186,7 +129,7 @@ func Model(ctx *todo.Context) model {
 	ti.PlaceholderStyle = ti.TextStyle.Foreground(color_subtle)
 	ti.Width = 100
 
-	return model{
+	return app{
 		context:       ctx,
 		cursor:        0,
 		contexts:      contexts,
@@ -197,12 +140,12 @@ func Model(ctx *todo.Context) model {
 	}
 }
 
-func (m model) Init() tea.Cmd {
+func (m app) Init() tea.Cmd {
 	// Just return `nil`, which means "no I/O right now, please."
 	return nil
 }
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
@@ -245,7 +188,7 @@ var keyStyle = lipgloss.NewStyle().Foreground(color_subtle).Bold(true)
 var descStyle = lipgloss.NewStyle().Foreground(color_subtle_desc)
 var sepStyle = lipgloss.NewStyle().Foreground(color_subtle_separator)
 
-func (m model) View() string {
+func (m app) View() string {
 	baseStyle := lipgloss.NewStyle()
 
 	menuitem := baseStyle.Padding(0, 2).Align(lipgloss.Center)

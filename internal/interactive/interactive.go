@@ -1,13 +1,13 @@
 package interactive
 
 import (
-	"log"
 	"slices"
 
 	"github.com/bricef/htt/internal/todo"
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -49,13 +49,14 @@ type app struct {
 	showHelp      bool
 	newTask       bool
 	textInput     textinput.Model
+	list          list.Model
 }
 
 var controller = NewKeyBindingController().
-	AddShortBinding(Help, key.NewBinding(
-		key.WithKeys("?"),
-		key.WithHelp("?", "toggle help"),
-	)).
+	// AddShortBinding(Help, key.NewBinding(
+	// 	key.WithKeys("?"),
+	// 	key.WithHelp("?", "toggle help"),
+	// )).
 	AddShortBinding(Quit, key.NewBinding(
 		key.WithKeys("q", "esc", "ctrl+c"),
 		key.WithHelp("q", "quit"),
@@ -72,14 +73,14 @@ var controller = NewKeyBindingController().
 		key.WithKeys("d"),
 		key.WithHelp("d", "delete"),
 	)).
-	AddBinding(Up, key.NewBinding(
-		key.WithKeys("up", "k"),
-		key.WithHelp("↑/k", "move up"),
-	)).
-	AddBinding(Down, key.NewBinding(
-		key.WithKeys("down", "j"),
-		key.WithHelp("↓/j", "move down"),
-	)).
+	// AddBinding(Up, key.NewBinding(
+	// 	key.WithKeys("up", "k"),
+	// 	key.WithHelp("↑/k", "move up"),
+	// )).
+	// AddBinding(Down, key.NewBinding(
+	// 	key.WithKeys("down", "j"),
+	// 	key.WithHelp("↓/j", "move down"),
+	// )).
 	AddBinding(NextContext, key.NewBinding(
 		key.WithKeys("right", "l"),
 		key.WithHelp("→/l", "move right"),
@@ -122,13 +123,15 @@ func App() app {
 
 	ti := textinput.New()
 	ti.Placeholder = "(A) Do a thing for +project in @context"
-
 	ti.Prompt = "New Task > "
 	ti.PromptStyle = lipgloss.NewStyle().Foreground(cursor_color).Bold(true)
 	ti.TextStyle = lipgloss.NewStyle().Foreground(background_color).Background(foreground_color)
 	ti.PlaceholderStyle = ti.TextStyle.Foreground(color_subtle)
 	ti.Width = 100
 
+	list := list.New([]list.Item{}, list.NewDefaultDelegate(), 0, 0)
+	list.SetItems(toItems(ctx.Tasks))
+	list.Title = ctx.Name
 	return app{
 		context:       ctx,
 		cursor:        0,
@@ -137,6 +140,7 @@ func App() app {
 		keys:          controller,
 		newTask:       false,
 		textInput:     ti,
+		list:          list,
 	}
 }
 
@@ -145,36 +149,87 @@ func (m app) Init() tea.Cmd {
 	return nil
 }
 
+type item struct {
+	title, description string
+}
+
+func (i item) Title() string       { return i.title }
+func (i item) Description() string { return i.description }
+func (i item) FilterValue() string { return i.title }
+
+func toItems(tasks []*todo.Task) []list.Item {
+	items := []list.Item{}
+	for _, task := range tasks {
+		items = append(items, item{title: task.RawString(), description: ""})
+	}
+
+	return items
+}
+
 func (m app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
+	var (
+		cmd  tea.Cmd
+		cmds []tea.Cmd
+	)
 
 	switch msg := msg.(type) {
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		for child := range m.getChildren() {
+			child.Update(msg)
+			cmds = append(cmds, cmd)
+		}
 
 	// Is it a key press?
 	case tea.KeyMsg:
-		if m.textInput.Focused() {
-			switch msg.Type {
-			case tea.KeyEnter:
-				return AddTask.Act(m)
-			case tea.KeyEsc:
-				return CancelNewTask.Act(m)
-			case tea.KeyCtrlC:
-				return m, tea.Quit
-			}
-			m.textInput, cmd = m.textInput.Update(msg)
-			return m, cmd
+
+		// if m.textInput.Focused() {
+		// 	switch msg.Type {
+		// 	case tea.KeyEnter:
+		// 		return AddTask.Act(m)
+		// 	case tea.KeyEsc:
+		// 		return CancelNewTask.Act(m)
+		// 	case tea.KeyCtrlC:
+		// 		return m, tea.Quit
+		// 	}
+		// 	m.textInput, cmd = m.textInput.Update(msg)
+		// 	cmds = append(cmds, cmd)
+		// } else {
+		child := m.getFocusedChild()
+		if child != nil {
+			child.Update(msg)
+			cmds = append(cmds, cmd)
 		} else {
-			action := m.keys.GetAction(msg)
-			log.Printf("action: %s", action.description)
-			return action.Act(m)
+			m.keys, cmd = m.keys.Update(msg)
+			cmds = append(cmds, cmd)
 		}
+		// m.keys, cmd = m.keys.Update(msg)
+		// cmds = append(cmds, cmd)
+
+		// m.list, cmd = m.list.Update(msg)
+		// cmds = append(cmds, cmd)
+
+		// action := m.keys.GetAction(msg)
+		// log.Printf("action cmd: %s %v", action.description, cmd)
+		// newModel, cmd := action.Act(m)
+		// if cmd != nil {
+		// 	m = newModel.(app)
+		// 	cmds = append(cmds, cmd)
+		// } else {
+		// 	m.list, cmd = m.list.Update(msg)
+		// 	log.Printf("list cmd: %v %v", msg, cmd)
+		// 	if cmd != nil {
+		// 		log.Printf("list cmd: %v %v", msg, cmd)
+		// 		cmds = append(cmds, cmd)
+		// 	}
+		// }
+
+		// }
 	}
 
-	return m, cmd
+	return m, tea.Sequence(cmds...)
 }
 
 func selected(l lipgloss.Style) lipgloss.Style {
@@ -243,7 +298,7 @@ func (m app) View() string {
 		FullSeparator:  sepStyle,
 	}
 
-	footer := lipgloss.NewStyle().
+	_ = lipgloss.NewStyle().
 		Align(lipgloss.Center).
 		Width(m.width).
 		Border(lipgloss.NormalBorder(), true, false, false, false).
@@ -252,28 +307,33 @@ func (m app) View() string {
 
 	addWidget := ""
 	if m.newTask {
-		addWidget = m.textInput.View()
+		addWidget = lipgloss.NewStyle().
+			Padding(1, 0).
+			Width(m.width).
+			Render(m.textInput.View())
 	}
 
+	contentHeight := m.height - lipgloss.Height(header) - lipgloss.Height(addWidget) // - lipgloss.Height(footer)
 	content := baseStyle.
 		Width(m.width).
-		Height(m.height - lipgloss.Height(header) - lipgloss.Height(addWidget) - lipgloss.Height(footer)).
+		Height(contentHeight).
 		Align(lipgloss.Left)
 
-	s := ""
+	m.list.SetSize(m.width, contentHeight)
 
-	if m.context.Name == "done" {
-		s += RenderDoneList(m.context.Tasks, m.cursor)
-	} else {
-		s += RenderTaskList(m.context.Tasks, m.cursor)
-	}
+	s := m.list.View()
+
+	// if m.context.Name == "done" {
+	// 	s += RenderDoneList(m.context.Tasks, m.cursor)
+	// } else {
+	// 	s += RenderTaskList(m.context.Tasks, m.cursor)
+	// }
 
 	app := lipgloss.JoinVertical(
 		lipgloss.Top,
 		header,
 		content.Render(s),
 		addWidget,
-		footer,
 	)
 
 	return app

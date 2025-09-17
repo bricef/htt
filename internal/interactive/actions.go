@@ -42,6 +42,8 @@ var NextContext = mkAction("move right", func(m app) (tea.Model, tea.Cmd) {
 	todo.SetCurrentContext(new_context)
 	m.context = todo.GetCurrentContext()
 	m.cursor = 0
+	m.list.SetItems(toItems(m.context.Tasks))
+	m.list.Title = m.context.Name
 	return m, nil
 })
 var PreviousContext = mkAction("move left", func(m app) (tea.Model, tea.Cmd) {
@@ -52,6 +54,8 @@ var PreviousContext = mkAction("move left", func(m app) (tea.Model, tea.Cmd) {
 	todo.SetCurrentContext(new_context)
 	m.context = todo.GetCurrentContext()
 	m.cursor = 0
+	m.list.SetItems(toItems(m.context.Tasks))
+	m.list.Title = m.context.Name
 	return m, nil
 })
 var Do = mkAction("do", func(m app) (tea.Model, tea.Cmd) {

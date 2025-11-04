@@ -100,6 +100,28 @@ $ tail -f debug.log
 - [ ] Fork goparsec to fix messed up API choices
   - AST/Node distinction? 
   - Simple querying
+  
+## Bugs
+
+**Edit line fails to sync to context via commands**
+```
+➜  htt git:(main) ✗ go run cmd/htt/main.go t
+
+  0 howdyou
+  1 Let's do something new
+
+(perso): 2 tasks
+➜  htt git:(main) ✗ go run cmd/htt/main.go t edit 0
+Before: howdyou
+After:  how do you do?
+➜  htt git:(main) ✗ go run cmd/htt/main.go t
+
+  0 howdyou
+  1 Let's do something new
+
+(perso): 2 tasks
+```
+
 
 ## Production grade
 

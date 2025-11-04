@@ -1,24 +1,30 @@
 package interactive
 
 import (
+	"log"
+
 	"github.com/bricef/htt/internal/todo"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 type TaskList struct {
-	model list.Model
+	list list.Model
 }
 
 func (t TaskList) Init() tea.Cmd {
 	return nil
 }
 func (t TaskList) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	m, cmd := t.model.Update(msg)
-	return TaskList{model: m}, cmd
+	var cmd tea.Cmd
+	log.Printf("TaskList list: %v", t.list.Cursor())
+	t.list, cmd = t.list.Update(msg)
+
+	log.Printf("TaskList list: %v", t.list.Cursor())
+	return t, cmd
 }
 func (t TaskList) View() string {
-	return t.model.View()
+	return t.list.View()
 }
 
 func NewTaskList(ctx *todo.Context) TaskList {
@@ -30,5 +36,5 @@ func NewTaskList(ctx *todo.Context) TaskList {
 	d := list.NewDefaultDelegate()
 	d.ShowDescription = false
 	d.SetSpacing(0)
-	return TaskList{model: list.New(items, d, 100, 40)}
+	return TaskList{list: list.New(items, d, 100, 40)}
 }

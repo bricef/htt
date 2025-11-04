@@ -41,7 +41,7 @@ var controller = NewKeyBindingController().
 	// 	key.WithHelp("?", "toggle help"),
 	// )).
 	AddShortBinding(Quit, key.NewBinding(
-		key.WithKeys("q", "ctrl+c"),
+		key.WithKeys("q", "esc", "ctrl+c"),
 		key.WithHelp("q", "quit"),
 	)).
 	// AddShortBinding(CommandMode, key.NewBinding(
@@ -148,17 +148,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Is it a key press?
 	case tea.KeyMsg:
-		if m.focused != nil {
-			m.focused, cmd = m.focused.Update(msg)
-			cmds = append(cmds, cmd)
-		} else {
+		if m.focused == nil {
+			log.Printf("Default model update")
 			action := m.keys.GetAction(msg)
 			log.Printf("action: %s", action.description)
 			var modelUpdate tea.Model
 			modelUpdate, cmd = action.Act(m)
 			m = modelUpdate.(model)
 			cmds = append(cmds, cmd)
-
+		} else {
+			log.Printf("Focused model update")
+			m.focused, cmd = m.focused.Update(msg)
+			cmds = append(cmds, cmd)
 		}
 	}
 	return m, tea.Batch(cmds...)

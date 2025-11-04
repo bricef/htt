@@ -9,6 +9,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -96,6 +97,14 @@ var color_subtle = lipgloss.Color("#626262")
 var color_subtle_separator = lipgloss.Color("#3C3C3C")
 var color_subtle_desc = lipgloss.Color("#4A4A4A")
 
+type item struct {
+	title, desc string
+}
+
+func (i item) Title() string       { return i.title }
+func (i item) Description() string { return i.desc }
+func (i item) FilterValue() string { return i.title }
+
 type model struct {
 	context       *todo.Context
 	cursor        int // which to-do list item our cursor is pointing at
@@ -107,13 +116,14 @@ type model struct {
 	showHelp      bool
 	newTask       bool
 	textInput     textinput.Model
+	list          list.Model
 }
 
 var controller = NewKeyBindingController().
-	AddShortBinding(Help, key.NewBinding(
-		key.WithKeys("?"),
-		key.WithHelp("?", "toggle help"),
-	)).
+	// AddShortBinding(Help, key.NewBinding(
+	// 	key.WithKeys("?"),
+	// 	key.WithHelp("?", "toggle help"),
+	// )).
 	AddShortBinding(Quit, key.NewBinding(
 		key.WithKeys("q", "esc", "ctrl+c"),
 		key.WithHelp("q", "quit"),
@@ -130,14 +140,14 @@ var controller = NewKeyBindingController().
 		key.WithKeys("d"),
 		key.WithHelp("d", "delete"),
 	)).
-	AddBinding(Up, key.NewBinding(
-		key.WithKeys("up", "k"),
-		key.WithHelp("↑/k", "move up"),
-	)).
-	AddBinding(Down, key.NewBinding(
-		key.WithKeys("down", "j"),
-		key.WithHelp("↓/j", "move down"),
-	)).
+	// AddBinding(Up, key.NewBinding(
+	// 	key.WithKeys("up", "k"),
+	// 	key.WithHelp("↑/k", "move up"),
+	// )).
+	// AddBinding(Down, key.NewBinding(
+	// 	key.WithKeys("down", "j"),
+	// 	key.WithHelp("↓/j", "move down"),
+	// )).
 	AddBinding(NextContext, key.NewBinding(
 		key.WithKeys("right", "l"),
 		key.WithHelp("→/l", "move right"),
@@ -162,6 +172,14 @@ var controller = NewKeyBindingController().
 		key.WithKeys("-"),
 		key.WithHelp("-", "decrease priority"),
 	))
+
+func NewTaskList(ctx *todo.Context) list.Model {
+	items := []list.Item{}
+	for _, task := range ctx.Tasks {
+		items = append(items, item{title: task.Raw, desc: ""})
+	}
+	return list.New(items, list.NewDefaultDelegate(), 100, 40)
+}
 
 func Model(ctx *todo.Context) model {
 	contexts := todo.GetContexts()
@@ -194,6 +212,7 @@ func Model(ctx *todo.Context) model {
 		keys:          controller,
 		newTask:       false,
 		textInput:     ti,
+		list:          NewTaskList(ctx),
 	}
 }
 
@@ -203,7 +222,12 @@ func (m model) Init() tea.Cmd {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
+	var (
+		cmd  tea.Cmd
+		cmds []tea.Cmd
+	)
+	m.list, cmd = m.list.Update(msg)
+	cmds = append(cmds, cmd)
 
 	switch msg := msg.(type) {
 
@@ -223,15 +247,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 			m.textInput, cmd = m.textInput.Update(msg)
-			return m, cmd
+			cmds = append(cmds, cmd)
+
 		} else {
 			action := m.keys.GetAction(msg)
 			log.Printf("action: %s", action.description)
-			return action.Act(m)
+			var modelUpdate tea.Model
+			modelUpdate, cmd = action.Act(m)
+			m = modelUpdate.(model)
+			cmds = append(cmds, cmd)
+
 		}
 	}
-
-	return m, cmd
+	return m, tea.Batch(cmds...)
 }
 
 func selected(l lipgloss.Style) lipgloss.Style {
@@ -300,37 +328,44 @@ func (m model) View() string {
 		FullSeparator:  sepStyle,
 	}
 
-	footer := lipgloss.NewStyle().
-		Align(lipgloss.Center).
-		Width(m.width).
-		Border(lipgloss.NormalBorder(), true, false, false, false).
-		BorderForeground(color_subtle).
-		Render(helpMenu.View(m.keys))
+	// footer := lipgloss.NewStyle().
+	// 	Align(lipgloss.Center).
+	// 	Width(m.width).
+	// 	Border(lipgloss.NormalBorder(), true, false, false, false).
+	// 	BorderForeground(color_subtle).
+	// 	Render(helpMenu.View(m.keys))
 
 	addWidget := ""
 	if m.newTask {
 		addWidget = m.textInput.View()
 	}
 
-	content := baseStyle.
-		Width(m.width).
-		Height(m.height - lipgloss.Height(header) - lipgloss.Height(addWidget) - lipgloss.Height(footer)).
-		Align(lipgloss.Left)
+	// contentHeight :=
+	// 	m.height -
+	// 		lipgloss.Height(header) -
+	// 		lipgloss.Height(addWidget) -
+	// 		lipgloss.Height(footer)
 
-	s := ""
+	// content := baseStyle.
+	// 	Width(m.width).
+	// 	Height(contentHeight).
+	// 	Align(lipgloss.Left)
 
-	if m.context.Name == "done" {
-		s += RenderDoneList(m.context.Tasks, m.cursor)
-	} else {
-		s += RenderTaskList(m.context.Tasks, m.cursor)
-	}
+	// s := ""
+
+	// if m.context.Name == "done" {
+	// 	s += RenderDoneList(m.context.Tasks, m.cursor)
+	// } else {
+	// 	s += RenderTaskList(m.context.Tasks, m.cursor)
+	// }
 
 	app := lipgloss.JoinVertical(
 		lipgloss.Top,
 		header,
-		content.Render(s),
+		// content.Render(s),
+		m.list.View(),
 		addWidget,
-		footer,
+		// footer,
 	)
 
 	return app

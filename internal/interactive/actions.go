@@ -22,18 +22,20 @@ func mkAction(description string, f func(m model) (tea.Model, tea.Cmd)) *Action 
 }
 
 var Noop = mkAction("noop", func(m model) (tea.Model, tea.Cmd) { return m, nil })
-var Up = mkAction("move up", func(m model) (tea.Model, tea.Cmd) {
-	if m.cursor > 0 {
-		m.cursor--
-	}
-	return m, nil
-})
-var Down = mkAction("move down", func(m model) (tea.Model, tea.Cmd) {
-	if m.cursor < len(m.context.Tasks)-1 {
-		m.cursor++
-	}
-	return m, nil
-})
+
+//	var Up = mkAction("move up", func(m model) (tea.Model, tea.Cmd) {
+//		if m.cursor > 0 {
+//			m.cursor--
+//		}
+//		return m, nil
+//	})
+//
+//	var Down = mkAction("move down", func(m model) (tea.Model, tea.Cmd) {
+//		if m.cursor < len(m.context.Tasks)-1 {
+//			m.cursor++
+//		}
+//		return m, nil
+//	})
 var NextContext = mkAction("move right", func(m model) (tea.Model, tea.Cmd) {
 	if m.contextCursor < len(m.contexts)-1 {
 		m.contextCursor++
@@ -92,9 +94,7 @@ var EditFile = mkAction("edit file", func(m model) (tea.Model, tea.Cmd) {
 })
 
 var NewTask = mkAction("new task", func(m model) (tea.Model, tea.Cmd) {
-	m.newTask = true
-	m.prompt.ti.Focus()
-	m.prompt.ti.Cursor.Blink = true
+	m.Focus(m.prompt)
 	return m, tea.ClearScreen
 })
 
@@ -103,27 +103,47 @@ var CommandMode = mkAction("command mode", func(m model) (tea.Model, tea.Cmd) {
 })
 
 var CancelNewTask = mkAction("cancel new task", func(m model) (tea.Model, tea.Cmd) {
-	m.newTask = false
 	m.prompt.ti.SetValue("")
 	m.prompt.ti.Blur()
 	return m, tea.ClearScreen
 })
 
-var AddTask = mkAction("add task", func(m model) (tea.Model, tea.Cmd) {
-	m.newTask = false
-	if m.prompt.ti.Value() == "" {
-		m.prompt.ti.SetValue("")
-		m.prompt.ti.Blur()
-		return m, tea.ClearScreen
+type AddedTaskMsg struct {
+	task *todo.Task
+}
+
+var AddTask = func(t string) tea.Cmd {
+	return func() tea.Msg {
+		task := todo.NewTask(t)
+		return AddedTaskMsg{task}
 	}
+}
 
-	task := todo.NewTask(m.prompt.ti.Value())
-	m.context.Add(task)
-	m.context.Sync()
-	m.prompt.ti.SetValue("")
-	m.prompt.ti.Blur()
-	return m, tea.ClearScreen
-})
+// var AddTask = mkAction("add task", func(m model) (tea.Model, tea.Cmd) {
+// 	// t := m.prompt.GetValue()
+// 	// if t == "" {
+// 	// 	m.prompt.Reset()
+// 	// 	m.Focus(m.list)
+// 	// 	return m, tea.ClearScreen
+// 	// }
+// 	// m.context.Add(todo.NewTask(t))
+// 	// m.context.Sync()
+// 	// m.prompt.Reset()
+// 	// m.Focus(m.list)
+// 	if m.prompt.ti.Value() == "" {
+
+// 		m.prompt.ti.SetValue("")
+// 		m.prompt.ti.Blur()
+// 		return m, tea.ClearScreen
+// 	}
+
+// 	task := todo.NewTask(m.prompt.ti.Value())
+// 	m.context.Add(task)
+// 	m.context.Sync()
+// 	m.prompt.ti.SetValue("")
+// 	m.prompt.ti.Blur()
+// 	return m, tea.ClearScreen
+// })
 
 var Delete = mkAction("delete", func(m model) (tea.Model, tea.Cmd) {
 	t, err := m.context.GetTaskById(m.cursor)

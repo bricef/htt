@@ -25,11 +25,43 @@ func NewPrompt() Prompt {
 	}
 }
 
+func (p Prompt) Focus() {
+	p.ti.Focus()
+	p.ti.Cursor.Blink = true
+}
+
+func (p Prompt) GetValue() string {
+	return p.ti.Value()
+}
+
+func (p Prompt) Reset() {
+	p.ti.SetValue("")
+	p.ti.Blur()
+}
+
 func (p Prompt) Init() tea.Cmd {
 	return nil
 }
 
 func (p Prompt) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+
+	case tea.KeyMsg:
+		switch msg.Type {
+		case tea.KeyEnter:
+			t := p.GetValue()
+			p.Reset()
+			if t == "" {
+				return p, nil
+			}
+			return p, AddTask(t)
+		case tea.KeyEsc:
+			p.Reset()
+			return p, nil
+		case tea.KeyCtrlC:
+			return p, tea.Quit
+		}
+	}
 	return p, nil
 }
 

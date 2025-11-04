@@ -42,6 +42,7 @@ var NextContext = mkAction("move right", func(m model) (tea.Model, tea.Cmd) {
 	todo.SetCurrentContext(new_context)
 	m.context = todo.GetCurrentContext()
 	m.cursor = 0
+	m.list = NewTaskList(m.context)
 	return m, nil
 })
 var PreviousContext = mkAction("move left", func(m model) (tea.Model, tea.Cmd) {
@@ -52,6 +53,7 @@ var PreviousContext = mkAction("move left", func(m model) (tea.Model, tea.Cmd) {
 	todo.SetCurrentContext(new_context)
 	m.context = todo.GetCurrentContext()
 	m.cursor = 0
+	m.list = NewTaskList(m.context)
 	return m, nil
 })
 var Do = mkAction("do", func(m model) (tea.Model, tea.Cmd) {
@@ -91,8 +93,8 @@ var EditFile = mkAction("edit file", func(m model) (tea.Model, tea.Cmd) {
 
 var NewTask = mkAction("new task", func(m model) (tea.Model, tea.Cmd) {
 	m.newTask = true
-	m.textInput.Focus()
-	m.textInput.Cursor.Blink = true
+	m.prompt.ti.Focus()
+	m.prompt.ti.Cursor.Blink = true
 	return m, tea.ClearScreen
 })
 
@@ -102,24 +104,24 @@ var CommandMode = mkAction("command mode", func(m model) (tea.Model, tea.Cmd) {
 
 var CancelNewTask = mkAction("cancel new task", func(m model) (tea.Model, tea.Cmd) {
 	m.newTask = false
-	m.textInput.SetValue("")
-	m.textInput.Blur()
+	m.prompt.ti.SetValue("")
+	m.prompt.ti.Blur()
 	return m, tea.ClearScreen
 })
 
 var AddTask = mkAction("add task", func(m model) (tea.Model, tea.Cmd) {
 	m.newTask = false
-	if m.textInput.Value() == "" {
-		m.textInput.SetValue("")
-		m.textInput.Blur()
+	if m.prompt.ti.Value() == "" {
+		m.prompt.ti.SetValue("")
+		m.prompt.ti.Blur()
 		return m, tea.ClearScreen
 	}
 
-	task := todo.NewTask(m.textInput.Value())
+	task := todo.NewTask(m.prompt.ti.Value())
 	m.context.Add(task)
 	m.context.Sync()
-	m.textInput.SetValue("")
-	m.textInput.Blur()
+	m.prompt.ti.SetValue("")
+	m.prompt.ti.Blur()
 	return m, tea.ClearScreen
 })
 

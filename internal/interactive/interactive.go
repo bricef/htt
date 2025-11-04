@@ -10,7 +10,6 @@ import (
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
 	lipgloss "github.com/charmbracelet/lipgloss"
@@ -115,7 +114,7 @@ type model struct {
 	keys          KeyBindingController
 	showHelp      bool
 	newTask       bool
-	textInput     textinput.Model
+	prompt        Prompt
 	list          list.Model
 }
 
@@ -125,21 +124,21 @@ var controller = NewKeyBindingController().
 	// 	key.WithHelp("?", "toggle help"),
 	// )).
 	AddShortBinding(Quit, key.NewBinding(
-		key.WithKeys("q", "esc", "ctrl+c"),
+		key.WithKeys("q", "ctrl+c"),
 		key.WithHelp("q", "quit"),
 	)).
-	AddShortBinding(CommandMode, key.NewBinding(
-		key.WithKeys(":"),
-		key.WithHelp(":", "command mode"),
-	)).
-	AddBinding(Do, key.NewBinding(
-		key.WithKeys("x"),
-		key.WithHelp("x", "do"),
-	)).
-	AddBinding(Delete, key.NewBinding(
-		key.WithKeys("d"),
-		key.WithHelp("d", "delete"),
-	)).
+	// AddShortBinding(CommandMode, key.NewBinding(
+	// 	key.WithKeys(":"),
+	// 	key.WithHelp(":", "command mode"),
+	// )).
+	// AddBinding(Do, key.NewBinding(
+	// 	key.WithKeys("x"),
+	// 	key.WithHelp("x", "do"),
+	// )).
+	// AddBinding(Delete, key.NewBinding(
+	// 	key.WithKeys("d"),
+	// 	key.WithHelp("d", "delete"),
+	// )).
 	// AddBinding(Up, key.NewBinding(
 	// 	key.WithKeys("up", "k"),
 	// 	key.WithHelp("↑/k", "move up"),
@@ -155,30 +154,34 @@ var controller = NewKeyBindingController().
 	AddBinding(PreviousContext, key.NewBinding(
 		key.WithKeys("left", "h"),
 		key.WithHelp("←/h", "move left"),
-	)).
-	AddBinding(EditFile, key.NewBinding(
-		key.WithKeys("f"),
-		key.WithHelp("f", "edit file"),
-	)).
-	AddBinding(NewTask, key.NewBinding(
-		key.WithKeys("n", "a"),
-		key.WithHelp("n/a", "new task"),
-	)).
-	AddBinding(IncreasePriority, key.NewBinding(
-		key.WithKeys("+"),
-		key.WithHelp("+", "increase priority"),
-	)).
-	AddBinding(DecreasePriority, key.NewBinding(
-		key.WithKeys("-"),
-		key.WithHelp("-", "decrease priority"),
 	))
+	// AddBinding(EditFile, key.NewBinding(
+	// 	key.WithKeys("f"),
+	// 	key.WithHelp("f", "edit file"),
+	// )).
+	// AddBinding(NewTask, key.NewBinding(
+	// 	key.WithKeys("n", "a"),
+	// 	key.WithHelp("n/a", "new task"),
+	// )).
+	// AddBinding(IncreasePriority, key.NewBinding(
+	// 	key.WithKeys("+"),
+	// 	key.WithHelp("+", "increase priority"),
+	// )).
+	// AddBinding(DecreasePriority, key.NewBinding(
+	// 	key.WithKeys("-"),
+	// 	key.WithHelp("-", "decrease priority"),
+	// ))
 
 func NewTaskList(ctx *todo.Context) list.Model {
 	items := []list.Item{}
 	for _, task := range ctx.Tasks {
 		items = append(items, item{title: task.Raw, desc: ""})
 	}
-	return list.New(items, list.NewDefaultDelegate(), 100, 40)
+
+	d := list.NewDefaultDelegate()
+	d.ShowDescription = false
+	d.SetSpacing(0)
+	return list.New(items, d, 100, 40)
 }
 
 func Model(ctx *todo.Context) model {
@@ -195,15 +198,6 @@ func Model(ctx *todo.Context) model {
 		return c.Equals(ctx)
 	})
 
-	ti := textinput.New()
-	ti.Placeholder = "(A) Do a thing for +project in @context"
-
-	ti.Prompt = "New Task > "
-	ti.PromptStyle = lipgloss.NewStyle().Foreground(cursor_color).Bold(true)
-	ti.TextStyle = lipgloss.NewStyle().Foreground(background_color).Background(foreground_color)
-	ti.PlaceholderStyle = ti.TextStyle.Foreground(color_subtle)
-	ti.Width = 100
-
 	return model{
 		context:       ctx,
 		cursor:        0,
@@ -211,7 +205,7 @@ func Model(ctx *todo.Context) model {
 		contextCursor: selected,
 		keys:          controller,
 		newTask:       false,
-		textInput:     ti,
+		prompt:        NewPrompt(),
 		list:          NewTaskList(ctx),
 	}
 }
@@ -237,7 +231,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Is it a key press?
 	case tea.KeyMsg:
-		if m.textInput.Focused() {
+		if m.prompt.ti.Focused() {
 			switch msg.Type {
 			case tea.KeyEnter:
 				return AddTask.Act(m)
@@ -246,7 +240,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case tea.KeyCtrlC:
 				return m, tea.Quit
 			}
-			m.textInput, cmd = m.textInput.Update(msg)
+			m.prompt.ti, cmd = m.prompt.ti.Update(msg)
 			cmds = append(cmds, cmd)
 
 		} else {
@@ -337,7 +331,7 @@ func (m model) View() string {
 
 	addWidget := ""
 	if m.newTask {
-		addWidget = m.textInput.View()
+		addWidget = m.prompt.View()
 	}
 
 	// contentHeight :=

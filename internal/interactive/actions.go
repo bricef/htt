@@ -45,6 +45,10 @@ var NextContext = mkAction("move right", func(m model) (tea.Model, tea.Cmd) {
 	m.context = todo.GetCurrentContext()
 	m.cursor = 0
 	m.list = NewTaskList(m.context)
+	// Update focused to point to the new list if it was pointing to the old one
+	if _, ok := m.focused.(*TaskList); ok {
+		m.focused = &m.list
+	}
 	return m, nil
 })
 var PreviousContext = mkAction("move left", func(m model) (tea.Model, tea.Cmd) {
@@ -56,6 +60,10 @@ var PreviousContext = mkAction("move left", func(m model) (tea.Model, tea.Cmd) {
 	m.context = todo.GetCurrentContext()
 	m.cursor = 0
 	m.list = NewTaskList(m.context)
+	// Update focused to point to the new list if it was pointing to the old one
+	if _, ok := m.focused.(*TaskList); ok {
+		m.focused = &m.list
+	}
 	return m, nil
 })
 var Do = mkAction("do", func(m model) (tea.Model, tea.Cmd) {

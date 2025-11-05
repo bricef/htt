@@ -140,6 +140,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.context.Add(msg.task)
 		m.context.Sync()
 		m.list = NewTaskList(m.context)
+		// Update focused to point to the new list if it was pointing to the old one
+		if _, ok := m.focused.(*TaskList); ok {
+			m.focused = &m.list
+		}
 		cmds = append(cmds, tea.ClearScreen)
 
 	case tea.WindowSizeMsg:
@@ -159,6 +163,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			log.Printf("Focused model update")
 			m.focused, cmd = m.focused.Update(msg)
+			// If focused is the TaskList, keep m.list in sync
+			if focusedList, ok := m.focused.(*TaskList); ok {
+				m.list = *focusedList
+				m.focused = &m.list
+			} else if focusedList, ok := m.focused.(TaskList); ok {
+				// Handle case where Update returns a value, not a pointer
+				m.list = focusedList
+				m.focused = &m.list
+			}
 			cmds = append(cmds, cmd)
 		}
 	}

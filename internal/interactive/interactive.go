@@ -245,11 +245,11 @@ func (m model) View() string {
 		addWidget = m.prompt.View()
 	}
 
-	// contentHeight :=
-	// 	m.height -
-	// 		lipgloss.Height(header) -
-	// 		lipgloss.Height(addWidget) -
-	// 		lipgloss.Height(footer)
+	contentHeight :=
+		m.height -
+			lipgloss.Height(header) -
+			lipgloss.Height(addWidget)
+		// lipgloss.Height(footer)
 
 	// content := baseStyle.
 	// 	Width(m.width).
@@ -264,6 +264,8 @@ func (m model) View() string {
 	// 	s += RenderTaskList(m.context.Tasks, m.cursor)
 	// }
 
+	m.list.list.SetWidth(m.width)
+	m.list.list.SetHeight(contentHeight)
 	app := lipgloss.JoinVertical(
 		lipgloss.Top,
 		header,

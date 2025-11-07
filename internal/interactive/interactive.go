@@ -233,13 +233,6 @@ func (m model) View() string {
 		FullSeparator:  sepStyle,
 	}
 
-	// footer := lipgloss.NewStyle().
-	// 	Align(lipgloss.Center).
-	// 	Width(m.width).
-	// 	Border(lipgloss.NormalBorder(), true, false, false, false).
-	// 	BorderForeground(color_subtle).
-	// 	Render(helpMenu.View(m.keys))
-
 	addWidget := ""
 	if m.isFocused(m.prompt) {
 		addWidget = m.prompt.View()
@@ -249,30 +242,15 @@ func (m model) View() string {
 		m.height -
 			lipgloss.Height(header) -
 			lipgloss.Height(addWidget)
-		// lipgloss.Height(footer)
-
-	// content := baseStyle.
-	// 	Width(m.width).
-	// 	Height(contentHeight).
-	// 	Align(lipgloss.Left)
-
-	// s := ""
-
-	// if m.context.Name == "done" {
-	// 	s += RenderDoneList(m.context.Tasks, m.cursor)
-	// } else {
-	// 	s += RenderTaskList(m.context.Tasks, m.cursor)
-	// }
 
 	m.list.list.SetWidth(m.width)
 	m.list.list.SetHeight(contentHeight)
+
 	app := lipgloss.JoinVertical(
 		lipgloss.Top,
 		header,
-		// content.Render(s),
 		m.list.View(),
 		addWidget,
-		// footer,
 	)
 
 	return app

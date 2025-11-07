@@ -8,6 +8,36 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+type InnerItem struct {
+	task *todo.Task
+}
+
+func (i InnerItem) FilterValue() string {
+	return i.task.Raw
+}
+
+type ListItem struct {
+	Task *todo.Task
+	Item InnerItem
+}
+
+func (i ListItem) Title() string {
+	return i.Task.Raw
+}
+func (i ListItem) Description() string {
+	return ""
+}
+func (i ListItem) FilterValue() string {
+	return i.Task.Raw
+}
+
+func NewListItem(task *todo.Task) ListItem {
+	return ListItem{
+		Task: task,
+		Item: InnerItem{task: task},
+	}
+}
+
 type TaskList struct {
 	list list.Model
 }
@@ -30,11 +60,13 @@ func (t TaskList) View() string {
 func NewTaskList(ctx *todo.Context) TaskList {
 	items := []list.Item{}
 	for _, task := range ctx.Tasks {
-		items = append(items, item{title: task.Raw, desc: ""})
+		items = append(items, NewListItem(task))
 	}
+	// need to set up custom delegate and additional list actions
 
 	d := list.NewDefaultDelegate()
 	d.ShowDescription = false
 	d.SetSpacing(0)
-	return TaskList{list: list.New(items, d, 100, 40)}
+	// width and height will be adjusted on update
+	return TaskList{list: list.New(items, d, 10, 10)}
 }

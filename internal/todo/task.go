@@ -31,6 +31,12 @@ var (
 	priorities = []string{"A", "B", "C", ""}
 )
 
+// NOTE
+// Maybe this should keep a parse tree of the task so that
+// actions are tree operations. This would make it easier to
+// preserve the structure of the task when making modifacations,
+// and allow for more sophisticated rendering based on the tree structure.
+
 // Creates a new task from a raw string
 func NewTask(raw string) *Task {
 	if raw == "" {

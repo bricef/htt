@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"github.com/bricef/htt/internal/todo"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -93,6 +94,38 @@ func (d TodoItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 	}
 
 	io.WriteString(w, buf.String())
+}
+
+var IncreasePriorityBinding = key.NewBinding(
+	key.WithKeys("Y", "y"),
+	key.WithHelp("Y/y", "Increase priority"),
+)
+
+var DecreasePriorityBinding = key.NewBinding(
+	key.WithKeys("N"),
+	key.WithHelp("N", "Decrease priority"),
+)
+
+func (d TodoItemDelegate) ShortHelp() []key.Binding {
+	return []key.Binding{
+		IncreasePriorityBinding,
+		DecreasePriorityBinding,
+	}
+}
+
+func (d TodoItemDelegate) FullHelp() [][]key.Binding {
+	return [][]key.Binding{}
+}
+
+func (d TodoItemDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		log.Printf("TodoItemDelegate Update: %v", msg)
+		if key.Matches(msg, IncreasePriorityBinding) {
+			log.Printf("Match: %v", msg)
+		}
+	}
+	return nil
 }
 
 type TaskList struct {

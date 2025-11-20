@@ -161,7 +161,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m = modelUpdate.(model)
 			cmds = append(cmds, cmd)
 		} else {
-			log.Printf("Focused model update")
+			log.Printf("Focused model update %v", msg)
 			m.focused, cmd = m.focused.Update(msg)
 			// If focused is the TaskList, keep m.list in sync
 			if focusedList, ok := m.focused.(*TaskList); ok {

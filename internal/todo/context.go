@@ -170,7 +170,7 @@ func (c *Context) ConsoleString() string {
 func showTasks(ts []*Task) {
 	fmt.Println()
 	for _, todo := range ts {
-		fmt.Printf("%3d %s\n", todo.Line, todo.ConsoleString())
+		fmt.Printf("%3d %s\n", todo.Line, todo.Raw)
 	}
 	fmt.Println()
 

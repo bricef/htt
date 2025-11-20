@@ -64,6 +64,12 @@ in another shell
 $ tail -f debug.log
 ```
 
+### Running the tests
+
+```shell
+$ go test ./...
+```
+
 ## Todo
 - [ ] Dedup - Find duplicate and similar tasks. See dedup example
 - Interactive Mode

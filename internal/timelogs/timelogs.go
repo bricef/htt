@@ -38,8 +38,8 @@ func AddEntry(task *todo.Task) {
 	// start:
 	// entryWithStart := fmt.Sprintf("start:%s %s \n", now.Format(time.RFC3339), strings.TrimSpace(entry))
 
-	_, err = f.WriteString(fmt.Sprintf("%v\n", task.ConsoleString()))
-	fmt.Printf("Logging entry: %v\n", task.RemoveAnnotation(TimestampLabel).ColorString())
+	_, err = f.WriteString(fmt.Sprintf("%v\n", task.Raw))
+	fmt.Printf("Logging entry: %v\n", task.RemoveAnnotation(TimestampLabel).Raw)
 	utils.DieOnError("Failed to write entry to log", err)
 }
 
@@ -62,7 +62,7 @@ func ShowStatus() {
 			utils.Fatal("Failed to parse log entry.")
 		}
 		duration := utils.HumanizeDuration(time.Since(startTime))
-		fmt.Printf("Currently working on: %v (%v) \n", currentTask.RemoveAnnotation(TimestampLabel).ColorString(), duration)
+		fmt.Printf("Currently working on: %v (%v) \n", currentTask.RemoveAnnotation(TimestampLabel).Raw, duration)
 	} else {
 		fmt.Printf("Not currently working on any task.\n")
 	}

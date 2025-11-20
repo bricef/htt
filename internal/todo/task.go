@@ -9,8 +9,6 @@ import (
 
 	pu "github.com/bricef/htt/internal/parseutils"
 	"github.com/bricef/htt/internal/utils"
-	"github.com/bricef/htt/internal/vars"
-	"github.com/fatih/color"
 	parsec "github.com/prataprc/goparsec"
 )
 
@@ -170,18 +168,6 @@ func (t *Task) DecreasePriority() *Task {
 	return t.SetPriority(priorities[i+1])
 }
 
-func (t *Task) RawString() string {
-	return t.Raw
-}
-
-func (t *Task) ConsoleString() string {
-	if vars.GetBool(vars.ConfigKeyDisableColor) {
-		return t.Raw
-	} else {
-		return t.ColorString()
-	}
-}
-
 func (t *Task) Do(context *Context, when time.Time) *Task {
 	t.Completed = true
 	t.CompletedOn = when
@@ -214,43 +200,4 @@ func (t *Task) RemoveAnnotation(key string) *Task {
 
 func (t *Task) Entry() string {
 	return t.entry
-}
-
-type lineColorFn func(a string, args ...interface{}) string
-
-func (t *Task) ColorFn() lineColorFn {
-	var lineColor lineColorFn
-	switch t.Priority {
-	case "A":
-		lineColor = color.New(color.FgRed).SprintfFunc()
-	case "B":
-		lineColor = color.New(color.FgYellow).SprintfFunc()
-	case "C":
-		lineColor = color.New(color.FgGreen).SprintfFunc()
-	default:
-		lineColor = color.New(color.FgWhite).SprintfFunc()
-	}
-
-	return lineColor
-}
-
-func (t *Task) ColoredEntry() string {
-	return t.ColorFn()(t.entry)
-}
-
-func (t *Task) ColorString() string { // doesn't feel like it should belong here, but nvm
-	// raw         string
-	// Line        int
-	// Completed   bool
-	// Priority    string
-	// CompletedAt time.Time
-	// CreatedAt   time.Time
-	// entry       string
-	// Tags        map[string][]string
-	// Annotations map[string]string
-
-	b := bytes.NewBuffer([]byte{})
-	b.WriteString(t.ColorFn()(t.Raw))
-
-	return b.String()
 }

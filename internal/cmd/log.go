@@ -67,7 +67,7 @@ var Active = &cobra.Command{
 
 		fmt.Printf(
 			"Working on: %s (%s)\n",
-			current.RemoveAnnotation(timelogs.TimestampLabel).ColorString(),
+			current.RemoveAnnotation(timelogs.TimestampLabel).Raw,
 			utils.HumanizeDuration(timelogs.CurrentDuration()))
 	},
 }

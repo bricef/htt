@@ -21,8 +21,9 @@ func (i InnerItem) FilterValue() string {
 }
 
 type ListItem struct {
-	Task *todo.Task
-	Item InnerItem
+	Task   *todo.Task
+	Item   InnerItem
+	Parent model
 }
 
 func (i ListItem) Title() string {
@@ -35,10 +36,11 @@ func (i ListItem) FilterValue() string {
 	return i.Task.Raw
 }
 
-func NewListItem(task *todo.Task) ListItem {
+func NewListItem(task *todo.Task, parent model) ListItem {
 	return ListItem{
-		Task: task,
-		Item: InnerItem{task: task},
+		Task:   task,
+		Item:   InnerItem{task: task},
+		Parent: parent,
 	}
 }
 
@@ -96,40 +98,60 @@ func (d TodoItemDelegate) Render(w io.Writer, m list.Model, index int, item list
 	io.WriteString(w, buf.String())
 }
 
-var IncreasePriorityBinding = key.NewBinding(
-	key.WithKeys("Y", "y"),
-	key.WithHelp("Y/y", "Increase priority"),
-)
+type ItemAction struct {
+	action  *Action
+	binding key.Binding
+}
 
-var DecreasePriorityBinding = key.NewBinding(
-	key.WithKeys("N"),
-	key.WithHelp("N", "Decrease priority"),
-)
+var itemActions = []ItemAction{
+	{
+		action: IncreasePriority,
+		binding: key.NewBinding(
+			key.WithKeys("Y", "y"),
+			key.WithHelp("Y/y", "Increase priority"),
+		),
+	},
+	{
+		action: DecreasePriority,
+		binding: key.NewBinding(
+			key.WithKeys("N"),
+			key.WithHelp("N", "Decrease priority"),
+		),
+	},
+}
 
 func (d TodoItemDelegate) ShortHelp() []key.Binding {
-	return []key.Binding{
-		IncreasePriorityBinding,
-		DecreasePriorityBinding,
+	short := []key.Binding{}
+	for _, action := range itemActions {
+		short = append(short, action.binding)
 	}
+	return short
 }
 
 func (d TodoItemDelegate) FullHelp() [][]key.Binding {
-	return [][]key.Binding{}
+	full := [][]key.Binding{}
+	for _, action := range itemActions {
+		full = append(full, []key.Binding{action.binding})
+	}
+	return full
 }
 
 func (d TodoItemDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		log.Printf("TodoItemDelegate Update: %v", msg)
-		if key.Matches(msg, IncreasePriorityBinding) {
-			log.Printf("Match: %v", msg)
+		for _, action := range itemActions {
+			if key.Matches(msg, action.binding) {
+				// return action.action.Act(*d.Parent)
+				return nil
+			}
 		}
 	}
 	return nil
 }
 
 type TaskList struct {
-	list list.Model
+	list   list.Model
+	Parent *model
 }
 
 func (t TaskList) Init() tea.Cmd {
@@ -147,10 +169,10 @@ func (t TaskList) View() string {
 	return t.list.View()
 }
 
-func NewTaskList(ctx *todo.Context) TaskList {
+func NewTaskList(ctx *todo.Context, parent model) TaskList {
 	items := []list.Item{}
 	for _, task := range ctx.Tasks {
-		items = append(items, NewListItem(task))
+		items = append(items, NewListItem(task, parent))
 	}
 	// need to set up custom delegate and additional list actions
 
@@ -168,5 +190,5 @@ func NewTaskList(ctx *todo.Context) TaskList {
 	l.Styles = styles
 
 	// width and height will be adjusted on update
-	return TaskList{list: l}
+	return TaskList{list: l, Parent: &parent}
 }

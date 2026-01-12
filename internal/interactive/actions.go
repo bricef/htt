@@ -8,6 +8,11 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// High level refactor, actions should be bare functions which return (tea.Model, tea.Cmd)
+// and close over the model
+// type Action func() (tea.Model, tea.Cmd)
+// optionally, we could have actions have a .Do() method instead
+
 type Action struct {
 	act         func(m model) (tea.Model, tea.Cmd)
 	description string
@@ -44,7 +49,7 @@ var NextContext = mkAction("move right", func(m model) (tea.Model, tea.Cmd) {
 	todo.SetCurrentContext(new_context)
 	m.context = todo.GetCurrentContext()
 	m.cursor = 0
-	m.list = NewTaskList(m.context)
+	m.list = NewTaskList(m.context, m)
 	// Update focused to point to the new list if it was pointing to the old one
 	if _, ok := m.focused.(*TaskList); ok {
 		m.focused = &m.list
@@ -59,7 +64,7 @@ var PreviousContext = mkAction("move left", func(m model) (tea.Model, tea.Cmd) {
 	todo.SetCurrentContext(new_context)
 	m.context = todo.GetCurrentContext()
 	m.cursor = 0
-	m.list = NewTaskList(m.context)
+	m.list = NewTaskList(m.context, m)
 	// Update focused to point to the new list if it was pointing to the old one
 	if _, ok := m.focused.(*TaskList); ok {
 		m.focused = &m.list

@@ -13,13 +13,10 @@ import (
 	lipgloss "github.com/charmbracelet/lipgloss"
 )
 
-type item struct {
-	title, desc string
+type actionBinding struct {
+	action  func() (tea.Model, tea.Cmd)
+	binding key.Binding
 }
-
-func (i item) Title() string       { return i.title }
-func (i item) Description() string { return i.desc }
-func (i item) FilterValue() string { return i.title }
 
 type model struct {
 	context       *todo.Context
@@ -28,66 +25,71 @@ type model struct {
 	contextCursor int
 	width         int
 	height        int
-	keys          KeyBindingController
+	keys          []actionBinding
 	showHelp      bool
 	prompt        Prompt
 	list          TaskList
 	focused       tea.Model
 }
 
-var controller = NewKeyBindingController().
-	// AddShortBinding(Help, key.NewBinding(
-	// 	key.WithKeys("?"),
-	// 	key.WithHelp("?", "toggle help"),
-	// )).
-	AddShortBinding(Quit, key.NewBinding(
-		key.WithKeys("q", "esc", "ctrl+c"),
-		key.WithHelp("q", "quit"),
-	)).
-	// AddShortBinding(CommandMode, key.NewBinding(
-	// 	key.WithKeys(":"),
-	// 	key.WithHelp(":", "command mode"),
-	// )).
-	// AddBinding(Do, key.NewBinding(
-	// 	key.WithKeys("x"),
-	// 	key.WithHelp("x", "do"),
-	// )).
-	// AddBinding(Delete, key.NewBinding(
-	// 	key.WithKeys("d"),
-	// 	key.WithHelp("d", "delete"),
-	// )).
-	// AddBinding(Up, key.NewBinding(
-	// 	key.WithKeys("up", "k"),
-	// 	key.WithHelp("↑/k", "move up"),
-	// )).
-	// AddBinding(Down, key.NewBinding(
-	// 	key.WithKeys("down", "j"),
-	// 	key.WithHelp("↓/j", "move down"),
-	// )).
-	AddBinding(NextContext, key.NewBinding(
-		key.WithKeys("right", "l"),
-		key.WithHelp("→/l", "move right"),
-	)).
-	AddBinding(PreviousContext, key.NewBinding(
-		key.WithKeys("left", "h"),
-		key.WithHelp("←/h", "move left"),
-	))
-	// AddBinding(EditFile, key.NewBinding(
-	// 	key.WithKeys("f"),
-	// 	key.WithHelp("f", "edit file"),
-	// )).
-	// AddBinding(NewTask, key.NewBinding(
-	// 	key.WithKeys("n", "a"),
-	// 	key.WithHelp("n/a", "new task"),
-	// )).
-	// AddBinding(IncreasePriority, key.NewBinding(
-	// 	key.WithKeys("+"),
-	// 	key.WithHelp("+", "increase priority"),
-	// )).
-	// AddBinding(DecreasePriority, key.NewBinding(
-	// 	key.WithKeys("-"),
-	// 	key.WithHelp("-", "decrease priority"),
-	// ))
+func (m model) Hello() (tea.Model, tea.Cmd) {
+	log.Printf("Hello")
+	return m, nil
+}
+
+// var controller = NewKeyBindingController().
+// AddShortBinding(Help, key.NewBinding(
+// 	key.WithKeys("?"),
+// 	key.WithHelp("?", "toggle help"),
+// )).
+// AddShortBinding(Quit, key.NewBinding(
+// 	key.WithKeys("q", "esc", "ctrl+c"),
+// 	key.WithHelp("q", "quit"),
+// )).
+// AddShortBinding(CommandMode, key.NewBinding(
+// 	key.WithKeys(":"),
+// 	key.WithHelp(":", "command mode"),
+// )).
+// AddBinding(Do, key.NewBinding(
+// 	key.WithKeys("x"),
+// 	key.WithHelp("x", "do"),
+// )).
+// AddBinding(Delete, key.NewBinding(
+// 	key.WithKeys("d"),
+// 	key.WithHelp("d", "delete"),
+// )).
+// AddBinding(Up, key.NewBinding(
+// 	key.WithKeys("up", "k"),
+// 	key.WithHelp("↑/k", "move up"),
+// )).
+// AddBinding(Down, key.NewBinding(
+// 	key.WithKeys("down", "j"),
+// 	key.WithHelp("↓/j", "move down"),
+// )).
+// AddBinding(NextContext, key.NewBinding(
+// 	key.WithKeys("right", "l"),
+// 	key.WithHelp("→/l", "move right"),
+// )).
+// AddBinding(PreviousContext, key.NewBinding(
+// 	key.WithKeys("left", "h"),
+// 	key.WithHelp("←/h", "move left"),
+// ))
+// AddBinding(EditFile, key.NewBinding(
+// 	key.WithKeys("f"),
+// 	key.WithHelp("f", "edit file"),
+// )).
+// AddBinding(NewTask, key.NewBinding(
+// 	key.WithKeys("n", "a"),
+// 	key.WithHelp("n/a", "new task"),
+// )).
+// AddBinding(IncreasePriority, key.NewBinding(
+// 	key.WithKeys("+"),
+// 	key.WithHelp("+", "increase priority"),
+// )).
+// AddBinding(DecreasePriority, key.NewBinding(
+// 	key.WithKeys("-"),
+// 	key.WithHelp("-", "decrease priority"),
+// ))
 
 func Model(ctx *todo.Context) model {
 	contexts := todo.GetContexts()
@@ -103,17 +105,25 @@ func Model(ctx *todo.Context) model {
 		return c.Equals(ctx)
 	})
 
-	list := NewTaskList(ctx)
-	return model{
+	m := model{
 		context:       ctx,
 		cursor:        0,
 		contexts:      contexts,
+		keys:          []actionBinding{},
 		contextCursor: selected,
-		keys:          controller,
 		prompt:        NewPrompt(),
-		list:          list,
-		focused:       &list,
+		list:          TaskList{},
+		focused:       nil,
 	}
+	m.keys = append(m.keys, actionBinding{
+		action:  func() (tea.Model, tea.Cmd) { return m.Hello() },
+		binding: key.NewBinding(key.WithKeys("h"), key.WithHelp("h", "Say hello"))},
+	)
+	list := NewTaskList(ctx, m)
+	m.list = list
+	m.focused = &list
+
+	return m
 }
 
 func (m model) Focus(f tea.Model) {
@@ -139,7 +149,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case AddedTaskMsg:
 		m.context.Add(msg.task)
 		m.context.Sync()
-		m.list = NewTaskList(m.context)
+		m.list = NewTaskList(m.context, m)
 		// Update focused to point to the new list if it was pointing to the old one
 		if _, ok := m.focused.(*TaskList); ok {
 			m.focused = &m.list
@@ -154,12 +164,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		if m.focused == nil {
 			log.Printf("Default model update")
-			action := m.keys.GetAction(msg)
-			log.Printf("action: %s", action.description)
-			var modelUpdate tea.Model
-			modelUpdate, cmd = action.Act(m)
-			m = modelUpdate.(model)
-			cmds = append(cmds, cmd)
+			// action := m.keys.GetAction(msg)
+			// log.Printf("action: %s", action.description)
+			// var modelUpdate tea.Model
+			// modelUpdate, cmd = action.Act()
+			// m = modelUpdate.(model)
+			// cmds = append(cmds, cmd)
 		} else {
 			log.Printf("Focused model update %v", msg)
 			m.focused, cmd = m.focused.Update(msg)

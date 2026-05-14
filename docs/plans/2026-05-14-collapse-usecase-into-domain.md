@@ -113,6 +113,61 @@ func (t *Task) markCompleted(c *Context, when time.Time) (*Task, error)  // rena
   them unexported removes the footgun at the API surface. Same-package tests
   still exercise the pure semantics.
 
+## Context/Repository inversion: the dependency mechanics
+
+This refactor inverts a dependency: previously `Repository` (in storage)
+referenced `Context`; now `Context` (in domain) holds a `Repository`. Both
+the interface and the type live in `domain`. The mechanics:
+
+**Intra-package cycle is fine.** `Repository` references `*Context` in its
+method signatures, and `Context` has a `repo Repository` field. Go allows
+mutual reference within a single package without import cycles.
+
+**No cross-package cycle.** `storage` imports `domain` to access the
+interface and the Context type. `domain` imports nothing from `storage`. The
+concrete `*FileRepository` and `*MemoryRepository` types implement
+`domain.Repository` by virtue of having the right method set — Go's
+structural typing means the implementations don't need to know they're
+implementing the interface.
+
+**Storage can't touch Context's private `repo` field.** It's unexported, and
+storage is in a different package. The injection point must be a
+`domain`-defined constructor:
+
+```go
+// internal/domain/context.go
+func NewContext(repo Repository, name string) *Context {
+    return &Context{repo: repo, Name: name, Tasks: []*Task{}}
+}
+
+// internal/storage/file.go
+func (r *FileRepository) LoadContext(name string) (*domain.Context, error) {
+    ctx := domain.NewContext(r, name)
+    // ... parse file, populate ctx.Tasks (exported field)
+    return ctx, nil
+}
+```
+
+`ctx.Tasks` stays public so storage can populate it directly after
+construction. Only `repo` is private. This keeps the seam minimal.
+
+**Pure tests construct via struct literal.** Tests that exercise only
+pure methods (`GetTaskById`, `Search`, `Sort`, `Equals`) keep using
+`&domain.Context{Name: ..., Tasks: ...}` — `repo` defaults to nil and the
+pure methods never touch it. Tests that exercise persistent methods
+construct via a memory repo: `repo := storage.NewMemoryRepository(); ctx, _ := repo.LoadContext("foo"); ctx.AddTask(...)`.
+
+**Persistent methods assume non-nil repo.** Calling `ctx.AddTask(...)` on a
+struct-literal Context with `repo == nil` will panic with a clear nil-
+pointer dereference. This is a programmer error (you obtained a Context
+without going through a repo), and we want it loud, not silent.
+
+**The two construction paths converge.** The repo's `LoadContext` is the
+ONLY way external callers get a Context that's wired for persistence.
+`domain.NewContext` is the constructor storage uses internally; callers
+outside the domain package shouldn't call it directly. Documented as
+such.
+
 ## Steps
 
 Each step keeps `just test` green.
@@ -137,23 +192,45 @@ Each step keeps `just test` green.
 
 ### Step 2 — Inject `Repository` into `Context`
 
-**Test harness change:** update `newCtxWithTasks` helpers in `internal/domain/`
-to construct via memory repo (or pass `nil` for pure-method tests). The
-existing `TestContext_Add_DoesNotTouchDisk` and `TestContext_Remove_DoesNotTouchDisk` already use viper for a temp dir — those continue to work; they
-test the pure helpers.
+See the "Context/Repository inversion" section above for the dependency
+mechanics this step implements.
+
+**Test harness change:**
+- Pure-method tests in `internal/domain/context_test.go` continue to use
+  `&Context{Name: ..., Tasks: ...}` struct literals (no repo).
+- `TestContext_Add_DoesNotTouchDisk` and `TestContext_Remove_DoesNotTouchDisk`
+  test the pure-helper semantics; they don't need a repo for the assertion
+  (the assertion is "no file written") and can keep using struct literals.
 
 **Refactor change:**
 - Add private `repo Repository` field to `Context`.
 - Change `NewContext(name string)` → `NewContext(repo Repository, name string)`.
-- `FileRepository.LoadContext` and `MemoryRepository.LoadContext` set
-  `ctx.repo = r` on the returned value.
-- Existing callers of `NewContext` (only internal — `interactive` model
-  construction post-Step-9 already uses repo.LoadContext) update.
+  This is the seam through which storage injects the repo into a Context it's
+  returning from `LoadContext`. Document NewContext as "intended for
+  Repository implementations; external callers should obtain Contexts via
+  `repo.LoadContext`".
+- `FileRepository.LoadContext` and `MemoryRepository.LoadContext` change from
+  ```go
+  return &domain.Context{Name: name, Tasks: tasks}, nil
+  ```
+  to
+  ```go
+  ctx := domain.NewContext(r, name)
+  ctx.Tasks = tasks
+  return ctx, nil
+  ```
+  (`Tasks` is exported, so direct assignment is fine; only `repo` requires
+  the constructor.)
+- The two remaining external callers of `domain.NewContext` are the legacy
+  `$EDITOR`-shelling commands that need a path string:
+  - `internal/cli/todo.go`'s `edit-done` command: `domain.NewContext("done").Filepath()`
+  - `internal/tui/actions.go`'s `EditFile` action: uses `m.context.Filepath()` (already gets a real Context from LoadContext — fine).
+  The CLI's edit-done line becomes `domain.NewContext(repo(), "done").Filepath()`, or better, `ctx, _ := repo().LoadContext("done"); utils.EditFilePath(ctx.Filepath())`.
 
 **Verify:** all tests green.
 
-**Risk:** nil-repo panics. Mitigated by routing all "live" Context construction
-through `repo.LoadContext`; pure-method tests pass `nil`.
+**Risk:** nil-repo panics on a struct-literal Context calling persistent
+methods. Acceptable failure mode (programmer error, loud).
 
 ---
 

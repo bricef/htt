@@ -5,7 +5,8 @@ import (
 	"log"
 	"slices"
 
-	"github.com/bricef/htt/internal/todo"
+	"github.com/bricef/htt/internal/domain"
+	"github.com/bricef/htt/internal/usecase"
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
@@ -97,9 +98,10 @@ var color_subtle_separator = lipgloss.Color("#3C3C3C")
 var color_subtle_desc = lipgloss.Color("#4A4A4A")
 
 type model struct {
-	context       *todo.Context
+	uc            *usecase.UseCases
+	context       *domain.Context
 	cursor        int // which to-do list item our cursor is pointing at
-	contexts      []*todo.Context
+	contexts      []*domain.Context
 	contextCursor int
 	width         int
 	height        int
@@ -163,17 +165,19 @@ var controller = NewKeyBindingController().
 		key.WithHelp("-", "decrease priority"),
 	))
 
-func Model(ctx *todo.Context) model {
-	contexts := todo.GetContexts()
-	contexts = append(contexts, todo.NewContext("done"))
-	// todoIndex := slices.IndexFunc(contexts, func(c *todo.Context) bool {
-	// 	return c.Name == "todo"
-	// })
-	// if todoIndex == -1 {
-	// 	contexts = slices.Insert(contexts, 0, todo.NewContext("todo"))
-	// }
+// Model constructs the TUI model rooted at ctx, with uc as the business
+// layer for all mutating actions.
+func Model(uc *usecase.UseCases, ctx *domain.Context) model {
+	// Names-only view of the contexts; the tab strip only renders Name.
+	// Tasks for each tab are loaded on demand when the user switches to it.
+	names, _ := uc.ListContextNames()
+	contexts := make([]*domain.Context, 0, len(names)+1)
+	for _, name := range names {
+		contexts = append(contexts, &domain.Context{Name: name})
+	}
+	contexts = append(contexts, &domain.Context{Name: "done"})
 
-	selected := slices.IndexFunc(contexts, func(c *todo.Context) bool {
+	selected := slices.IndexFunc(contexts, func(c *domain.Context) bool {
 		return c.Equals(ctx)
 	})
 
@@ -187,6 +191,7 @@ func Model(ctx *todo.Context) model {
 	ti.Width = 100
 
 	return model{
+		uc:            uc,
 		context:       ctx,
 		cursor:        0,
 		contexts:      contexts,

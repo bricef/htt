@@ -8,7 +8,8 @@ import (
 	"testing"
 
 	"github.com/bricef/htt/internal/interactive"
-	"github.com/bricef/htt/internal/todo"
+	"github.com/bricef/htt/internal/storage"
+	"github.com/bricef/htt/internal/usecase"
 	"github.com/bricef/htt/internal/vars"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/viper"
@@ -65,8 +66,13 @@ func (e *tuiEnv) seedCurrentContext(name string) {
 // initial WindowSizeMsg. It expects the named context file to already exist.
 func (e *tuiEnv) start(contextName string) {
 	e.t.Helper()
-	ctx := todo.NewContext(contextName)
-	e.model = interactive.Model(ctx)
+	repo := storage.NewFileRepository(e.dataDir)
+	uc := usecase.New(repo)
+	ctx, err := repo.LoadContext(contextName)
+	if err != nil {
+		e.t.Fatalf("LoadContext(%q): %v", contextName, err)
+	}
+	e.model = interactive.Model(uc, ctx)
 	e.send(tea.WindowSizeMsg{Width: 120, Height: 40})
 }
 

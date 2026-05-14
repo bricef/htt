@@ -1,0 +1,112 @@
+package cmd
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/bricef/htt/internal/storage"
+	"github.com/bricef/htt/internal/usecase"
+)
+
+// withMemoryRepo swaps the package-level UseCases for a fresh in-memory
+// instance and restores it on cleanup. Returns the underlying repo so the
+// caller can inspect state.
+//
+// Tests using this helper must NOT run in parallel because RootCmd and the
+// uc() injection point are package-level state.
+func withMemoryRepo(t *testing.T) *storage.MemoryRepository {
+	t.Helper()
+	repo := storage.NewMemoryRepository()
+	prev := defaultUC
+	SetUseCases(usecase.New(repo))
+	t.Cleanup(func() { SetUseCases(prev) })
+	return repo
+}
+
+// runCobra invokes RootCmd with the given args. Returns the error from
+// Execute() — useful for verifying RunE error propagation. Stdout is not
+// captured (commands use fmt.Printf directly); use the e2e harness for
+// output assertions.
+func runCobra(t *testing.T, args ...string) error {
+	t.Helper()
+	RootCmd.SetArgs(args)
+	return RootCmd.Execute()
+}
+
+func TestCobra_AddCommand_PersistsToRepo(t *testing.T) {
+	repo := withMemoryRepo(t)
+
+	if err := runCobra(t, "todo", "add", "buy", "milk"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	ctx, err := repo.LoadContext("todo")
+	if err != nil {
+		t.Fatalf("LoadContext: %v", err)
+	}
+	if len(ctx.Tasks) != 1 || ctx.Tasks[0].Raw != "buy milk" {
+		t.Errorf("repo state = %v, want one task 'buy milk'", ctx.Tasks)
+	}
+}
+
+func TestCobra_DeleteOutOfRange_ReturnsError(t *testing.T) {
+	withMemoryRepo(t)
+
+	err := runCobra(t, "todo", "delete", "99")
+	if err == nil {
+		t.Fatalf("expected error from out-of-range delete, got nil")
+	}
+	if !strings.Contains(err.Error(), "delete task") {
+		t.Errorf("error should mention delete task, got %q", err.Error())
+	}
+}
+
+func TestCobra_InvalidPriority_ReturnsError(t *testing.T) {
+	withMemoryRepo(t)
+
+	if err := runCobra(t, "todo", "add", "task"); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+
+	err := runCobra(t, "todo", "priority", "0", "Z")
+	if err == nil {
+		t.Fatalf("expected error from invalid priority, got nil")
+	}
+	if !strings.Contains(err.Error(), "set priority") {
+		t.Errorf("error should mention set priority, got %q", err.Error())
+	}
+}
+
+func TestCobra_ContextSwitch_PersistsName(t *testing.T) {
+	repo := withMemoryRepo(t)
+
+	if err := runCobra(t, "todo", "context", "work"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	name, err := repo.GetCurrentContextName()
+	if err != nil {
+		t.Fatalf("GetCurrentContextName: %v", err)
+	}
+	if name != "work" {
+		t.Errorf("current = %q, want work", name)
+	}
+}
+
+func TestCobra_DoCommand_MovesToDone(t *testing.T) {
+	repo := withMemoryRepo(t)
+	if err := runCobra(t, "todo", "add", "make tea"); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	if err := runCobra(t, "todo", "do", "0"); err != nil {
+		t.Fatalf("do: %v", err)
+	}
+
+	todoCtx, _ := repo.LoadContext("todo")
+	if len(todoCtx.Tasks) != 0 {
+		t.Errorf("todo should be empty, got %v", todoCtx.Tasks)
+	}
+	doneCtx, _ := repo.LoadContext("done")
+	if len(doneCtx.Tasks) != 1 || !strings.Contains(doneCtx.Tasks[0].Raw, "make tea") {
+		t.Errorf("done should contain completed task, got %v", doneCtx.Tasks)
+	}
+}

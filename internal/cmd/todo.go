@@ -20,7 +20,9 @@ var TodoCommand = &cobra.Command{
 	Args:    cobra.NoArgs,
 	Aliases: []string{"t"},
 	Run: func(cmd *cobra.Command, args []string) {
-		todo.GetCurrentContext().Show()
+		ctx, err := uc().CurrentContext()
+		utils.DieOnError("Could not load current context.", err)
+		ctx.Show()
 	},
 }
 
@@ -55,7 +57,9 @@ var show = &cobra.Command{
 	Short:   "Show the current tasklist.",
 	Long:    `Show the current tasklist.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		todo.GetCurrentContext().Show()
+		ctx, err := uc().CurrentContext()
+		utils.DieOnError("Could not load current context.", err)
+		ctx.Show()
 	},
 }
 
@@ -185,10 +189,9 @@ var random = &cobra.Command{
 	Short: "Select an item at random from the tasklist",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-
-		current := todo.GetCurrentContext()
+		current, err := uc().CurrentContext()
+		utils.DieOnError("Could not load current context.", err)
 		task := current.Tasks[rand.Intn(len(current.Tasks))]
-
 		fmt.Println(task.ConsoleString())
 	},
 }
@@ -283,15 +286,16 @@ var context = &cobra.Command{
 	Use:     "context [context]",
 	Short:   "Show or change the context for tasks",
 	Aliases: []string{"switch", "c"},
-	Long: `This will change the default context for todos. Note that 
-the only supported characters are [A-Za-z_]. Other 
-characters will be replaced by underscores. This 
-means that different arguments may map to the 
+	Long: `This will change the default context for todos. Note that
+the only supported characters are [A-Za-z_]. Other
+characters will be replaced by underscores. This
+means that different arguments may map to the
 same context.`,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) == 0 {
-			current := todo.GetCurrentContext()
+			current, err := uc().CurrentContext()
+			utils.DieOnError("Could not load current context.", err)
 			fmt.Printf("%s\n", current.ConsoleString())
 			return
 		}
@@ -307,7 +311,20 @@ var todoStatus = &cobra.Command{
 	Aliases: []string{"?"},
 	Args:    cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		todo.ShowStatus()
+		current, err := uc().CurrentContext()
+		utils.DieOnError("Could not load current context.", err)
+
+		names, err := uc().ListContextNames()
+		utils.DieOnError("Could not list contexts.", err)
+
+		fmt.Printf("Available Contexts: ")
+		for _, name := range names {
+			c := &todo.Context{Name: name}
+			fmt.Printf("%s ", c.ConsoleString())
+		}
+		fmt.Println()
+		fmt.Printf("Current Context: %s\n", current.ConsoleString())
+		current.Show()
 	},
 }
 
@@ -318,8 +335,8 @@ var search = &cobra.Command{
 	Long:    "Search in current context for tasks matching the given expression.\nThe Expression will be interepreted as a Golang regular expression.",
 	Args:    cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		// interpret expression as golang regxp
-		current := todo.GetCurrentContext()
+		current, err := uc().CurrentContext()
+		utils.DieOnError("Could not load current context.", err)
 
 		// Case insensitive
 		restr := "(?i)" + strings.Join(args[0:], " ")

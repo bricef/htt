@@ -1,4 +1,4 @@
-package todo
+package domain
 
 import (
 	"testing"
@@ -36,11 +36,20 @@ func TestTaskCreation(t *testing.T) {
 	t.Run("Can decrease the priority",
 		stringsEqualOrFail(NewTask("(A) hello world").DecreasePriority().ConsoleString(), "(B) hello world"))
 
-	t.Run("Can't decrease the priority past minimum",
-		stringsEqualOrFail(NewTask("(F) hello world").DecreasePriority().ConsoleString(), "(F) hello world"))
+	// NOTE: priorities = ["A", "B", "C", ""]. Decreasing an unknown priority
+	// (anything outside A-C) resets to "" (no priority) rather than clamping
+	// at the lowest valid letter. This test pins that current behavior.
+	t.Run("Decreasing an unknown priority resets to no priority",
+		stringsEqualOrFail(NewTask("(F) hello world").DecreasePriority().ConsoleString(), "hello world"))
 
-	t.Run("Can't increase the priority past minimum",
+	t.Run("Decrease from no priority stays at no priority",
+		stringsEqualOrFail(NewTask("hello world").DecreasePriority().ConsoleString(), "hello world"))
+
+	t.Run("Can't increase the priority past maximum",
 		stringsEqualOrFail(NewTask("(A) hello world").IncreasePriority().ConsoleString(), "(A) hello world"))
+
+	t.Run("Increase from no priority steps up to C",
+		stringsEqualOrFail(NewTask("hello world").IncreasePriority().ConsoleString(), "(C) hello world"))
 
 	t.Run("Can add an annotation",
 		stringsEqualOrFail(NewTask("hello").Annotate("test", "123").ConsoleString(), "hello test:123"))

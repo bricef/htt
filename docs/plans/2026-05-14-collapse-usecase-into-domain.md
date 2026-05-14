@@ -4,6 +4,79 @@
 **Status:** Proposed
 **Builds on:** `2026-05-14-business-layer-extraction.md`
 
+## Resume marker (where this session left off)
+
+- Branch: `refactor/collapse-usecase-into-domain`
+- Working tree: clean (only this plan committed; no code changes yet)
+- Tasks: Step 1 is `in_progress` in the task list; Steps 2–6 are `pending`
+- Next action: execute Step 1 (move + reshape Repository in one commit)
+
+The plan went through two rounds of design dialogue before any code was
+written. The "Decisions captured" section below records the choices that
+came out of that dialogue so they don't have to be relitigated when work
+resumes.
+
+## Decisions captured during planning
+
+These are the design choices that emerged from the conversation. Each is
+reflected in the shape and steps below, but listed here in one place for
+quick reference.
+
+1. **The repo is the factory; Context is downstream.** Inversion direction:
+   `Repository.Context(name)` returns a `*Context` wired with its repo.
+   External callers never construct Contexts directly.
+
+2. **`ctx.AddTask(task)` takes a pre-built Task, not a raw string.**
+   Construction and placement are different concerns. Callers do
+   `task, err := domain.NewTask("foo"); err = ctx.AddTask(task)`. Same
+   pattern for `ctx.Replace(strID, newTask)`.
+
+3. **Task mutation methods are unexported.** `SetPriority`,
+   `IncreasePriority`, `DecreasePriority`, `Do` (renamed `markCompleted`)
+   become lowercase. The Context layer is the only sanctioned mutation
+   path; pure-mutation methods on Task exist for same-package tests and
+   internal use only.
+
+4. **Priority operations live on Context, not Task.** A `task.SetPriority`
+   that persists would need a back-reference to its parent Context
+   (cyclic graph, fragile after Move). Keeping mutation pure on Task and
+   orchestration on Context avoids the trap.
+
+5. **`Save` stays exported with a doc comment.** Go's unexported-method
+   interface matching is single-package; an unexported `save` would
+   prevent `storage.MemoryRepository` from satisfying `domain.Repository`.
+   Doc comment communicates intent ("internal use by Context methods").
+   No architecture-test enforcement — convention is enough.
+
+6. **Two methods for listing contexts: `Contexts()` and `ContextNames()`.**
+   Honest about cost. `ContextNames()` is cheap (just names, for tab
+   strips and status). `Contexts()` loads all tasks (real use case:
+   cumulative stats across all contexts).
+
+7. **Two methods for the active context: `CurrentContext()` and `CurrentContextName()`.** Same shape. `CurrentContext()` defaults to the
+   `"todo"` context if no pointer has been set — keeps setup costs to
+   zero for new users.
+
+8. **`SetCurrent(name)` sanitizes the input internally.** Non-word
+   characters become underscores (preserving today's behavior via
+   `utils.StringToFilename`). Returns just `error`. Callers that need the
+   sanitized form follow up with `CurrentContextName()`. Sanitization
+   moves from `usecase.SwitchContext` into the repo impls; the use case
+   becomes a passthrough until it's deleted in Step 6.
+
+9. **`Tasks []*Task` stays exported.** Repository impls need to populate
+   it after construction. Fully sealing the type (private `tasks` with
+   accessors) is out of scope here — possible follow-up.
+
+10. **Storage impls live in `internal/storage/`, not collapsed into
+    `domain`.** Keeps the layering from the previous refactor intact.
+    The cost is `Save` being exported (per decision 5); the benefit is a
+    smaller, more focused `domain` package.
+
+11. **`internal/timelogs` stays out of scope.** Continues wrapping domain
+    errors with `utils.DieOnError` for legacy parity. Its own refactor
+    is a future improvement.
+
 ## Motivation
 
 The previous refactor introduced `internal/usecase/` as the business layer that

@@ -18,18 +18,52 @@ provides implementations of it. The `usecase` package goes away.
 
 ## Shape
 
+The Repository is the top of the object graph. A repo *holds* contexts.
+That matches both the on-disk layout (a data dir contains context files)
+and the user's mental model. Construction goes through the repo as factory:
+external callers never write `domain.NewContext(...)` — they ask the repo
+for a Context.
+
 ```go
-// Repository is a domain abstraction; storage just implements it.
 // internal/domain/repository.go
+//
+// Repository is a domain abstraction; storage implementations satisfy it.
 type Repository interface {
-    LoadContext(name string) (*Context, error)
-    SaveContext(*Context) error
-    ListContextNames() ([]string, error)
-    GetCurrentContextName() (string, error)
-    SetCurrentContextName(name string) error
+    // Context returns the named context, loaded with its tasks. A name
+    // that has never been persisted returns an empty Context (Tasks empty).
+    Context(name string) (*Context, error)
+
+    // Contexts returns every persisted context with tasks loaded. Heavier
+    // than ContextNames; use only when you actually need the task lists.
+    Contexts() ([]*Context, error)
+
+    // ContextNames returns the names of every persisted context. Cheap.
+    // Use this for tab strips, status output, anywhere you just need to
+    // list what's available.
+    ContextNames() ([]string, error)
+
+    // CurrentContext returns the active context, loaded. Equivalent to
+    // Context(CurrentContextName()) but expressed as one call.
+    CurrentContext() (*Context, error)
+
+    // CurrentContextName returns just the name of the active context.
+    // Defaults to DefaultContextName if no current pointer is set.
+    CurrentContextName() (string, error)
+
+    // SetCurrent persists the active-context pointer. Sanitization of the
+    // name (non-word characters → underscores) lives here.
+    SetCurrent(name string) error
+
+    // Save persists a context. Intended for internal use by Context's
+    // mutation methods (AddTask, Delete, etc.); external callers should
+    // mutate through those methods rather than calling Save directly.
+    // Public because Go's unexported-method interface matching only works
+    // within a single package, and we want storage impls to live in
+    // internal/storage/.
+    Save(c *Context) error
 }
 
-// Context carries an injected repo (via NewContext or LoadContext) and
+// Context carries an injected repo (set by repo.Context() and friends) and
 // exposes the operations that need persistence.
 type Context struct {
     Name  string
@@ -117,7 +151,7 @@ func (t *Task) markCompleted(c *Context, when time.Time) (*Task, error)  // rena
 
 This refactor inverts a dependency: previously `Repository` (in storage)
 referenced `Context`; now `Context` (in domain) holds a `Repository`. Both
-the interface and the type live in `domain`. The mechanics:
+the interface and the type live in `domain`.
 
 **Intra-package cycle is fine.** `Repository` references `*Context` in its
 method signatures, and `Context` has a `repo Repository` field. Go allows
@@ -125,107 +159,161 @@ mutual reference within a single package without import cycles.
 
 **No cross-package cycle.** `storage` imports `domain` to access the
 interface and the Context type. `domain` imports nothing from `storage`. The
-concrete `*FileRepository` and `*MemoryRepository` types implement
-`domain.Repository` by virtue of having the right method set — Go's
-structural typing means the implementations don't need to know they're
-implementing the interface.
+concrete `*FileRepository` and `*MemoryRepository` types in `internal/
+storage/` implement `domain.Repository` by virtue of having the right
+method set — Go's structural typing means the implementations don't need
+to know they're implementing the interface.
 
-**Storage can't touch Context's private `repo` field.** It's unexported, and
-storage is in a different package. The injection point must be a
-`domain`-defined constructor:
+**`Save` is exported, by convention private.** Go's unexported-method
+interface matching only works within a single package, so an unexported
+`save` method on `domain.Repository` would prevent `storage.MemoryRepository`
+from satisfying it. We expose `Save` and document it as "intended for
+internal use by Context methods; external callers should mutate through
+the Context API." The architecture test could enforce this convention
+(no caller outside `internal/domain/` should reference `Repository.Save`)
+if it becomes load-bearing.
+
+**Repo as factory; storage uses a domain-internal constructor.** Storage
+can't set Context's private `repo` field directly, so the construction
+seam is a domain-package constructor that storage calls:
 
 ```go
-// internal/domain/context.go
+// internal/domain/context.go — used by repository implementations only
 func NewContext(repo Repository, name string) *Context {
     return &Context{repo: repo, Name: name, Tasks: []*Task{}}
 }
 
 // internal/storage/file.go
-func (r *FileRepository) LoadContext(name string) (*domain.Context, error) {
+func (r *FileRepository) Context(name string) (*domain.Context, error) {
     ctx := domain.NewContext(r, name)
     // ... parse file, populate ctx.Tasks (exported field)
     return ctx, nil
 }
 ```
 
-`ctx.Tasks` stays public so storage can populate it directly after
-construction. Only `repo` is private. This keeps the seam minimal.
+External callers never write `domain.NewContext(...)` — they ask the repo:
+`repo.Context("todo")`. The constructor is documented as
+"intended for Repository implementations; external callers obtain Contexts
+via Repository.Context() or Repository.Contexts()."
+
+**`Tasks` stays exported.** Repository impls populate it directly after
+construction. Only `repo` is private. The implicit invariant is "after
+NewContext, you set Tasks before returning the Context to a caller."
 
 **Pure tests construct via struct literal.** Tests that exercise only
 pure methods (`GetTaskById`, `Search`, `Sort`, `Equals`) keep using
 `&domain.Context{Name: ..., Tasks: ...}` — `repo` defaults to nil and the
 pure methods never touch it. Tests that exercise persistent methods
-construct via a memory repo: `repo := storage.NewMemoryRepository(); ctx, _ := repo.LoadContext("foo"); ctx.AddTask(...)`.
+construct via a memory repo: `repo := storage.NewMemoryRepository(); ctx, _ := repo.Context("foo"); ctx.AddTask(...)`.
 
 **Persistent methods assume non-nil repo.** Calling `ctx.AddTask(...)` on a
-struct-literal Context with `repo == nil` will panic with a clear nil-
-pointer dereference. This is a programmer error (you obtained a Context
-without going through a repo), and we want it loud, not silent.
+struct-literal Context with `repo == nil` will panic with a nil-pointer
+dereference. This is a programmer error (you obtained a Context without
+going through a repo), and we want it loud, not silent.
 
-**The two construction paths converge.** The repo's `LoadContext` is the
-ONLY way external callers get a Context that's wired for persistence.
-`domain.NewContext` is the constructor storage uses internally; callers
-outside the domain package shouldn't call it directly. Documented as
-such.
+**Cross-context ops read naturally.** `c.Move("0", "work")` internally
+calls `c.repo.Context("work")` to obtain the target Context (which is
+wired with the same repo). No ambiguity about which repo to save to.
+
+**`Tasks` could become unexported later.** With `AddTask` as the only
+sanctioned mutation path, the exported `Tasks` field is no longer
+load-bearing for the use case layer (which used to splice it directly to
+avoid the legacy `Add`-triggers-`Sync` quirk). We keep `Tasks` exported
+in this refactor for compatibility with repo impls and read-only callers
+(rendering); fully sealing it is a future improvement out of scope here.
 
 ## Steps
 
 Each step keeps `just test` green.
 
-### Step 1 — Move `Repository` interface to `internal/domain/`
+### Step 1 — Move `Repository` to `internal/domain/` with the inverted shape
 
-**Test harness change:** none — interface relocation is purely mechanical.
+This is a bigger step than I initially scoped: not just relocating the
+interface, but reshaping it. We do the reshape and the move together so
+storage impls only change once.
+
+**Test harness change:**
+- `internal/storage/contract_test.go` keeps the same shape ("Save then load
+  round-trips", "Save preserves order", etc.) but updated method names:
+  `LoadContext` → `Context`, `SaveContext` → `Save`, `ListContexts` →
+  `ContextNames`, `GetCurrentContextName` → `CurrentContextName`,
+  `SetCurrentContextName` → `SetCurrent`. Two new contract tests for the
+  added methods: `Contexts()` returns all persisted contexts with tasks;
+  `CurrentContext()` returns the active context (default `todo`) loaded.
 
 **Refactor change:**
-- Move `internal/storage/repository.go` → `internal/domain/repository.go`.
-- Storage implementations import `domain.Repository`.
-- Rename `Repository.ListContexts` → `ListContextNames` for consistency with
-  the existing `GetCurrentContextName` / `SetCurrentContextName`. (The current
-  method already returns `[]string`; the rename just makes the contract honest.)
+- Delete `internal/storage/repository.go`. Create `internal/domain/repository.go` with the inverted interface:
+  ```go
+  type Repository interface {
+      Context(name string) (*Context, error)
+      Contexts() ([]*Context, error)
+      ContextNames() ([]string, error)
+      CurrentContext() (*Context, error)
+      CurrentContextName() (string, error)
+      SetCurrent(name string) error
+      Save(c *Context) error
+  }
+  ```
+  Also moves `ErrInvalidContextName` and `DefaultContextName` constants.
+- `internal/storage/memory.go` rewires:
+  - `LoadContext(name)` → `Context(name)`
+  - `SaveContext(c)` → `Save(c)`
+  - `ListContexts()` → `ContextNames()`
+  - `GetCurrentContextName()` → `CurrentContextName()`
+  - `SetCurrentContextName(name)` → `SetCurrent(name)`
+  - New: `Contexts() ([]*Context, error)` — iterate names, call Context for each
+  - New: `CurrentContext() (*Context, error)` — call CurrentContextName, then Context
+- `internal/storage/file.go` mirrors the same renames + additions.
+- `internal/usecase/usecase.go` updates its repo calls accordingly. This is
+  the one consumer that needs to swallow the rename; the use case package
+  still exists during this step and remains the layer CLI/TUI call into.
+- CLI and TUI don't touch `Repository` directly yet (still go through `uc()`).
 
-**Verify:** all tests pass; architecture test confirms `storage` imports
-`domain` (no new cycle).
+**Sanitization moves to `SetCurrent`.** Currently
+`usecase.SwitchContext` calls `utils.StringToFilename(rawName)` before
+delegating to `repo.SetCurrentContextName`. After this step,
+`Repository.SetCurrent` does the sanitization itself (so any caller — not
+just the use case — gets the right behavior). The use case's
+`SwitchContext` becomes a one-line passthrough; Step 4 deletes the
+use-case wrapper.
 
-**Risk:** none beyond a few import-path edits.
+**Verify:**
+- All contract tests pass against both Memory and File impls.
+- All existing e2e, TUI, in-process Cobra, domain, and usecase tests pass.
+- Architecture test still passes (storage → domain remains the only
+  cross-package direction).
+
+**Risk:** the rename surface is wide (5 methods across 2 impls + 1 consumer
++ contract test). Mitigated by doing them all in one commit so the build is
+green at every checkpoint.
 
 ---
 
 ### Step 2 — Inject `Repository` into `Context`
 
-See the "Context/Repository inversion" section above for the dependency
-mechanics this step implements.
+See "Context/Repository inversion" above for the dependency mechanics.
 
 **Test harness change:**
-- Pure-method tests in `internal/domain/context_test.go` continue to use
+- Pure-method tests in `internal/domain/context_test.go` continue using
   `&Context{Name: ..., Tasks: ...}` struct literals (no repo).
 - `TestContext_Add_DoesNotTouchDisk` and `TestContext_Remove_DoesNotTouchDisk`
-  test the pure-helper semantics; they don't need a repo for the assertion
-  (the assertion is "no file written") and can keep using struct literals.
+  use struct literals.
 
 **Refactor change:**
 - Add private `repo Repository` field to `Context`.
 - Change `NewContext(name string)` → `NewContext(repo Repository, name string)`.
-  This is the seam through which storage injects the repo into a Context it's
-  returning from `LoadContext`. Document NewContext as "intended for
-  Repository implementations; external callers should obtain Contexts via
-  `repo.LoadContext`".
-- `FileRepository.LoadContext` and `MemoryRepository.LoadContext` change from
-  ```go
-  return &domain.Context{Name: name, Tasks: tasks}, nil
-  ```
-  to
+  Documented as "intended for Repository implementations; external callers
+  obtain Contexts via `Repository.Context()` or `Repository.Contexts()`."
+- `FileRepository.Context()` and `MemoryRepository.Context()` change to:
   ```go
   ctx := domain.NewContext(r, name)
-  ctx.Tasks = tasks
+  ctx.Tasks = tasks  // populate after construction
   return ctx, nil
   ```
-  (`Tasks` is exported, so direct assignment is fine; only `repo` requires
-  the constructor.)
-- The two remaining external callers of `domain.NewContext` are the legacy
-  `$EDITOR`-shelling commands that need a path string:
-  - `internal/cli/todo.go`'s `edit-done` command: `domain.NewContext("done").Filepath()`
-  - `internal/tui/actions.go`'s `EditFile` action: uses `m.context.Filepath()` (already gets a real Context from LoadContext — fine).
-  The CLI's edit-done line becomes `domain.NewContext(repo(), "done").Filepath()`, or better, `ctx, _ := repo().LoadContext("done"); utils.EditFilePath(ctx.Filepath())`.
+- The legacy `edit-done` CLI command (`domain.NewContext("done").Filepath()`)
+  becomes `ctx, _ := repo().Context("done"); utils.EditFilePath(ctx.Filepath())`.
+- TUI's `EditFile` action: already gets its Context from a repo call, no
+  change needed.
 
 **Verify:** all tests green.
 
@@ -252,8 +340,8 @@ func (c *Context) IncreasePriority(strID string) (old, new *Task, err error)
 func (c *Context) DecreasePriority(strID string) (old, new *Task, err error)
 ```
 
-Each method loads any auxiliary context via `c.repo.LoadContext`, applies the
-mutation, and saves through `c.repo.SaveContext`. The snapshot pattern from
+Each method loads any auxiliary context via `c.repo.Context()`, applies the
+mutation, and saves through `c.repo.Save(c)`. The snapshot pattern from
 `swapTask` moves into the priority methods.
 
 `usecase` package still exists in parallel during this step; CLI and TUI still
@@ -277,7 +365,7 @@ Update them only if call shapes change.
 - Replace `cli.uc()` with `cli.repo()` (returning a `domain.Repository`).
 - CLI commands change from `uc().AddTask(...)` to:
   ```go
-  ctx, _ := repo().LoadContext(name)
+  ctx, _ := repo().CurrentContext()  // or repo().Context(name) for add-to
   task, _ := domain.NewTask(raw)
   ctx.AddTask(task)
   ```

@@ -115,6 +115,31 @@ func TestTodoPriority_SetsExplicitPriority(t *testing.T) {
 	assertEqual(t, "todo.txt", e.readData("todo.txt"), "(A) urgent thing\n")
 }
 
+func TestTodoPriority_BeforeAfterReflectsTransition(t *testing.T) {
+	// Locks the "Before:" / "After:" stdout contract: Before should show
+	// the pre-mutation state, After the post-mutation state. The naïve
+	// rewire to use cases would have collapsed both to the post-mutation
+	// state because the domain priority methods mutate the receiver in
+	// place. Pin it so we don't regress.
+	e := newEnv(t)
+	e.mustRun("todo", "add", "task")
+	r := e.mustRun("todo", "priority", "0", "A")
+
+	bIdx := strings.Index(r.stdout, "Before:")
+	aIdx := strings.Index(r.stdout, "After:")
+	if bIdx < 0 || aIdx < 0 || bIdx >= aIdx {
+		t.Fatalf("expected Before then After in stdout, got:\n%s", r.stdout)
+	}
+	beforeLine := r.stdout[bIdx:aIdx]
+	afterLine := r.stdout[aIdx:]
+	if strings.Contains(beforeLine, "(A)") {
+		t.Errorf("Before should NOT contain (A); got %q", beforeLine)
+	}
+	if !strings.Contains(afterLine, "(A)") {
+		t.Errorf("After should contain (A); got %q", afterLine)
+	}
+}
+
 func TestTodoPriorityIncrease_LowersLetter(t *testing.T) {
 	e := newEnv(t)
 

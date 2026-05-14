@@ -32,8 +32,8 @@ var add = &cobra.Command{
 	Short:   "Add an item to the current tasklist",
 	Args:    cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		task := todo.NewTask(strings.Join(args, " "))
-		todo.GetCurrentContext().Add(task).Sync()
+		task, _, err := uc().AddTask(strings.Join(args, " "))
+		utils.DieOnError("Failed to add task.", err)
 		fmt.Printf("Added: %v\n", task.ConsoleString())
 	},
 }
@@ -43,11 +43,9 @@ var addTo = &cobra.Command{
 	Short: "Add an item to a specific tasklist",
 	Args:  cobra.MinimumNArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		context := todo.NewContext(args[0]).Read()
-		task := todo.NewTask(strings.Join(args[1:], " "))
-		context.Add(task)
-		context.Sync()
-		fmt.Printf("Added: %v to %v", task.ConsoleString(), context.ConsoleString())
+		task, ctx, err := uc().AddTaskTo(args[0], strings.Join(args[1:], " "))
+		utils.DieOnError("Failed to add task.", err)
+		fmt.Printf("Added: %v to %v", task.ConsoleString(), ctx.ConsoleString())
 	},
 }
 
@@ -121,9 +119,8 @@ var do = &cobra.Command{
 	Args:    cobra.ExactArgs(1),
 	Aliases: []string{"x"},
 	Run: func(cmd *cobra.Command, args []string) {
-		t, err := todo.CompleteTask(args[0])
+		t, err := uc().CompleteTask(args[0])
 		utils.DieOnError("Failed to complete the task.", err)
-
 		fmt.Printf("Completed: %s\n", t.ConsoleString())
 	},
 }
@@ -144,17 +141,8 @@ var deleteTodo = &cobra.Command{
 	Aliases: []string{"rm"},
 	Args:    cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		context := todo.GetCurrentContext()
-
-		task, err := context.GetTaskByStrId(args[0])
-		utils.DieOnError("Could not get specfied task.", err)
-
-		err = context.Remove(task)
-		utils.DieOnError("Could not remove specified task.", err)
-
-		err = context.Sync()
-		utils.DieOnError("Could not save current context.", err)
-
+		task, err := uc().DeleteTask(args[0])
+		utils.DieOnError("Could not delete task.", err)
 		fmt.Printf("Deleted task: %v\n", task.ConsoleString())
 	},
 }
@@ -165,22 +153,11 @@ var move = &cobra.Command{
 	Aliases: []string{"mv"},
 	Args:    cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		fromContext := todo.GetCurrentContext()
-		toContext := todo.NewContext(args[1])
-
-		task, err := fromContext.GetTaskByStrId(args[0])
-		utils.DieOnError("Could not get specified task.", err)
-
-		err = todo.Move(task, fromContext, toContext)
+		task, from, to, err := uc().MoveTask(args[0], args[1])
 		utils.DieOnError("Could not move task.", err)
-
-		err = fromContext.Sync()
-		utils.DieOnError("Could not save context.", err)
-
-		err = toContext.Sync()
-		utils.DieOnError("Could not save context.", err)
-
-		fmt.Printf("Moved %v from %v to %v.\n", task.ConsoleString(), fromContext.ConsoleString(), toContext.ConsoleString())
+		fromCtx := &todo.Context{Name: from}
+		toCtx := &todo.Context{Name: to}
+		fmt.Printf("Moved %v from %v to %v.\n", task.ConsoleString(), fromCtx.ConsoleString(), toCtx.ConsoleString())
 	},
 }
 
@@ -201,18 +178,10 @@ var priPlus = &cobra.Command{
 	Short: "increase the priority for the selected task",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx := todo.GetCurrentContext()
-		oldTask, err := ctx.GetTaskByStrId(args[0])
-		utils.DieOnError("Could not find task specified.", err)
-
-		fmt.Printf("Before: %s\n", oldTask.ConsoleString())
-
-		newTask := oldTask.IncreasePriority()
-		ctx.Replace(oldTask, newTask)
-		ctx.Sync()
-
-		fmt.Printf("After:  %s\n", newTask.ConsoleString())
-
+		old, neu, err := uc().IncreasePriority(args[0])
+		utils.DieOnError("Could not increase priority.", err)
+		fmt.Printf("Before: %s\n", old.ConsoleString())
+		fmt.Printf("After:  %s\n", neu.ConsoleString())
 	},
 }
 
@@ -221,17 +190,10 @@ var priMinus = &cobra.Command{
 	Short: "Decrease the priority for the selected task",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx := todo.GetCurrentContext()
-		oldTask, err := ctx.GetTaskByStrId(args[0])
-		utils.DieOnError("Could not find task specified.", err)
-
-		fmt.Printf("Before: %s\n", oldTask.ConsoleString())
-
-		newTask := oldTask.DecreasePriority()
-		ctx.Replace(oldTask, newTask)
-		ctx.Sync()
-
-		fmt.Printf("After:  %s\n", newTask.ConsoleString())
+		old, neu, err := uc().DecreasePriority(args[0])
+		utils.DieOnError("Could not decrease priority.", err)
+		fmt.Printf("Before: %s\n", old.ConsoleString())
+		fmt.Printf("After:  %s\n", neu.ConsoleString())
 	},
 }
 
@@ -241,24 +203,10 @@ var priority = &cobra.Command{
 	Args:    cobra.ExactArgs(2),
 	Aliases: []string{"pri", "p"},
 	Run: func(cmd *cobra.Command, args []string) {
-		// Check valid input
-		matches, err := regexp.MatchString("^[ABCDEF]$", args[1])
-		if err != nil || !matches {
-			utils.Fatal(fmt.Sprintf("Invalid priority '%v'.", args[1]))
-		}
-
-		ctx := todo.GetCurrentContext()
-		oldTask, err := ctx.GetTaskByStrId(args[0])
-		utils.DieOnError("Could not find task specified.", err)
-
-		fmt.Printf("Before: %s\n", oldTask.ConsoleString())
-
-		newTask := oldTask.SetPriority(args[1])
-		ctx.Replace(oldTask, newTask)
-		ctx.Sync()
-
-		fmt.Printf("After:  %s\n", newTask.ConsoleString())
-
+		old, neu, err := uc().SetPriority(args[0], args[1])
+		utils.DieOnError("Could not set priority.", err)
+		fmt.Printf("Before: %s\n", old.ConsoleString())
+		fmt.Printf("After:  %s\n", neu.ConsoleString())
 	},
 }
 
@@ -268,17 +216,10 @@ var replace = &cobra.Command{
 	Args:    cobra.MinimumNArgs(2),
 	Aliases: []string{"r"},
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx := todo.GetCurrentContext()
-		oldTask, err := ctx.GetTaskByStrId(args[0])
-		utils.DieOnError("Could not find task specified.", err)
-
-		fmt.Printf("Before: %s\n", oldTask.ConsoleString())
-
-		newTask := todo.NewTask(strings.Join(args[1:], " "))
-		ctx.Replace(oldTask, newTask)
-		ctx.Sync()
-
-		fmt.Printf("After: %s\n", newTask.ConsoleString())
+		old, neu, err := uc().ReplaceTask(args[0], strings.Join(args[1:], " "))
+		utils.DieOnError("Could not replace task.", err)
+		fmt.Printf("Before: %s\n", old.ConsoleString())
+		fmt.Printf("After: %s\n", neu.ConsoleString())
 	},
 }
 

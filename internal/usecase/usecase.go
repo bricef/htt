@@ -256,7 +256,12 @@ func (u *UseCases) ListContextNames() ([]string, error) {
 
 // swapTask loads the current context, finds the task by string ID, applies
 // transform to produce a new task, replaces in-place, persists, and returns
-// (old, new).
+// (snapshotOfOriginal, new).
+//
+// The pre-mutation snapshot is critical: Task.SetPriority /
+// IncreasePriority / DecreasePriority all mutate the receiver in place and
+// return the same pointer. Without snapshotting first, callers that want to
+// print a "Before:" view (the CLI does) would see the post-mutation state.
 func (u *UseCases) swapTask(strID string, transform func(*domain.Task) *domain.Task) (*domain.Task, *domain.Task, error) {
 	currentName, err := u.repo.GetCurrentContextName()
 	if err != nil {
@@ -266,12 +271,13 @@ func (u *UseCases) swapTask(strID string, transform func(*domain.Task) *domain.T
 	if err != nil {
 		return nil, nil, err
 	}
-	old, err := ctx.GetTaskByStrId(strID)
+	target, err := ctx.GetTaskByStrId(strID)
 	if err != nil {
 		return nil, nil, err
 	}
-	newTask := transform(old)
-	if err := ctx.Replace(old, newTask); err != nil {
+	old := domain.NewTask(target.Raw)
+	newTask := transform(target)
+	if err := ctx.Replace(target, newTask); err != nil {
 		return nil, nil, err
 	}
 	if err := u.repo.SaveContext(ctx); err != nil {

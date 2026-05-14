@@ -199,12 +199,18 @@ func TestIncreasePriority_StepsUp(t *testing.T) {
 	uc, repo := newUC(t)
 	_, _, _ = uc.AddTask("(C) something")
 
-	_, neu, err := uc.IncreasePriority("0")
+	old, neu, err := uc.IncreasePriority("0")
 	if err != nil {
 		t.Fatalf("IncreasePriority: %v", err)
 	}
 	if neu.Priority != "B" {
 		t.Errorf("priority = %q, want B", neu.Priority)
+	}
+	if old.Priority != "C" {
+		t.Errorf("old.Priority = %q, want C (pre-mutation snapshot)", old.Priority)
+	}
+	if old.Raw == neu.Raw {
+		t.Errorf("old and new should differ; both are %q", old.Raw)
 	}
 	stored := mustLoad(t, repo, "todo")
 	if !strings.HasPrefix(stored.Tasks[0].Raw, "(B) ") {

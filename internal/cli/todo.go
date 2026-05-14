@@ -1,4 +1,4 @@
-package cmd
+package cli
 
 import (
 	"errors"
@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/bricef/htt/internal/todo"
+	"github.com/bricef/htt/internal/domain"
 	"github.com/bricef/htt/internal/utils"
 	"github.com/spf13/cobra"
 )
@@ -161,7 +161,7 @@ var editDone = &cobra.Command{
 	Aliases: []string{"ed"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// Legacy $EDITOR shell-out; needs the on-disk path.
-		utils.EditFilePath(todo.NewContext("done").Filepath())
+		utils.EditFilePath(domain.NewContext("done").Filepath())
 		return nil
 	},
 }
@@ -191,8 +191,8 @@ var move = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("move task: %w", err)
 		}
-		fromCtx := &todo.Context{Name: from}
-		toCtx := &todo.Context{Name: to}
+		fromCtx := &domain.Context{Name: from}
+		toCtx := &domain.Context{Name: to}
 		fmt.Printf("Moved %v from %v to %v.\n", task.ConsoleString(), fromCtx.ConsoleString(), toCtx.ConsoleString())
 		return nil
 	},
@@ -324,7 +324,7 @@ var todoStatus = &cobra.Command{
 
 		fmt.Printf("Available Contexts: ")
 		for _, name := range names {
-			c := &todo.Context{Name: name}
+			c := &domain.Context{Name: name}
 			fmt.Printf("%s ", c.ConsoleString())
 		}
 		fmt.Println()
@@ -352,7 +352,7 @@ var search = &cobra.Command{
 			return fmt.Errorf("invalid regular expression: %w", err)
 		}
 
-		current.ShowOnly(func(t *todo.Task) bool {
+		current.ShowOnly(func(t *domain.Task) bool {
 			return re.MatchString(t.Raw)
 		})
 		return nil

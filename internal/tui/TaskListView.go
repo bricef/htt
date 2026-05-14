@@ -1,9 +1,9 @@
-package interactive
+package tui
 
 import (
 	"fmt"
 
-	"github.com/bricef/htt/internal/todo"
+	"github.com/bricef/htt/internal/domain"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -13,14 +13,14 @@ var currentTask = lipgloss.NewStyle().
 	Foreground(foreground_color).
 	Background(selected_color)
 
-func RenderTask(task *todo.Task, selected bool) string {
+func RenderTask(task *domain.Task, selected bool) string {
 	if selected {
 		return currentTask.Render(task.RawString())
 	}
 	return task.RawString()
 }
 
-func RenderTaskList(tasks []*todo.Task, cursor int) string {
+func RenderTaskList(tasks []*domain.Task, cursor int) string {
 	s := ""
 	// Iterate over our choices
 	for i, choice := range tasks {
@@ -37,7 +37,7 @@ func RenderTaskList(tasks []*todo.Task, cursor int) string {
 	return s
 }
 
-func RenderDoneList(tasks []*todo.Task, cursor int) string {
+func RenderDoneList(tasks []*domain.Task, cursor int) string {
 	s := ""
 	// Iterate over our choices
 	for i, choice := range tasks {

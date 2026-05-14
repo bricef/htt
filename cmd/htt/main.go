@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	commands "github.com/bricef/htt/internal/cmd"
+	cli "github.com/bricef/htt/internal/cli"
 	"github.com/bricef/htt/internal/utils"
 	vars "github.com/bricef/htt/internal/vars"
 	homedir "github.com/mitchellh/go-homedir"
@@ -43,8 +43,8 @@ func main() {
 
 	// global flags
 	var nocolor = false
-	commands.RootCmd.PersistentFlags().BoolVarP(&nocolor, vars.NoColorFlag, "", false, "Disable color output for coloured commands")
-	viper.BindPFlag(vars.NoColorFlag, commands.RootCmd.PersistentFlags().Lookup(vars.NoColorFlag))
+	cli.RootCmd.PersistentFlags().BoolVarP(&nocolor, vars.NoColorFlag, "", false, "Disable color output for coloured commands")
+	viper.BindPFlag(vars.NoColorFlag, cli.RootCmd.PersistentFlags().Lookup(vars.NoColorFlag))
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
@@ -61,7 +61,7 @@ func main() {
 		}
 	}
 
-	if err = commands.RootCmd.Execute(); err != nil {
+	if err = cli.RootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "❌", err)
 		os.Exit(1)
 	}

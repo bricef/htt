@@ -1,10 +1,10 @@
-package cmd
+package cli
 
 import (
 	"fmt"
 
 	"github.com/bricef/htt/internal/timelogs"
-	"github.com/bricef/htt/internal/todo"
+	"github.com/bricef/htt/internal/domain"
 	"github.com/spf13/cobra"
 )
 
@@ -26,7 +26,7 @@ var status = &cobra.Command{
 
 		fmt.Printf("Available Contexts: ")
 		for _, name := range names {
-			c := &todo.Context{Name: name}
+			c := &domain.Context{Name: name}
 			fmt.Printf("%s ", c.ConsoleString())
 		}
 		fmt.Println()

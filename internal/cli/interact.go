@@ -1,9 +1,9 @@
-package cmd
+package cli
 
 import (
 	"fmt"
 
-	"github.com/bricef/htt/internal/interactive"
+	"github.com/bricef/htt/internal/tui"
 	"github.com/spf13/cobra"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -23,7 +23,7 @@ var Interactive = &cobra.Command{
 			return fmt.Errorf("load current context: %w", err)
 		}
 		p := tea.NewProgram(
-			interactive.Model(u, ctx),
+			tui.Model(u, ctx),
 			tea.WithAltScreen(),
 			tea.WithMouseCellMotion(),
 		)

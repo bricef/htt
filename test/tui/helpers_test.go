@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/bricef/htt/internal/interactive"
+	tuipkg "github.com/bricef/htt/internal/tui"
 	"github.com/bricef/htt/internal/storage"
 	"github.com/bricef/htt/internal/usecase"
 	"github.com/bricef/htt/internal/vars"
@@ -72,7 +72,7 @@ func (e *tuiEnv) start(contextName string) {
 	if err != nil {
 		e.t.Fatalf("LoadContext(%q): %v", contextName, err)
 	}
-	e.model = interactive.Model(uc, ctx)
+	e.model = tuipkg.Model(uc, ctx)
 	e.send(tea.WindowSizeMsg{Width: 120, Height: 40})
 }
 

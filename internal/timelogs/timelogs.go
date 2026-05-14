@@ -6,7 +6,7 @@ import (
 	"path"
 	"time"
 
-	"github.com/bricef/htt/internal/todo"
+	"github.com/bricef/htt/internal/domain"
 
 	"github.com/bricef/htt/internal/vars"
 
@@ -24,7 +24,7 @@ func LogFilePath(t time.Time) string {
 	return logFilePath
 }
 
-func AddEntry(task *todo.Task) {
+func AddEntry(task *domain.Task) {
 	now := time.Now().UTC()
 
 	currentLog := CurrentLogFilePath()
@@ -68,12 +68,12 @@ func ShowStatus() {
 	}
 }
 
-func CurrentActive() *todo.Task {
+func CurrentActive() *domain.Task {
 	lines := utils.ReadLines(CurrentLogFilePath())
 	if len(lines) == 0 {
 		return nil
 	}
-	t := todo.NewTask(lines[len(lines)-1])
+	t := domain.NewTask(lines[len(lines)-1])
 	return t
 }
 

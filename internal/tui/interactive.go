@@ -1,4 +1,4 @@
-package interactive
+package tui
 
 import (
 	"image/color"

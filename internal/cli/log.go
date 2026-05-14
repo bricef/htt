@@ -1,11 +1,11 @@
-package cmd
+package cli
 
 import (
 	"fmt"
 	"strings"
 
 	"github.com/bricef/htt/internal/timelogs"
-	"github.com/bricef/htt/internal/todo"
+	"github.com/bricef/htt/internal/domain"
 	"github.com/bricef/htt/internal/utils"
 	"github.com/spf13/cobra"
 )
@@ -23,7 +23,7 @@ var Add = &cobra.Command{
 	Args:    cobra.MinimumNArgs(1),
 	Aliases: []string{"+"},
 	Run: func(cmd *cobra.Command, args []string) {
-		task := todo.NewTask(strings.Join(args, " "))
+		task := domain.NewTask(strings.Join(args, " "))
 		timelogs.AddEntry(task)
 	},
 }
@@ -77,7 +77,7 @@ var Start = &cobra.Command{
 	Short: "Start the timelog for the day.",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		timelogs.AddEntry(todo.NewTask(("@start")))
+		timelogs.AddEntry(domain.NewTask(("@start")))
 	},
 }
 
@@ -86,7 +86,7 @@ var End = &cobra.Command{
 	Short: "End the timelog for the day.",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		timelogs.AddEntry(todo.NewTask(("@end")))
+		timelogs.AddEntry(domain.NewTask(("@end")))
 	},
 }
 

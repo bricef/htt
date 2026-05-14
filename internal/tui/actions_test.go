@@ -10,6 +10,15 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+func mustTask(t *testing.T, raw string) *domain.Task {
+	t.Helper()
+	task, err := domain.NewTask(raw)
+	if err != nil {
+		t.Fatalf("domain.NewTask(%q): %v", raw, err)
+	}
+	return task
+}
+
 // seedModel builds a minimal model rooted at the named context with the
 // given task lines, backed by an in-memory repository. Returns the model
 // and the repo so tests can inspect post-action state.
@@ -20,7 +29,7 @@ func seedModel(t *testing.T, contextName string, tasks ...string) (model, *stora
 
 	ctx := &domain.Context{Name: contextName, Tasks: []*domain.Task{}}
 	for _, raw := range tasks {
-		ctx.Tasks = append(ctx.Tasks, domain.NewTask(raw))
+		ctx.Tasks = append(ctx.Tasks, mustTask(t, raw))
 	}
 	if err := repo.SaveContext(ctx); err != nil {
 		t.Fatalf("SaveContext: %v", err)
@@ -170,7 +179,7 @@ func TestAction_NextContext_SwitchesAndRefreshes(t *testing.T) {
 	m, repo := seedModel(t, "todo", "in todo")
 	if err := repo.SaveContext(&domain.Context{
 		Name:  "work",
-		Tasks: []*domain.Task{domain.NewTask("in work")},
+		Tasks: []*domain.Task{mustTask(t,"in work")},
 	}); err != nil {
 		t.Fatal(err)
 	}

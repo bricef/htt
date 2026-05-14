@@ -33,7 +33,8 @@ func AddEntry(task *domain.Task) {
 	f, err := os.OpenFile(currentLog, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 	utils.DieOnError("Failed to open log file for writing: ", err)
 
-	task.Annotate(TimestampLabel, now.Format(time.RFC3339))
+	_, err = task.Annotate(TimestampLabel, now.Format(time.RFC3339))
+	utils.DieOnError("Failed to annotate log entry timestamp: ", err)
 
 	// start:
 	// entryWithStart := fmt.Sprintf("start:%s %s \n", now.Format(time.RFC3339), strings.TrimSpace(entry))
@@ -73,7 +74,8 @@ func CurrentActive() *domain.Task {
 	if len(lines) == 0 {
 		return nil
 	}
-	t := domain.NewTask(lines[len(lines)-1])
+	t, err := domain.NewTask(lines[len(lines)-1])
+	utils.DieOnError("Failed to parse last log entry: ", err)
 	return t
 }
 

@@ -23,7 +23,10 @@ var Add = &cobra.Command{
 	Args:    cobra.MinimumNArgs(1),
 	Aliases: []string{"+"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		task := domain.NewTask(strings.Join(args, " "))
+		task, err := domain.NewTask(strings.Join(args, " "))
+		if err != nil {
+			return fmt.Errorf("parse log entry: %w", err)
+		}
 		timelogs.AddEntry(task)
 		return nil
 	},
@@ -81,7 +84,11 @@ var Start = &cobra.Command{
 	Short: "Start the timelog for the day.",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		timelogs.AddEntry(domain.NewTask("@start"))
+		task, err := domain.NewTask("@start")
+		if err != nil {
+			return fmt.Errorf("build start entry: %w", err)
+		}
+		timelogs.AddEntry(task)
 		return nil
 	},
 }
@@ -91,7 +98,11 @@ var End = &cobra.Command{
 	Short: "End the timelog for the day.",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		timelogs.AddEntry(domain.NewTask("@end"))
+		task, err := domain.NewTask("@end")
+		if err != nil {
+			return fmt.Errorf("build end entry: %w", err)
+		}
+		timelogs.AddEntry(task)
 		return nil
 	},
 }

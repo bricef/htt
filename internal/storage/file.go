@@ -91,7 +91,10 @@ func (r *FileRepository) LoadContext(name string) (*domain.Context, error) {
 			lineNo++
 			continue
 		}
-		task := domain.NewTask(line)
+		task, err := domain.NewTask(line)
+		if err != nil {
+			return nil, fmt.Errorf("parse %s:%d: %w", r.contextPath(name), lineNo, err)
+		}
 		task.Line = lineNo
 		ctx.Tasks = append(ctx.Tasks, task)
 		lineNo++

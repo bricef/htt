@@ -1,17 +1,9 @@
 // Package usecase wraps storage.Repository with the business operations
 // that CLI and TUI presentation code call into. Use cases return domain
 // values and errors; they do not print, exit, or read viper config.
-//
-// Until Step 10, the domain Context.Add/Remove methods still call Sync()
-// (the long-standing in-mutation I/O quirk). To avoid invoking that
-// side-effecting path while we operate via the repository, the use cases
-// manipulate Context.Tasks directly via the exported slice. After Step 10
-// removes Sync from those methods, callers can switch to ctx.Add/ctx.Remove
-// without changing semantics.
 package usecase
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 	"time"
@@ -44,14 +36,14 @@ func (u *UseCases) AddTask(raw string) (*domain.Task, *domain.Context, error) {
 
 // AddTaskTo appends a new task to the named context.
 func (u *UseCases) AddTaskTo(contextName, raw string) (*domain.Task, *domain.Context, error) {
-	if raw == "" {
-		return nil, nil, errors.New("cannot add empty task")
+	task, err := domain.NewTask(raw)
+	if err != nil {
+		return nil, nil, fmt.Errorf("parse task: %w", err)
 	}
 	ctx, err := u.repo.LoadContext(contextName)
 	if err != nil {
 		return nil, nil, err
 	}
-	task := domain.NewTask(raw)
 	ctx.Tasks = append(ctx.Tasks, task)
 	if err := u.repo.SaveContext(ctx); err != nil {
 		return nil, nil, err
@@ -80,7 +72,9 @@ func (u *UseCases) CompleteTask(strID string) (*domain.Task, error) {
 		return nil, err
 	}
 
-	task.Do(current, time.Now())
+	if _, err := task.Do(current, time.Now()); err != nil {
+		return nil, fmt.Errorf("mark task complete: %w", err)
+	}
 
 	if err := removeTask(current, task); err != nil {
 		return nil, err
@@ -154,11 +148,12 @@ func (u *UseCases) MoveTask(strID, toContextName string) (*domain.Task, string, 
 // ReplaceTask swaps the indexed task in the current context for a new
 // entry built from raw.
 func (u *UseCases) ReplaceTask(strID, raw string) (*domain.Task, *domain.Task, error) {
-	if raw == "" {
-		return nil, nil, errors.New("cannot replace with empty task")
+	replacement, err := domain.NewTask(raw)
+	if err != nil {
+		return nil, nil, fmt.Errorf("parse replacement task: %w", err)
 	}
-	return u.swapTask(strID, func(_ *domain.Task) *domain.Task {
-		return domain.NewTask(raw)
+	return u.swapTask(strID, func(_ *domain.Task) (*domain.Task, error) {
+		return replacement, nil
 	})
 }
 
@@ -168,22 +163,22 @@ func (u *UseCases) SetPriority(strID, priority string) (*domain.Task, *domain.Ta
 	if !validPriorityRE.MatchString(priority) {
 		return nil, nil, fmt.Errorf("invalid priority %q", priority)
 	}
-	return u.swapTask(strID, func(t *domain.Task) *domain.Task {
-		return t.SetPriority(priority)
+	return u.swapTask(strID, func(t *domain.Task) (*domain.Task, error) {
+		return t.SetPriority(priority), nil
 	})
 }
 
 // IncreasePriority raises the indexed task's priority by one step.
 func (u *UseCases) IncreasePriority(strID string) (*domain.Task, *domain.Task, error) {
-	return u.swapTask(strID, func(t *domain.Task) *domain.Task {
-		return t.IncreasePriority()
+	return u.swapTask(strID, func(t *domain.Task) (*domain.Task, error) {
+		return t.IncreasePriority(), nil
 	})
 }
 
 // DecreasePriority lowers the indexed task's priority by one step.
 func (u *UseCases) DecreasePriority(strID string) (*domain.Task, *domain.Task, error) {
-	return u.swapTask(strID, func(t *domain.Task) *domain.Task {
-		return t.DecreasePriority()
+	return u.swapTask(strID, func(t *domain.Task) (*domain.Task, error) {
+		return t.DecreasePriority(), nil
 	})
 }
 
@@ -262,7 +257,7 @@ func (u *UseCases) ListContextNames() ([]string, error) {
 // IncreasePriority / DecreasePriority all mutate the receiver in place and
 // return the same pointer. Without snapshotting first, callers that want to
 // print a "Before:" view (the CLI does) would see the post-mutation state.
-func (u *UseCases) swapTask(strID string, transform func(*domain.Task) *domain.Task) (*domain.Task, *domain.Task, error) {
+func (u *UseCases) swapTask(strID string, transform func(*domain.Task) (*domain.Task, error)) (*domain.Task, *domain.Task, error) {
 	currentName, err := u.repo.GetCurrentContextName()
 	if err != nil {
 		return nil, nil, err
@@ -275,8 +270,14 @@ func (u *UseCases) swapTask(strID string, transform func(*domain.Task) *domain.T
 	if err != nil {
 		return nil, nil, err
 	}
-	old := domain.NewTask(target.Raw)
-	newTask := transform(target)
+	old, err := domain.NewTask(target.Raw)
+	if err != nil {
+		return nil, nil, fmt.Errorf("snapshot task: %w", err)
+	}
+	newTask, err := transform(target)
+	if err != nil {
+		return nil, nil, err
+	}
 	if err := ctx.Replace(target, newTask); err != nil {
 		return nil, nil, err
 	}

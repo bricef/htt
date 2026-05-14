@@ -9,13 +9,13 @@ import (
 	"github.com/spf13/viper"
 )
 
-// newCtxWithTasks builds a Context populated with raw task lines, bypassing
-// the I/O-bound Add() (which calls Sync). This is the pure-value setup we
-// want for testing the non-I/O methods.
-func newCtxWithTasks(name string, raws ...string) *Context {
+// newCtxWithTasks builds a Context populated with raw task lines, using
+// the test helper mustTask (which fails the test on a malformed entry).
+func newCtxWithTasks(t *testing.T, name string, raws ...string) *Context {
+	t.Helper()
 	c := &Context{Name: name, Tasks: []*Task{}}
 	for _, raw := range raws {
-		c.Tasks = append(c.Tasks, NewTask(raw))
+		c.Tasks = append(c.Tasks, mustTask(t, raw))
 	}
 	return c
 }
@@ -34,7 +34,7 @@ func TestContext_Equals(t *testing.T) {
 }
 
 func TestContext_GetTaskById(t *testing.T) {
-	ctx := newCtxWithTasks("todo", "alpha", "beta", "gamma")
+	ctx := newCtxWithTasks(t, "todo", "alpha", "beta", "gamma")
 
 	got, err := ctx.GetTaskById(1)
 	if err != nil {
@@ -53,14 +53,14 @@ func TestContext_GetTaskById(t *testing.T) {
 }
 
 func TestContext_GetTaskById_EmptyContext(t *testing.T) {
-	ctx := newCtxWithTasks("todo")
+	ctx := newCtxWithTasks(t, "todo")
 	if _, err := ctx.GetTaskById(0); err == nil {
 		t.Errorf("expected error on empty context")
 	}
 }
 
 func TestContext_GetTaskByStrId(t *testing.T) {
-	ctx := newCtxWithTasks("todo", "a", "b")
+	ctx := newCtxWithTasks(t, "todo", "a", "b")
 
 	got, err := ctx.GetTaskByStrId("0")
 	if err != nil {
@@ -76,7 +76,7 @@ func TestContext_GetTaskByStrId(t *testing.T) {
 }
 
 func TestContext_GetTaskIndex(t *testing.T) {
-	ctx := newCtxWithTasks("todo", "a", "b", "c")
+	ctx := newCtxWithTasks(t, "todo", "a", "b", "c")
 
 	target := ctx.Tasks[1]
 	idx, err := ctx.GetTaskIndex(target)
@@ -87,16 +87,16 @@ func TestContext_GetTaskIndex(t *testing.T) {
 		t.Errorf("got %d, want 1", idx)
 	}
 
-	other := NewTask("not in context")
+	other := mustTask(t, "not in context")
 	if _, err := ctx.GetTaskIndex(other); err == nil {
 		t.Errorf("expected error for task not in context")
 	}
 }
 
 func TestContext_Replace(t *testing.T) {
-	ctx := newCtxWithTasks("todo", "old", "keep")
+	ctx := newCtxWithTasks(t, "todo", "old", "keep")
 	old := ctx.Tasks[0]
-	replacement := NewTask("new")
+	replacement := mustTask(t, "new")
 
 	if err := ctx.Replace(old, replacement); err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -110,15 +110,15 @@ func TestContext_Replace(t *testing.T) {
 }
 
 func TestContext_Replace_TaskNotPresent(t *testing.T) {
-	ctx := newCtxWithTasks("todo", "a")
-	other := NewTask("not there")
-	if err := ctx.Replace(other, NewTask("x")); err == nil {
+	ctx := newCtxWithTasks(t, "todo", "a")
+	other := mustTask(t, "not there")
+	if err := ctx.Replace(other, mustTask(t, "x")); err == nil {
 		t.Errorf("expected error replacing absent task")
 	}
 }
 
 func TestContext_Search(t *testing.T) {
-	ctx := newCtxWithTasks("todo", "buy milk", "buy bread", "call alice")
+	ctx := newCtxWithTasks(t, "todo", "buy milk", "buy bread", "call alice")
 
 	matches := ctx.Search(func(t *Task) bool {
 		return len(t.Raw) >= 3 && t.Raw[:3] == "buy"
@@ -142,7 +142,7 @@ func TestContext_Add_DoesNotTouchDisk(t *testing.T) {
 	ctx := NewContext("invariant")
 	expectedPath := filepath.Join(dir, "invariant.txt")
 
-	ctx.Add(NewTask("test"))
+	ctx.Add(mustTask(t, "test"))
 
 	if _, err := os.Stat(expectedPath); !os.IsNotExist(err) {
 		t.Errorf("Add should not write to disk; file %s exists (err=%v)", expectedPath, err)
@@ -153,7 +153,7 @@ func TestContext_Remove_DoesNotTouchDisk(t *testing.T) {
 	dir := t.TempDir()
 	viper.Set(vars.ConfigKeyDataDir, dir)
 
-	ctx := newCtxWithTasks("invariant", "task")
+	ctx := newCtxWithTasks(t, "invariant", "task")
 	expectedPath := filepath.Join(dir, "invariant.txt")
 
 	if err := ctx.Remove(ctx.Tasks[0]); err != nil {
@@ -166,7 +166,7 @@ func TestContext_Remove_DoesNotTouchDisk(t *testing.T) {
 }
 
 func TestContext_Sort_ByPriority(t *testing.T) {
-	ctx := newCtxWithTasks("todo",
+	ctx := newCtxWithTasks(t, "todo",
 		"no priority task",
 		"(A) urgent",
 		"(C) low",

@@ -7,6 +7,16 @@ import (
 	"github.com/bricef/htt/internal/domain"
 )
 
+// mustTask is the test helper for parsing task lines; failures abort the test.
+func mustTask(t *testing.T, raw string) *domain.Task {
+	t.Helper()
+	task, err := domain.NewTask(raw)
+	if err != nil {
+		t.Fatalf("domain.NewTask(%q): %v", raw, err)
+	}
+	return task
+}
+
 // runRepositoryContract exercises the behaviors every Repository
 // implementation must satisfy. file.go's TestFileRepository_Contract will
 // invoke the same suite against the file-backed impl in Step 6.
@@ -32,8 +42,8 @@ func runRepositoryContract(t *testing.T, newRepo func(t *testing.T) Repository) 
 		original := &domain.Context{
 			Name: "todo",
 			Tasks: []*domain.Task{
-				domain.NewTask("buy milk"),
-				domain.NewTask("(A) call alice"),
+				mustTask(t,"buy milk"),
+				mustTask(t,"(A) call alice"),
 			},
 		}
 		if err := r.SaveContext(original); err != nil {
@@ -62,7 +72,7 @@ func runRepositoryContract(t *testing.T, newRepo func(t *testing.T) Repository) 
 		raws := []string{"first", "second", "third", "fourth"}
 		tasks := make([]*domain.Task, len(raws))
 		for i, raw := range raws {
-			tasks[i] = domain.NewTask(raw)
+			tasks[i] = mustTask(t,raw)
 		}
 		if err := r.SaveContext(&domain.Context{Name: "ordered", Tasks: tasks}); err != nil {
 			t.Fatalf("save: %v", err)
@@ -82,11 +92,11 @@ func runRepositoryContract(t *testing.T, newRepo func(t *testing.T) Repository) 
 		r := newRepo(t)
 		_ = r.SaveContext(&domain.Context{
 			Name:  "todo",
-			Tasks: []*domain.Task{domain.NewTask("v1 task")},
+			Tasks: []*domain.Task{mustTask(t,"v1 task")},
 		})
 		_ = r.SaveContext(&domain.Context{
 			Name:  "todo",
-			Tasks: []*domain.Task{domain.NewTask("v2 task a"), domain.NewTask("v2 task b")},
+			Tasks: []*domain.Task{mustTask(t,"v2 task a"), mustTask(t,"v2 task b")},
 		})
 		loaded, err := r.LoadContext("todo")
 		if err != nil {
@@ -110,9 +120,9 @@ func runRepositoryContract(t *testing.T, newRepo func(t *testing.T) Repository) 
 			t.Errorf("fresh repo should list 0 contexts, got %v", names)
 		}
 
-		_ = r.SaveContext(&domain.Context{Name: "todo", Tasks: []*domain.Task{domain.NewTask("a")}})
-		_ = r.SaveContext(&domain.Context{Name: "work", Tasks: []*domain.Task{domain.NewTask("b")}})
-		_ = r.SaveContext(&domain.Context{Name: "done", Tasks: []*domain.Task{domain.NewTask("x c")}})
+		_ = r.SaveContext(&domain.Context{Name: "todo", Tasks: []*domain.Task{mustTask(t,"a")}})
+		_ = r.SaveContext(&domain.Context{Name: "work", Tasks: []*domain.Task{mustTask(t,"b")}})
+		_ = r.SaveContext(&domain.Context{Name: "done", Tasks: []*domain.Task{mustTask(t,"x c")}})
 
 		names, err = r.ListContexts()
 		if err != nil {
@@ -171,13 +181,13 @@ func runRepositoryContract(t *testing.T, newRepo func(t *testing.T) Repository) 
 		r := newRepo(t)
 		input := &domain.Context{
 			Name:  "todo",
-			Tasks: []*domain.Task{domain.NewTask("original")},
+			Tasks: []*domain.Task{mustTask(t,"original")},
 		}
 		if err := r.SaveContext(input); err != nil {
 			t.Fatalf("save: %v", err)
 		}
 
-		input.Tasks = append(input.Tasks, domain.NewTask("mutation after save"))
+		input.Tasks = append(input.Tasks, mustTask(t,"mutation after save"))
 
 		loaded, err := r.LoadContext("todo")
 		if err != nil {

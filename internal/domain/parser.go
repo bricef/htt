@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/bricef/htt/internal/parseutils"
-	"github.com/bricef/htt/internal/utils"
 	parsec "github.com/prataprc/goparsec"
 )
 
@@ -21,10 +20,12 @@ func customCompleted(name string, s parsec.Scanner, node parsec.Queryable) parse
 	return t
 }
 
+// dateValidation rejects nodes that don't parse as YYYY-MM-DD. Returning
+// nil makes the parser treat the production as a non-match and try
+// alternatives — that's the right behavior for an ambiguous grammar, so
+// no logging is needed here (the parser will retry).
 func dateValidation(name string, s parsec.Scanner, node parsec.Queryable) parsec.Queryable {
-	_, err := time.Parse("2006-01-02", node.GetValue())
-	if err != nil { // Not a valid date in the format specified
-		utils.Failure("Could not parse give date: ", err)
+	if _, err := time.Parse("2006-01-02", node.GetValue()); err != nil {
 		return nil
 	}
 	return node

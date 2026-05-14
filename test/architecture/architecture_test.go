@@ -34,6 +34,7 @@ func TestArchitecture_DependencyDirections(t *testing.T) {
 			"internal/usecase",
 			"internal/cli",
 			"internal/tui",
+			"internal/utils",
 		},
 		"internal/storage": {
 			"internal/usecase",

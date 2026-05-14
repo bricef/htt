@@ -60,7 +60,7 @@ func TestFileRepository_SaveContext_CreatesBakBackup(t *testing.T) {
 
 	first := &domain.Context{
 		Name:  "todo",
-		Tasks: []*domain.Task{domain.NewTask("v1")},
+		Tasks: []*domain.Task{mustTask(t,"v1")},
 	}
 	if err := r.SaveContext(first); err != nil {
 		t.Fatalf("first save: %v", err)
@@ -68,7 +68,7 @@ func TestFileRepository_SaveContext_CreatesBakBackup(t *testing.T) {
 
 	second := &domain.Context{
 		Name:  "todo",
-		Tasks: []*domain.Task{domain.NewTask("v2")},
+		Tasks: []*domain.Task{mustTask(t,"v2")},
 	}
 	if err := r.SaveContext(second); err != nil {
 		t.Fatalf("second save: %v", err)
@@ -102,9 +102,9 @@ func TestFileRepository_SaveContext_ByteExactOutput(t *testing.T) {
 	ctx := &domain.Context{
 		Name: "todo",
 		Tasks: []*domain.Task{
-			domain.NewTask("(A) urgent"),
-			domain.NewTask("buy milk"),
-			domain.NewTask("x 2024-01-15 finished thing"),
+			mustTask(t,"(A) urgent"),
+			mustTask(t,"buy milk"),
+			mustTask(t,"x 2024-01-15 finished thing"),
 		},
 	}
 	if err := r.SaveContext(ctx); err != nil {

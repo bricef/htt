@@ -80,19 +80,18 @@ var edit = &cobra.Command{
 	Args:    cobra.ExactArgs(1),
 	Aliases: []string{"e"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// $EDITOR-shelling commands stay on the legacy todo.* path for
-		// now; the use case layer doesn't expose file paths, and these
-		// commands need a path to hand to the editor process.
-		context := todo.GetCurrentContext()
+		ctx, err := uc().CurrentContext()
+		if err != nil {
+			return fmt.Errorf("load current context: %w", err)
+		}
+		oldTask, err := ctx.GetTaskByStrId(args[0])
+		if err != nil {
+			return fmt.Errorf("get task: %w", err)
+		}
 
 		editor, ok := os.LookupEnv("EDITOR")
 		if !ok || editor == "" {
 			return errors.New("$EDITOR variable is empty or not set")
-		}
-
-		oldTask, err := context.GetTaskByStrId(args[0])
-		if err != nil {
-			return fmt.Errorf("get task: %w", err)
 		}
 
 		f, err := os.CreateTemp("", "hypothetical-tracker-todo")
@@ -122,14 +121,16 @@ var edit = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("read temp file: %w", err)
 		}
-
 		raw := strings.TrimSpace(string(content))
-		if raw == oldTask.ConsoleString() || raw == "" {
+		if raw == oldTask.Raw || raw == "" {
 			utils.Info("New entry was identical or empty. No actions taken.")
 			return nil
 		}
-		newTask := todo.NewTask(raw)
-		if err := context.Replace(oldTask, newTask); err != nil {
+
+		// ReplaceTask persists; the legacy code path did the in-memory
+		// Replace but never Sync'd, so edits silently failed to stick.
+		_, newTask, err := uc().ReplaceTask(args[0], raw)
+		if err != nil {
 			return fmt.Errorf("replace: %w", err)
 		}
 		fmt.Printf("Before: %s\n", oldTask.ConsoleString())

@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/bricef/htt/internal/todo"
 	"github.com/bricef/htt/internal/utils"
 	"github.com/bricef/htt/internal/vars"
 	"github.com/spf13/cobra"
@@ -41,8 +40,13 @@ var Context = &cobra.Command{
 	Use:   "context",
 	Short: "Output the current context.",
 	Args:  cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println(todo.GetCurrentContext())
+	RunE: func(cmd *cobra.Command, args []string) error {
+		name, err := uc().CurrentContextName()
+		if err != nil {
+			return fmt.Errorf("get current context name: %w", err)
+		}
+		fmt.Println(name)
+		return nil
 	},
 }
 

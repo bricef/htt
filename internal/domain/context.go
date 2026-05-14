@@ -2,13 +2,11 @@ package domain
 
 import (
 	"fmt"
-	"os"
 	"path"
 	"slices"
 	"strconv"
 	"strings"
 
-	"github.com/bricef/htt/internal/utils"
 	"github.com/bricef/htt/internal/vars"
 	"github.com/fatih/color"
 )
@@ -18,31 +16,32 @@ type Context struct {
 	Tasks []*Task
 }
 
+// NewContext returns an empty Context with the given name. Loading tasks
+// from storage is the repository's job (storage.Repository.LoadContext).
 func NewContext(name string) *Context {
-
-	c := Context{
+	return &Context{
 		Name:  name,
 		Tasks: []*Task{},
 	}
-	c.Read()
-	return &c
 }
 
 func (c *Context) Equals(other *Context) bool {
 	return c.Name == other.Name
 }
 
+// Add appends a task to the in-memory context. Persistence is the caller's
+// responsibility, via storage.Repository.SaveContext.
 func (c *Context) Add(t *Task) *Context {
 	c.Tasks = append(c.Tasks, t)
-	c.Sync()
 	return c
 }
 
+// Remove deletes a task pointer from the in-memory context. Persistence is
+// the caller's responsibility.
 func (c *Context) Remove(task *Task) error {
 	for i, t := range c.Tasks {
 		if t == task {
 			c.Tasks = append(c.Tasks[:i], c.Tasks[i+1:]...)
-			c.Sync()
 			return nil
 		}
 	}
@@ -69,58 +68,18 @@ func (c *Context) RemoveByStrId(strid string) error {
 	if err != nil {
 		return err
 	}
-
 	return c.Remove(t)
 }
 
-func (c *Context) Read() *Context {
-	c.Tasks = []*Task{}
-	lines := utils.ReadLines(c.Filepath())
-	for i, line := range lines {
-		if line != "" {
-			t := NewTask(line)
-			t.Line = i
-			c.Add(t)
-		}
-	}
-	return c
-}
-
+// Filepath returns the on-disk location of this context under the viper-
+// configured data directory. It performs no I/O — purely a path builder.
+// Kept for the two $EDITOR shell-out commands (edit-done, TUI EditFile)
+// that need a path to hand to an external process.
+//
+// TODO(refactor): a future step should move path resolution onto the
+// storage layer so domain stops depending on viper at all.
 func (c *Context) Filepath() string {
 	return path.Join(vars.Get(vars.ConfigKeyDataDir), c.Name+vars.DefaultFileExtension)
-}
-
-func (c *Context) File() *os.File {
-	contextPath := c.Filepath()
-	utils.EnsurePath(contextPath)
-	f, err := os.OpenFile(contextPath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
-	utils.DieOnError("Failed to create context file. ", err)
-	return f
-}
-
-func (c *Context) Sync() error {
-	currentFilePath := c.Filepath()
-	_, err := os.Stat(c.Filepath())
-	if err != nil {
-		// original file can't be accessed. Assume it hasn't been created.
-		utils.Info("Context file " + c.Filepath() + " doesn't exist and cannot be backed up.")
-	} else {
-		backupPath := c.Filepath() + ".bak"
-		err := os.Rename(currentFilePath, backupPath)
-		if err != nil {
-			utils.Fatal("Could not create a backup file.", err)
-		}
-	}
-
-	workingFile := c.File()
-	defer workingFile.Close()
-	for _, task := range c.Tasks {
-		_, err := fmt.Fprintln(workingFile, task.Raw)
-		if err != nil {
-			return err //utils.DieOnError("Failed to write todo to file", err)
-		}
-	}
-	return nil
 }
 
 func (c *Context) GetTaskById(index int) (*Task, error) {
@@ -173,7 +132,6 @@ func showTasks(ts []*Task) {
 		fmt.Printf("%3d %s\n", todo.Line, todo.ConsoleString())
 	}
 	fmt.Println()
-
 }
 
 func (c *Context) Show() {
@@ -183,19 +141,15 @@ func (c *Context) Show() {
 	}
 	showTasks(c.Tasks)
 	fmt.Printf("(%s): %d tasks\n", c.ConsoleString(), len(c.Tasks))
-
 }
 
 func (c *Context) ShowOnly(predicate func(*Task) bool) {
 	ts := c.Search(predicate)
-
 	if len(ts) == 0 {
 		fmt.Printf("(%s): No tasks matched query.\n", c.ConsoleString())
 		return
 	}
-
 	showTasks(ts)
-
 	fmt.Printf("(%s): %d out of %v tasks matched query.\n", c.ConsoleString(), len(ts), len(c.Tasks))
 }
 

@@ -1,9 +1,9 @@
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/bricef/htt/internal/timelogs"
-	"github.com/bricef/htt/internal/todo"
-	"github.com/bricef/htt/internal/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -12,11 +12,17 @@ var Begin = &cobra.Command{
 	Short:   "Log that work has began on numbered item in the current context.",
 	Args:    cobra.MinimumNArgs(1),
 	Aliases: []string{"wo"},
-	Run: func(cmd *cobra.Command, args []string) {
-		ctx := todo.GetCurrentContext()
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx, err := uc().CurrentContext()
+		if err != nil {
+			return fmt.Errorf("load current context: %w", err)
+		}
 		t, err := ctx.GetTaskByStrId(args[0])
-		utils.DieOnError("Could not find specified task.", err)
+		if err != nil {
+			return fmt.Errorf("find task: %w", err)
+		}
 		timelogs.AddEntry(t)
+		return nil
 	},
 }
 

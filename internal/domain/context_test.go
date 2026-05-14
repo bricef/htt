@@ -1,7 +1,12 @@
 package domain
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/bricef/htt/internal/vars"
+	"github.com/spf13/viper"
 )
 
 // newCtxWithTasks builds a Context populated with raw task lines, bypassing
@@ -123,6 +128,40 @@ func TestContext_Search(t *testing.T) {
 	}
 	if matches[0].Raw != "buy milk" || matches[1].Raw != "buy bread" {
 		t.Errorf("unexpected match order: %q, %q", matches[0].Raw, matches[1].Raw)
+	}
+}
+
+func TestContext_Add_DoesNotTouchDisk(t *testing.T) {
+	// Step 10 invariant: Context.Add only mutates the in-memory slice;
+	// it must not produce a file at Filepath(). Legacy Add called Sync
+	// internally, which was the bug fueling the read-writes-back issue
+	// and the source of the duplicated-Sync calls in CLI/TUI.
+	dir := t.TempDir()
+	viper.Set(vars.ConfigKeyDataDir, dir)
+
+	ctx := NewContext("invariant")
+	expectedPath := filepath.Join(dir, "invariant.txt")
+
+	ctx.Add(NewTask("test"))
+
+	if _, err := os.Stat(expectedPath); !os.IsNotExist(err) {
+		t.Errorf("Add should not write to disk; file %s exists (err=%v)", expectedPath, err)
+	}
+}
+
+func TestContext_Remove_DoesNotTouchDisk(t *testing.T) {
+	dir := t.TempDir()
+	viper.Set(vars.ConfigKeyDataDir, dir)
+
+	ctx := newCtxWithTasks("invariant", "task")
+	expectedPath := filepath.Join(dir, "invariant.txt")
+
+	if err := ctx.Remove(ctx.Tasks[0]); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+
+	if _, err := os.Stat(expectedPath); !os.IsNotExist(err) {
+		t.Errorf("Remove should not write to disk; file %s exists (err=%v)", expectedPath, err)
 	}
 }
 

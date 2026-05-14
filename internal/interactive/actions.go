@@ -109,13 +109,15 @@ var Help = mkAction("toggle help", func(m model) (tea.Model, tea.Cmd) {
 })
 
 var EditFile = mkAction("edit file", func(m model) (tea.Model, tea.Cmd) {
-	// Shells out to $EDITOR with the on-disk path. The repo abstraction
-	// doesn't expose paths, so this action still calls the legacy domain
-	// method Filepath() / Read(). It is the last user of those methods
-	// in the TUI; Step 10 will need to address it (likely by exposing a
-	// PathFor(name) helper on the repo).
+	// Shells out to $EDITOR on the context file. Filepath() builds the
+	// path string from viper-backed config; it doesn't perform I/O, so
+	// it survived the Step 10 cull. After the editor exits we refresh
+	// the displayed context via the use case (the editor may have added
+	// or removed tasks).
 	utils.EditFilePath(m.context.Filepath())
-	m.context = m.context.Read()
+	if err := refresh(&m); err != nil {
+		return m, tea.Quit
+	}
 	return m, tea.ClearScreen
 })
 

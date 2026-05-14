@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bricef/htt/internal/timelogs"
 	"github.com/bricef/htt/internal/domain"
+	"github.com/bricef/htt/internal/timelogs"
 	"github.com/bricef/htt/internal/utils"
 	"github.com/spf13/cobra"
 )
@@ -22,9 +22,10 @@ var Add = &cobra.Command{
 	Short:   "Log an entry to the time log.",
 	Args:    cobra.MinimumNArgs(1),
 	Aliases: []string{"+"},
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		task := domain.NewTask(strings.Join(args, " "))
 		timelogs.AddEntry(task)
+		return nil
 	},
 }
 
@@ -33,8 +34,9 @@ var Show = &cobra.Command{
 	Short:   "Show today's time log.",
 	Args:    cobra.NoArgs,
 	Aliases: []string{"s"},
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		timelogs.Show()
+		return nil
 	},
 }
 
@@ -43,8 +45,9 @@ var Edit = &cobra.Command{
 	Short:   "Open the current time log file using $EDITOR.",
 	Args:    cobra.NoArgs,
 	Aliases: []string{"e"},
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		utils.EditFilePath(timelogs.CurrentLogFilePath())
+		return nil
 	},
 }
 
@@ -53,8 +56,9 @@ var Status = &cobra.Command{
 	Short:   "Show the status of the time log.",
 	Args:    cobra.NoArgs,
 	Aliases: []string{"?"},
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		timelogs.ShowStatus()
+		return nil
 	},
 }
 
@@ -62,13 +66,13 @@ var Active = &cobra.Command{
 	Use:   "active",
 	Short: "Show active task, if any.",
 	Args:  cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		current := timelogs.CurrentActive()
-
 		fmt.Printf(
 			"Working on: %s (%s)\n",
 			current.RemoveAnnotation(timelogs.TimestampLabel).ColorString(),
 			utils.HumanizeDuration(timelogs.CurrentDuration()))
+		return nil
 	},
 }
 
@@ -76,8 +80,9 @@ var Start = &cobra.Command{
 	Use:   "start",
 	Short: "Start the timelog for the day.",
 	Args:  cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
-		timelogs.AddEntry(domain.NewTask(("@start")))
+	RunE: func(cmd *cobra.Command, args []string) error {
+		timelogs.AddEntry(domain.NewTask("@start"))
+		return nil
 	},
 }
 
@@ -85,8 +90,9 @@ var End = &cobra.Command{
 	Use:   "end",
 	Short: "End the timelog for the day.",
 	Args:  cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
-		timelogs.AddEntry(domain.NewTask(("@end")))
+	RunE: func(cmd *cobra.Command, args []string) error {
+		timelogs.AddEntry(domain.NewTask("@end"))
+		return nil
 	},
 }
 

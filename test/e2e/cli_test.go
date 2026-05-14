@@ -239,3 +239,21 @@ func TestTodoPriority_InvalidPriorityFails(t *testing.T) {
 		t.Errorf("expected non-zero exit, got 0\nstdout:\n%s\nstderr:\n%s", r.stdout, r.stderr)
 	}
 }
+
+func TestErrorPath_StderrCarriesPrefixAndExitCode(t *testing.T) {
+	// Step 12 contract: command errors propagate up RunE, are caught by
+	// main.go's Execute() wrapper, printed to stderr with "❌" prefix,
+	// and the binary exits non-zero. Pin the contract end-to-end.
+	e := newEnv(t)
+	r := e.run("todo", "delete", "999")
+
+	if r.exitCode == 0 {
+		t.Errorf("expected non-zero exit, got 0")
+	}
+	if !strings.Contains(r.stderr, "❌") {
+		t.Errorf("stderr should carry ❌ prefix from main.go wrapper, got: %q", r.stderr)
+	}
+	if r.stdout != "" {
+		t.Errorf("error should not pollute stdout, got: %q", r.stdout)
+	}
+}

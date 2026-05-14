@@ -26,8 +26,9 @@ be synced to the backend.
 In addition, you can re-target htt to use your own 
 repository.`,
 		Args: cobra.NoArgs,
-		Run: func(cmd *cobra.Command, args []string) {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			repo.Sync()
+			return nil
 		},
 	})
 }

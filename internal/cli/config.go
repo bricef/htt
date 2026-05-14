@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 
-	"github.com/bricef/htt/internal/utils"
 	"github.com/bricef/htt/internal/vars"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -19,11 +18,14 @@ var Print = &cobra.Command{
 	Use:   "yaml",
 	Short: "Prints out the current configuration in YAML.",
 	Args:  cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		c := viper.AllSettings()
 		bs, err := yaml.Marshal(c)
-		utils.DieOnError("Could not get YAML config. ", err)
+		if err != nil {
+			return fmt.Errorf("marshal YAML config: %w", err)
+		}
 		fmt.Print(string(bs))
+		return nil
 	},
 }
 
@@ -31,8 +33,9 @@ var Directory = &cobra.Command{
 	Use:   "where-data",
 	Short: "Outputs the currently configured data directory.",
 	Args:  cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Println(vars.Get(vars.ConfigKeyDataDir))
+		return nil
 	},
 }
 
@@ -54,8 +57,9 @@ var Where = &cobra.Command{
 	Use:   "dir",
 	Short: "Show the config directory",
 	Args:  cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Println(vars.Get(vars.ConfigKeyTrackerDir))
+		return nil
 	},
 }
 

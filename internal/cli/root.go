@@ -14,10 +14,9 @@ var RootCmd = &cobra.Command{
 	// SilenceErrors lets main.go own the error format (❌ prefix).
 	SilenceUsage:  true,
 	SilenceErrors: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Println(cmd.Short)
 		fmt.Println()
-		cmd.Usage()
-
+		return cmd.Usage()
 	},
 }

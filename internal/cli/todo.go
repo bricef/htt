@@ -21,7 +21,7 @@ var TodoCommand = &cobra.Command{
 	Args:    cobra.NoArgs,
 	Aliases: []string{"t"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx, err := uc().CurrentContext()
+		ctx, err := repo().CurrentContext()
 		if err != nil {
 			return fmt.Errorf("load current context: %w", err)
 		}
@@ -36,8 +36,15 @@ var add = &cobra.Command{
 	Short:   "Add an item to the current tasklist",
 	Args:    cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		task, _, err := uc().AddTask(strings.Join(args, " "))
+		ctx, err := repo().CurrentContext()
 		if err != nil {
+			return fmt.Errorf("load current context: %w", err)
+		}
+		task, err := domain.NewTask(strings.Join(args, " "))
+		if err != nil {
+			return fmt.Errorf("parse task: %w", err)
+		}
+		if err := ctx.AddTask(task); err != nil {
 			return fmt.Errorf("add task: %w", err)
 		}
 		fmt.Printf("Added: %v\n", task.ConsoleString())
@@ -50,8 +57,15 @@ var addTo = &cobra.Command{
 	Short: "Add an item to a specific tasklist",
 	Args:  cobra.MinimumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		task, ctx, err := uc().AddTaskTo(args[0], strings.Join(args[1:], " "))
+		ctx, err := repo().Context(args[0])
 		if err != nil {
+			return fmt.Errorf("load context %s: %w", args[0], err)
+		}
+		task, err := domain.NewTask(strings.Join(args[1:], " "))
+		if err != nil {
+			return fmt.Errorf("parse task: %w", err)
+		}
+		if err := ctx.AddTask(task); err != nil {
 			return fmt.Errorf("add task to %s: %w", args[0], err)
 		}
 		fmt.Printf("Added: %v to %v", task.ConsoleString(), ctx.ConsoleString())
@@ -65,7 +79,7 @@ var show = &cobra.Command{
 	Short:   "Show the current tasklist.",
 	Long:    `Show the current tasklist.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx, err := uc().CurrentContext()
+		ctx, err := repo().CurrentContext()
 		if err != nil {
 			return fmt.Errorf("load current context: %w", err)
 		}
@@ -80,7 +94,7 @@ var edit = &cobra.Command{
 	Args:    cobra.ExactArgs(1),
 	Aliases: []string{"e"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx, err := uc().CurrentContext()
+		ctx, err := repo().CurrentContext()
 		if err != nil {
 			return fmt.Errorf("load current context: %w", err)
 		}
@@ -127,10 +141,11 @@ var edit = &cobra.Command{
 			return nil
 		}
 
-		// ReplaceTask persists; the legacy code path did the in-memory
-		// Replace but never Sync'd, so edits silently failed to stick.
-		_, newTask, err := uc().ReplaceTask(args[0], raw)
+		newTask, err := domain.NewTask(raw)
 		if err != nil {
+			return fmt.Errorf("parse replacement: %w", err)
+		}
+		if _, err := ctx.Replace(args[0], newTask); err != nil {
 			return fmt.Errorf("replace: %w", err)
 		}
 		fmt.Printf("Before: %s\n", oldTask.ConsoleString())
@@ -145,7 +160,11 @@ var do = &cobra.Command{
 	Args:    cobra.ExactArgs(1),
 	Aliases: []string{"x"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		t, err := uc().CompleteTask(args[0])
+		ctx, err := repo().CurrentContext()
+		if err != nil {
+			return fmt.Errorf("load current context: %w", err)
+		}
+		t, err := ctx.Complete(args[0])
 		if err != nil {
 			return fmt.Errorf("complete task: %w", err)
 		}
@@ -160,10 +179,11 @@ var editDone = &cobra.Command{
 	Args:    cobra.NoArgs,
 	Aliases: []string{"ed"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Legacy $EDITOR shell-out; needs the on-disk path. Filepath is
-		// pure (uses viper, no repo), so a struct-literal Context is
-		// fine here — matches the display-only pattern used by `move`.
-		utils.EditFilePath((&domain.Context{Name: "done"}).Filepath())
+		ctx, err := repo().Context(domain.DoneContextName)
+		if err != nil {
+			return fmt.Errorf("load done context: %w", err)
+		}
+		utils.EditFilePath(ctx.Filepath())
 		return nil
 	},
 }
@@ -174,7 +194,11 @@ var deleteTodo = &cobra.Command{
 	Aliases: []string{"rm"},
 	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		task, err := uc().DeleteTask(args[0])
+		ctx, err := repo().CurrentContext()
+		if err != nil {
+			return fmt.Errorf("load current context: %w", err)
+		}
+		task, err := ctx.Delete(args[0])
 		if err != nil {
 			return fmt.Errorf("delete task: %w", err)
 		}
@@ -189,12 +213,16 @@ var move = &cobra.Command{
 	Aliases: []string{"mv"},
 	Args:    cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		task, from, to, err := uc().MoveTask(args[0], args[1])
+		ctx, err := repo().CurrentContext()
+		if err != nil {
+			return fmt.Errorf("load current context: %w", err)
+		}
+		task, err := ctx.Move(args[0], args[1])
 		if err != nil {
 			return fmt.Errorf("move task: %w", err)
 		}
-		fromCtx := &domain.Context{Name: from}
-		toCtx := &domain.Context{Name: to}
+		fromCtx := &domain.Context{Name: ctx.Name}
+		toCtx := &domain.Context{Name: args[1]}
 		fmt.Printf("Moved %v from %v to %v.\n", task.ConsoleString(), fromCtx.ConsoleString(), toCtx.ConsoleString())
 		return nil
 	},
@@ -205,7 +233,7 @@ var random = &cobra.Command{
 	Short: "Select an item at random from the tasklist",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		current, err := uc().CurrentContext()
+		current, err := repo().CurrentContext()
 		if err != nil {
 			return fmt.Errorf("load current context: %w", err)
 		}
@@ -223,7 +251,11 @@ var priPlus = &cobra.Command{
 	Short: "increase the priority for the selected task",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		old, neu, err := uc().IncreasePriority(args[0])
+		ctx, err := repo().CurrentContext()
+		if err != nil {
+			return fmt.Errorf("load current context: %w", err)
+		}
+		old, neu, err := ctx.IncreasePriority(args[0])
 		if err != nil {
 			return fmt.Errorf("increase priority: %w", err)
 		}
@@ -238,7 +270,11 @@ var priMinus = &cobra.Command{
 	Short: "Decrease the priority for the selected task",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		old, neu, err := uc().DecreasePriority(args[0])
+		ctx, err := repo().CurrentContext()
+		if err != nil {
+			return fmt.Errorf("load current context: %w", err)
+		}
+		old, neu, err := ctx.DecreasePriority(args[0])
 		if err != nil {
 			return fmt.Errorf("decrease priority: %w", err)
 		}
@@ -254,7 +290,11 @@ var priority = &cobra.Command{
 	Args:    cobra.ExactArgs(2),
 	Aliases: []string{"pri", "p"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		old, neu, err := uc().SetPriority(args[0], args[1])
+		ctx, err := repo().CurrentContext()
+		if err != nil {
+			return fmt.Errorf("load current context: %w", err)
+		}
+		old, neu, err := ctx.SetPriority(args[0], args[1])
 		if err != nil {
 			return fmt.Errorf("set priority: %w", err)
 		}
@@ -270,7 +310,15 @@ var replace = &cobra.Command{
 	Args:    cobra.MinimumNArgs(2),
 	Aliases: []string{"r"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		old, neu, err := uc().ReplaceTask(args[0], strings.Join(args[1:], " "))
+		ctx, err := repo().CurrentContext()
+		if err != nil {
+			return fmt.Errorf("load current context: %w", err)
+		}
+		neu, err := domain.NewTask(strings.Join(args[1:], " "))
+		if err != nil {
+			return fmt.Errorf("parse replacement: %w", err)
+		}
+		old, err := ctx.Replace(args[0], neu)
 		if err != nil {
 			return fmt.Errorf("replace task: %w", err)
 		}
@@ -292,7 +340,7 @@ same context.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
-			current, err := uc().CurrentContext()
+			current, err := repo().CurrentContext()
 			if err != nil {
 				return fmt.Errorf("load current context: %w", err)
 			}
@@ -300,9 +348,12 @@ same context.`,
 			return nil
 		}
 
-		name, err := uc().SwitchContext(args[0])
-		if err != nil {
+		if err := repo().SetCurrent(args[0]); err != nil {
 			return fmt.Errorf("switch context: %w", err)
+		}
+		name, err := repo().CurrentContextName()
+		if err != nil {
+			return fmt.Errorf("read sanitized context name: %w", err)
 		}
 		fmt.Println("Now using context: " + name)
 		return nil
@@ -315,11 +366,11 @@ var todoStatus = &cobra.Command{
 	Aliases: []string{"?"},
 	Args:    cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		current, err := uc().CurrentContext()
+		current, err := repo().CurrentContext()
 		if err != nil {
 			return fmt.Errorf("load current context: %w", err)
 		}
-		names, err := uc().ListContextNames()
+		names, err := domain.SwitchableContextNames(repo())
 		if err != nil {
 			return fmt.Errorf("list contexts: %w", err)
 		}
@@ -343,7 +394,7 @@ var search = &cobra.Command{
 	Long:    "Search in current context for tasks matching the given expression.\nThe Expression will be interepreted as a Golang regular expression.",
 	Args:    cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		current, err := uc().CurrentContext()
+		current, err := repo().CurrentContext()
 		if err != nil {
 			return fmt.Errorf("load current context: %w", err)
 		}

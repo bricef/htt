@@ -1,26 +1,26 @@
 package cli
 
 import (
+	"github.com/bricef/htt/internal/domain"
 	"github.com/bricef/htt/internal/storage"
-	"github.com/bricef/htt/internal/usecase"
 	"github.com/bricef/htt/internal/vars"
 )
 
-// defaultUC is the use case set the commands reach for. Initialized lazily
-// from viper config on first use; can be overridden by tests via
-// SetUseCases to inject a memory-backed repository.
-var defaultUC *usecase.UseCases
+// defaultRepo is the domain.Repository CLI commands reach for. Lazily
+// initialized from viper config on first use; tests override it via
+// SetRepository to inject a memory-backed repo.
+var defaultRepo domain.Repository
 
-func uc() *usecase.UseCases {
-	if defaultUC == nil {
-		defaultUC = usecase.New(storage.NewFileRepository(vars.Get(vars.ConfigKeyDataDir)))
+func repo() domain.Repository {
+	if defaultRepo == nil {
+		defaultRepo = storage.NewFileRepository(vars.Get(vars.ConfigKeyDataDir))
 	}
-	return defaultUC
+	return defaultRepo
 }
 
-// SetUseCases overrides the package-level UseCases used by every CLI
+// SetRepository overrides the package-level Repository used by every CLI
 // command. Pass nil to reset and force lazy reconstruction on next call.
 // Used by tests; main.go does not need to call this.
-func SetUseCases(u *usecase.UseCases) {
-	defaultUC = u
+func SetRepository(r domain.Repository) {
+	defaultRepo = r
 }

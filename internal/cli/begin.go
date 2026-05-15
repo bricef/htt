@@ -13,7 +13,7 @@ var Begin = &cobra.Command{
 	Args:    cobra.MinimumNArgs(1),
 	Aliases: []string{"wo"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx, err := uc().CurrentContext()
+		ctx, err := repo().CurrentContext()
 		if err != nil {
 			return fmt.Errorf("load current context: %w", err)
 		}

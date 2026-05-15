@@ -5,21 +5,20 @@ import (
 	"testing"
 
 	"github.com/bricef/htt/internal/storage"
-	"github.com/bricef/htt/internal/usecase"
 )
 
-// withMemoryRepo swaps the package-level UseCases for a fresh in-memory
+// withMemoryRepo swaps the package-level Repository for a fresh in-memory
 // instance and restores it on cleanup. Returns the underlying repo so the
 // caller can inspect state.
 //
-// Tests using this helper must NOT run in parallel because RootCmd and the
-// uc() injection point are package-level state.
+// Tests using this helper must NOT run in parallel because RootCmd and
+// the repo() injection point are package-level state.
 func withMemoryRepo(t *testing.T) *storage.MemoryRepository {
 	t.Helper()
 	repo := storage.NewMemoryRepository()
-	prev := defaultUC
-	SetUseCases(usecase.New(repo))
-	t.Cleanup(func() { SetUseCases(prev) })
+	prev := defaultRepo
+	SetRepository(repo)
+	t.Cleanup(func() { SetRepository(prev) })
 	return repo
 }
 

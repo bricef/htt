@@ -15,11 +15,11 @@ var status = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		timelogs.ShowStatus()
 
-		current, err := uc().CurrentContext()
+		current, err := repo().CurrentContext()
 		if err != nil {
 			return fmt.Errorf("load current context: %w", err)
 		}
-		names, err := uc().ListContextNames()
+		names, err := domain.SwitchableContextNames(repo())
 		if err != nil {
 			return fmt.Errorf("list contexts: %w", err)
 		}

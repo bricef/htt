@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"github.com/bricef/htt/internal/repo"
+	gitsync "github.com/bricef/htt/internal/repo"
 	"github.com/spf13/cobra"
 )
 
@@ -27,7 +27,7 @@ In addition, you can re-target htt to use your own
 repository.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			repo.Sync()
+			gitsync.Sync()
 			return nil
 		},
 	})

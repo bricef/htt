@@ -44,7 +44,7 @@ var Context = &cobra.Command{
 	Short: "Output the current context.",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		name, err := uc().CurrentContextName()
+		name, err := repo().CurrentContextName()
 		if err != nil {
 			return fmt.Errorf("get current context name: %w", err)
 		}

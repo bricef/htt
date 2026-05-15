@@ -6,7 +6,6 @@ import (
 
 	"github.com/bricef/htt/internal/domain"
 	"github.com/bricef/htt/internal/storage"
-	"github.com/bricef/htt/internal/usecase"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -22,23 +21,29 @@ func mustTask(t *testing.T, raw string) *domain.Task {
 // seedModel builds a minimal model rooted at the named context with the
 // given task lines, backed by an in-memory repository. Returns the model
 // and the repo so tests can inspect post-action state.
+//
+// The context is round-tripped through repo.Context so it carries a
+// wired repo — Step 3 persistent methods (Delete, Complete, …) need it.
 func seedModel(t *testing.T, contextName string, tasks ...string) (model, *storage.MemoryRepository) {
 	t.Helper()
 	repo := storage.NewMemoryRepository()
-	uc := usecase.New(repo)
 
-	ctx := &domain.Context{Name: contextName, Tasks: []*domain.Task{}}
+	seed := &domain.Context{Name: contextName, Tasks: []*domain.Task{}}
 	for _, raw := range tasks {
-		ctx.Tasks = append(ctx.Tasks, mustTask(t, raw))
+		seed.Tasks = append(seed.Tasks, mustTask(t, raw))
 	}
-	if err := repo.Save(ctx); err != nil {
+	if err := repo.Save(seed); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 	if err := repo.SetCurrent(contextName); err != nil {
 		t.Fatalf("SetCurrent: %v", err)
 	}
 
-	return Model(uc, ctx), repo
+	loaded, err := repo.Context(contextName)
+	if err != nil {
+		t.Fatalf("Context(%q): %v", contextName, err)
+	}
+	return Model(repo, loaded), repo
 }
 
 // asModel asserts the tea.Model returned by an action is back to model.
@@ -185,9 +190,8 @@ func TestAction_NextContext_SwitchesAndRefreshes(t *testing.T) {
 	}
 	// Rebuild model so contexts list includes both. seedModel only knew
 	// about "todo" at construction time.
-	uc := usecase.New(repo)
 	todoCtx, _ := repo.Context("todo")
-	m = Model(uc, todoCtx)
+	m = Model(repo, todoCtx)
 
 	// Find the position of "todo" and step past it.
 	for i, c := range m.contexts {

@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 
+	"github.com/bricef/htt/internal/domain"
 	"github.com/bricef/htt/internal/utils"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -20,9 +21,8 @@ func mkAction(description string, f func(m model) (tea.Model, tea.Cmd)) *Action 
 	return &Action{act: f, description: description}
 }
 
-// strID converts the integer cursor position into the form the use cases
-// expect (they use strconv.Atoi internally because the CLI layer passes
-// strings from os.Args).
+// strID converts the integer cursor position into the form the Context
+// methods expect (string IDs, since the CLI passes os.Args).
 func strID(i int) string {
 	return fmt.Sprintf("%d", i)
 }
@@ -31,7 +31,7 @@ func strID(i int) string {
 // Used after every mutating action so the rendered view reflects what's
 // on disk.
 func refresh(m *model) error {
-	ctx, err := m.uc.CurrentContext()
+	ctx, err := m.repo.CurrentContext()
 	if err != nil {
 		return err
 	}
@@ -60,7 +60,7 @@ var NextContext = mkAction("move right", func(m model) (tea.Model, tea.Cmd) {
 		m.contextCursor++
 	}
 	newName := m.contexts[m.contextCursor].Name
-	if _, err := m.uc.SwitchContext(newName); err != nil {
+	if err := m.repo.SetCurrent(newName); err != nil {
 		return m, tea.Quit
 	}
 	if err := refresh(&m); err != nil {
@@ -75,7 +75,7 @@ var PreviousContext = mkAction("move left", func(m model) (tea.Model, tea.Cmd) {
 		m.contextCursor--
 	}
 	newName := m.contexts[m.contextCursor].Name
-	if _, err := m.uc.SwitchContext(newName); err != nil {
+	if err := m.repo.SetCurrent(newName); err != nil {
 		return m, tea.Quit
 	}
 	if err := refresh(&m); err != nil {
@@ -87,10 +87,10 @@ var PreviousContext = mkAction("move left", func(m model) (tea.Model, tea.Cmd) {
 
 var Do = mkAction("do", func(m model) (tea.Model, tea.Cmd) {
 	// Doing something in the "done" view doesn't make sense — bail out.
-	if m.context.Name == "done" {
+	if m.context.Name == domain.DoneContextName {
 		return m, tea.Quit
 	}
-	if _, err := m.uc.CompleteTask(strID(m.cursor)); err != nil {
+	if _, err := m.context.Complete(strID(m.cursor)); err != nil {
 		return m, tea.Quit
 	}
 	if err := refresh(&m); err != nil {
@@ -110,10 +110,9 @@ var Help = mkAction("toggle help", func(m model) (tea.Model, tea.Cmd) {
 
 var EditFile = mkAction("edit file", func(m model) (tea.Model, tea.Cmd) {
 	// Shells out to $EDITOR on the context file. Filepath() builds the
-	// path string from viper-backed config; it doesn't perform I/O, so
-	// it survived the Step 10 cull. After the editor exits we refresh
-	// the displayed context via the use case (the editor may have added
-	// or removed tasks).
+	// path string from viper-backed config; it doesn't perform I/O. After
+	// the editor exits we refresh the displayed context from the repo
+	// (the editor may have added or removed tasks).
 	utils.EditFilePath(m.context.Filepath())
 	if err := refresh(&m); err != nil {
 		return m, tea.Quit
@@ -147,11 +146,19 @@ var AddTask = mkAction("add task", func(m model) (tea.Model, tea.Cmd) {
 	if value == "" {
 		return m, tea.ClearScreen
 	}
-	// AddTaskTo writes to the visible context regardless of what the repo
-	// considers "current". The TUI's NextContext action syncs the two
-	// (calls SwitchContext on every move), but we name the target context
+	// Add to the visible context regardless of what the repo considers
+	// "current". The TUI's NextContext action syncs the two (calls
+	// SetCurrent on every move), but we name the target context
 	// explicitly here for clarity.
-	if _, _, err := m.uc.AddTaskTo(m.context.Name, value); err != nil {
+	target, err := m.repo.Context(m.context.Name)
+	if err != nil {
+		return m, tea.ClearScreen
+	}
+	task, err := domain.NewTask(value)
+	if err != nil {
+		return m, tea.ClearScreen
+	}
+	if err := target.AddTask(task); err != nil {
 		return m, tea.ClearScreen
 	}
 	if err := refresh(&m); err != nil {
@@ -161,7 +168,7 @@ var AddTask = mkAction("add task", func(m model) (tea.Model, tea.Cmd) {
 })
 
 var Delete = mkAction("delete", func(m model) (tea.Model, tea.Cmd) {
-	if _, err := m.uc.DeleteTask(strID(m.cursor)); err != nil {
+	if _, err := m.context.Delete(strID(m.cursor)); err != nil {
 		return m, tea.Quit
 	}
 	if err := refresh(&m); err != nil {
@@ -171,7 +178,7 @@ var Delete = mkAction("delete", func(m model) (tea.Model, tea.Cmd) {
 })
 
 var IncreasePriority = mkAction("increase priority", func(m model) (tea.Model, tea.Cmd) {
-	if _, _, err := m.uc.IncreasePriority(strID(m.cursor)); err != nil {
+	if _, _, err := m.context.IncreasePriority(strID(m.cursor)); err != nil {
 		return m, tea.Quit
 	}
 	if err := refresh(&m); err != nil {
@@ -182,7 +189,7 @@ var IncreasePriority = mkAction("increase priority", func(m model) (tea.Model, t
 })
 
 var DecreasePriority = mkAction("decrease priority", func(m model) (tea.Model, tea.Cmd) {
-	if _, _, err := m.uc.DecreasePriority(strID(m.cursor)); err != nil {
+	if _, _, err := m.context.DecreasePriority(strID(m.cursor)); err != nil {
 		return m, tea.Quit
 	}
 	if err := refresh(&m); err != nil {

@@ -9,7 +9,6 @@ import (
 
 	tuipkg "github.com/bricef/htt/internal/tui"
 	"github.com/bricef/htt/internal/storage"
-	"github.com/bricef/htt/internal/usecase"
 	"github.com/bricef/htt/internal/vars"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/viper"
@@ -67,12 +66,11 @@ func (e *tuiEnv) seedCurrentContext(name string) {
 func (e *tuiEnv) start(contextName string) {
 	e.t.Helper()
 	repo := storage.NewFileRepository(e.dataDir)
-	uc := usecase.New(repo)
 	ctx, err := repo.Context(contextName)
 	if err != nil {
 		e.t.Fatalf("Context(%q): %v", contextName, err)
 	}
-	e.model = tuipkg.Model(uc, ctx)
+	e.model = tuipkg.Model(repo, ctx)
 	e.send(tea.WindowSizeMsg{Width: 120, Height: 40})
 }
 

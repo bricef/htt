@@ -61,3 +61,24 @@ const DefaultContextName = "todo"
 // DoneContextName is the conventional target for completed tasks.
 // Context.Complete moves the indexed task into this context.
 const DoneContextName = "done"
+
+// SwitchableContextNames returns every persisted context name except
+// DoneContextName — the contexts a user can usefully switch to. Order
+// matches Repository.ContextNames.
+//
+// This is a presentation-layer helper hoisted into the domain package so
+// CLI and TUI share a single definition (avoids a tiny six-line filter
+// loop at each call site).
+func SwitchableContextNames(r Repository) ([]string, error) {
+	all, err := r.ContextNames()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(all))
+	for _, n := range all {
+		if n != DoneContextName {
+			out = append(out, n)
+		}
+	}
+	return out, nil
+}

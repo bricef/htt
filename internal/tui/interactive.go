@@ -6,7 +6,6 @@ import (
 	"slices"
 
 	"github.com/bricef/htt/internal/domain"
-	"github.com/bricef/htt/internal/usecase"
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
@@ -98,7 +97,7 @@ var color_subtle_separator = lipgloss.Color("#3C3C3C")
 var color_subtle_desc = lipgloss.Color("#4A4A4A")
 
 type model struct {
-	uc            *usecase.UseCases
+	repo          domain.Repository
 	context       *domain.Context
 	cursor        int // which to-do list item our cursor is pointing at
 	contexts      []*domain.Context
@@ -165,17 +164,17 @@ var controller = NewKeyBindingController().
 		key.WithHelp("-", "decrease priority"),
 	))
 
-// Model constructs the TUI model rooted at ctx, with uc as the business
-// layer for all mutating actions.
-func Model(uc *usecase.UseCases, ctx *domain.Context) model {
+// Model constructs the TUI model rooted at ctx, backed by repo for all
+// mutating actions and context lookups.
+func Model(repo domain.Repository, ctx *domain.Context) model {
 	// Names-only view of the contexts; the tab strip only renders Name.
 	// Tasks for each tab are loaded on demand when the user switches to it.
-	names, _ := uc.ListContextNames()
+	names, _ := domain.SwitchableContextNames(repo)
 	contexts := make([]*domain.Context, 0, len(names)+1)
 	for _, name := range names {
 		contexts = append(contexts, &domain.Context{Name: name})
 	}
-	contexts = append(contexts, &domain.Context{Name: "done"})
+	contexts = append(contexts, &domain.Context{Name: domain.DoneContextName})
 
 	selected := slices.IndexFunc(contexts, func(c *domain.Context) bool {
 		return c.Equals(ctx)
@@ -191,7 +190,7 @@ func Model(uc *usecase.UseCases, ctx *domain.Context) model {
 	ti.Width = 100
 
 	return model{
-		uc:            uc,
+		repo:          repo,
 		context:       ctx,
 		cursor:        0,
 		contexts:      contexts,

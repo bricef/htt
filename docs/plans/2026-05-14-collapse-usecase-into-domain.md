@@ -7,18 +7,14 @@
 ## Resume marker (where this session left off)
 
 - Branch: `refactor/collapse-usecase-into-domain`
-- Steps 1, 2, and 3 complete. Persistent operations now live on Context:
-  AddTask, Delete, Replace (strID, *Task) → snapshot, Move, Complete,
-  SetPriority, IncreasePriority, DecreasePriority. Pure methods (Add,
-  Remove, RemoveByStrId, in-memory Replace) excised. DoneContextName moved
-  into domain. usecase.swapTask now drives `ctx.Replace` (persistent),
-  observable behavior unchanged. New black-box harness
-  `internal/domain/context_ops_test.go` (package `domain_test`) pins the
-  Context API with 13 tests including the cross-package wiring check
-  `TestContext_PersistentMethodsSaveThroughInjectedRepo`. usecase package
-  + usecase_test.go still exist in parallel and pass; CLI/TUI still go
-  through `uc()`.
-- Next action: Step 4 — rewire CLI/TUI to call `ctx.X(...)` directly.
+- Steps 1, 2, 3, and 4 complete. CLI and TUI now talk to `domain.Repository`
+  directly: `cli.repo()` / `cli.SetRepository` replace `cli.uc()` /
+  `cli.SetUseCases`; TUI's model holds a `repo domain.Repository` and its
+  actions drive `m.context.X(...)` directly. `domain.SwitchableContextNames`
+  is the shared "all contexts except done" helper used by both
+  `htt status` and the TUI tab strip. `usecase` package still exists in
+  isolation (nothing imports it now); deleted in Step 6.
+- Next action: Step 5 — unexport Task mutators, rename `Do` → `markCompleted`.
 
 The plan went through two rounds of design dialogue before any code was
 written. The "Decisions captured" section below records the choices that

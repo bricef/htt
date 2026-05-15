@@ -17,13 +17,13 @@ var Interactive = &cobra.Command{
 	Args:    cobra.NoArgs,
 	Aliases: []string{"i"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		u := uc()
-		ctx, err := u.CurrentContext()
+		r := repo()
+		ctx, err := r.CurrentContext()
 		if err != nil {
 			return fmt.Errorf("load current context: %w", err)
 		}
 		p := tea.NewProgram(
-			tui.Model(u, ctx),
+			tui.Model(r, ctx),
 			tea.WithAltScreen(),
 			tea.WithMouseCellMotion(),
 		)

@@ -11,7 +11,7 @@ import (
 
 func TestFileRepository_Contract(t *testing.T) {
 	runRepositoryContract(t, func(t *testing.T) domain.Repository {
-		return NewFileRepository(t.TempDir())
+		return NewFileRepository(t.TempDir(), t.TempDir())
 	})
 }
 
@@ -29,7 +29,7 @@ func TestFileRepository_Context_DoesNotWriteOnRead(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r := NewFileRepository(dir)
+	r := NewFileRepository(dir, dir)
 	if _, err := r.Context("todo"); err != nil {
 		t.Fatalf("Context: %v", err)
 	}
@@ -56,7 +56,7 @@ func TestFileRepository_Save_CreatesBakBackup(t *testing.T) {
 	// rely on it. This is documented in the plan as "the well-known .bak
 	// side effect" and is the only artifact of the legacy code path.
 	dir := t.TempDir()
-	r := NewFileRepository(dir)
+	r := NewFileRepository(dir, dir)
 
 	first := &domain.Context{
 		Name:  "todo",
@@ -97,7 +97,7 @@ func TestFileRepository_Save_ByteExactOutput(t *testing.T) {
 	// lines. FileRepository must match byte-for-byte so existing on-disk
 	// data is fully compatible.
 	dir := t.TempDir()
-	r := NewFileRepository(dir)
+	r := NewFileRepository(dir, dir)
 
 	ctx := &domain.Context{
 		Name: "todo",
@@ -129,7 +129,7 @@ func TestFileRepository_Context_SkipsBlankLines(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r := NewFileRepository(dir)
+	r := NewFileRepository(dir, dir)
 	ctx, err := r.Context("todo")
 	if err != nil {
 		t.Fatal(err)
@@ -155,7 +155,7 @@ func TestFileRepository_ContextNames_IgnoresNonTxtAndDirs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	r := NewFileRepository(dir)
+	r := NewFileRepository(dir, dir)
 	names, err := r.ContextNames()
 	if err != nil {
 		t.Fatal(err)
@@ -178,7 +178,8 @@ func TestFileRepository_ContextNames_IgnoresNonTxtAndDirs(t *testing.T) {
 }
 
 func TestFileRepository_ContextNames_OnMissingDir(t *testing.T) {
-	r := NewFileRepository(filepath.Join(t.TempDir(), "does-not-exist"))
+	missing := filepath.Join(t.TempDir(), "does-not-exist")
+	r := NewFileRepository(missing, missing)
 	names, err := r.ContextNames()
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -193,12 +194,81 @@ func TestFileRepository_CurrentContextName_FromExistingPointer(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "current-context"), []byte("work\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	r := NewFileRepository(dir)
+	r := NewFileRepository(dir, dir)
 	name, err := r.CurrentContextName()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if name != "work" {
 		t.Errorf("got %q, want work", name)
+	}
+}
+
+func TestFileRepository_CurrentPointer_LivesInPointerDir(t *testing.T) {
+	// bug_005: SetCurrent / CurrentContextName must read and write the
+	// pointer file under pointerDir, not dataDir. Legacy installs that
+	// split tracker_path from data_path relied on this.
+	dataDir := t.TempDir()
+	pointerDir := t.TempDir()
+	r := NewFileRepository(dataDir, pointerDir)
+
+	if err := r.SetCurrent("work"); err != nil {
+		t.Fatalf("SetCurrent: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(pointerDir, currentContextFile)); err != nil {
+		t.Errorf("pointer file should exist in pointerDir, stat err: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dataDir, currentContextFile)); !os.IsNotExist(err) {
+		t.Errorf("pointer file should NOT be in dataDir, stat err: %v", err)
+	}
+
+	// Reading back returns what was persisted.
+	name, err := r.CurrentContextName()
+	if err != nil {
+		t.Fatalf("CurrentContextName: %v", err)
+	}
+	if name != "work" {
+		t.Errorf("got %q, want work", name)
+	}
+}
+
+func TestFileRepository_Context_SanitizesNameAndStaysInDataDir(t *testing.T) {
+	// bug_011: A name containing path separators or .. segments used to
+	// flow straight into filepath.Join, letting Save("../escape") write
+	// outside dataDir. Sanitization via utils.StringToFilename
+	// (non-word → underscore) keeps every file inside dataDir.
+	dataDir := t.TempDir()
+	pointerDir := t.TempDir()
+	r := NewFileRepository(dataDir, pointerDir)
+
+	// Save through a name that would escape if unsanitized.
+	if err := r.Save(&domain.Context{
+		Name:  "../escapee",
+		Tasks: []*domain.Task{mustTask(t, "task")},
+	}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	// No file appeared one level up.
+	parent := filepath.Dir(dataDir)
+	if _, err := os.Stat(filepath.Join(parent, "escapee.txt")); err == nil {
+		t.Errorf("file escaped dataDir at %s", filepath.Join(parent, "escapee.txt"))
+	}
+
+	// A sanitized version landed inside dataDir.
+	entries, err := os.ReadDir(dataDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, e := range entries {
+		if strings.Contains(e.Name(), "escapee") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected a sanitized escapee*.txt file in %s, dir contents = %v", dataDir, entries)
 	}
 }

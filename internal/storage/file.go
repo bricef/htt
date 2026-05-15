@@ -19,29 +19,45 @@ const (
 	fileMode           = 0644
 )
 
-// FileRepository persists contexts as todo.txt-format files in a single
-// data directory. Layout matches the legacy on-disk layout used by
-// internal/todo so the file format is preserved byte-for-byte for users
-// migrating from an existing installation.
+// FileRepository persists contexts as todo.txt-format files. Context
+// files (per-name *.txt) live under dataDir; the current-context
+// pointer file (currentContextFile) lives under pointerDir. The legacy
+// layout kept the pointer under tracker_path while the per-context
+// files lived under data_path — most installs map both to the same
+// directory but users that overrode tracker_path independently relied
+// on the split. Layout matches the legacy on-disk layout byte-for-byte
+// so existing data migrates cleanly.
 //
-// Unlike the legacy todo.Context.Read/Sync pair, Context is read-only: it
-// never writes the file back. This deliberately fixes the long-standing
-// bug where todo.Context.Read called Add (which called Sync) on every
+// Unlike the legacy todo.Context.Read/Sync pair, Context is read-only:
+// it never writes the file back. This fixes the long-standing bug
+// where todo.Context.Read called Add (which called Sync) on every
 // line, causing every read to overwrite the file.
+//
+// Context names are sanitized at the path boundary via
+// utils.StringToFilename (non-word characters become underscores) so
+// `Context("../foo")` and `Save(&Context{Name: "../escape"})` can't
+// write outside dataDir. SetCurrent already sanitized; the rest of
+// the repo now matches it.
 type FileRepository struct {
-	dataDir string
+	dataDir    string
+	pointerDir string
 }
 
-func NewFileRepository(dataDir string) *FileRepository {
-	return &FileRepository{dataDir: dataDir}
+// NewFileRepository constructs a repo with separate directories for
+// context files and the current-context pointer. Most callers pass the
+// same path for both; pointerDir is honoured separately so users with a
+// custom tracker_path different from data_path keep their context
+// selection across the storage rewrite.
+func NewFileRepository(dataDir, pointerDir string) *FileRepository {
+	return &FileRepository{dataDir: dataDir, pointerDir: pointerDir}
 }
 
 func (r *FileRepository) contextPath(name string) string {
-	return filepath.Join(r.dataDir, name+fileExtension)
+	return filepath.Join(r.dataDir, utils.StringToFilename(name)+fileExtension)
 }
 
 func (r *FileRepository) currentPointerPath() string {
-	return filepath.Join(r.dataDir, currentContextFile)
+	return filepath.Join(r.pointerDir, currentContextFile)
 }
 
 func (r *FileRepository) ContextNames() ([]string, error) {

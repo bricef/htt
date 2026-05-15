@@ -65,7 +65,7 @@ func (e *tuiEnv) seedCurrentContext(name string) {
 // initial WindowSizeMsg. It expects the named context file to already exist.
 func (e *tuiEnv) start(contextName string) {
 	e.t.Helper()
-	repo := storage.NewFileRepository(e.dataDir)
+	repo := storage.NewFileRepository(e.dataDir, e.dataDir)
 	ctx, err := repo.Context(contextName)
 	if err != nil {
 		e.t.Fatalf("Context(%q): %v", contextName, err)

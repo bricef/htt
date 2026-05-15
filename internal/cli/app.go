@@ -13,7 +13,13 @@ var defaultRepo domain.Repository
 
 func repo() domain.Repository {
 	if defaultRepo == nil {
-		defaultRepo = storage.NewFileRepository(vars.Get(vars.ConfigKeyDataDir))
+		// Pointer file lives under tracker_path to preserve the legacy
+		// layout for users that overrode tracker_path independently of
+		// data_path. Default config maps both to the same directory.
+		defaultRepo = storage.NewFileRepository(
+			vars.Get(vars.ConfigKeyDataDir),
+			vars.Get(vars.ConfigKeyTrackerDir),
+		)
 	}
 	return defaultRepo
 }

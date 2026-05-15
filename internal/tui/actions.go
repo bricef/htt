@@ -39,6 +39,22 @@ func refresh(m *model) error {
 	return nil
 }
 
+// clampCursor keeps m.cursor inside the bounds of m.context.Tasks after
+// an action shortens the list (bug_013). Without this, deleting or
+// completing the last task leaves the cursor one past the end, and the
+// next mutating keypress (d/x/+/-) routes to GetTaskById with an
+// out-of-range index, errors, and tea.Quits the TUI unexpectedly.
+func clampCursor(m *model) {
+	n := len(m.context.Tasks)
+	if n == 0 {
+		m.cursor = 0
+		return
+	}
+	if m.cursor >= n {
+		m.cursor = n - 1
+	}
+}
+
 var Noop = mkAction("noop", func(m model) (tea.Model, tea.Cmd) { return m, nil })
 
 var Up = mkAction("move up", func(m model) (tea.Model, tea.Cmd) {
@@ -96,6 +112,7 @@ var Do = mkAction("do", func(m model) (tea.Model, tea.Cmd) {
 	if err := refresh(&m); err != nil {
 		return m, tea.Quit
 	}
+	clampCursor(&m)
 	return m, nil
 })
 
@@ -146,6 +163,14 @@ var AddTask = mkAction("add task", func(m model) (tea.Model, tea.Cmd) {
 	if value == "" {
 		return m, tea.ClearScreen
 	}
+	// bug_008: Adding an uncompleted task to the done context produces
+	// a phantom entry (no `x ` prefix) that renders as completed but
+	// parses as not completed — file/view divergence with no recovery
+	// path from inside the TUI. The Do action has the same guard; this
+	// just mirrors it for AddTask.
+	if m.context.Name == domain.DoneContextName {
+		return m, tea.ClearScreen
+	}
 	// Add to the visible context regardless of what the repo considers
 	// "current". The TUI's NextContext action syncs the two (calls
 	// SetCurrent on every move), but we name the target context
@@ -174,6 +199,7 @@ var Delete = mkAction("delete", func(m model) (tea.Model, tea.Cmd) {
 	if err := refresh(&m); err != nil {
 		return m, tea.Quit
 	}
+	clampCursor(&m)
 	return m, tea.ClearScreen
 })
 

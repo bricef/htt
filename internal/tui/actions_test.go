@@ -56,6 +56,33 @@ func asModel(t *testing.T, m tea.Model) model {
 	return mm
 }
 
+func TestModel_FreshInstall_ContextCursorIsNonNegative(t *testing.T) {
+	// bug_006: On a fresh install no context files exist yet, so the
+	// synthetic done tab is the only entry in m.contexts. The default
+	// loaded ctx is "todo" — slices.IndexFunc returns -1 (no match)
+	// and m.contextCursor used to land at -1. Pressing 'h' (PreviousContext)
+	// would then panic at m.contexts[-1].Name. The fix clamps to 0.
+	repo := storage.NewMemoryRepository()
+	ctx, err := repo.CurrentContext()
+	if err != nil {
+		t.Fatalf("CurrentContext: %v", err)
+	}
+
+	m := Model(repo, ctx)
+	if m.contextCursor < 0 {
+		t.Errorf("contextCursor = %d on fresh install, want >= 0", m.contextCursor)
+	}
+
+	// PreviousContext must not panic now; defending against future
+	// regressions where the clamp gets removed.
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("PreviousContext panicked on fresh install: %v", r)
+		}
+	}()
+	_, _ = PreviousContext.Act(m)
+}
+
 func TestAction_AddTask_PersistsToRepo(t *testing.T) {
 	m, repo := seedModel(t, "todo")
 	m.textInput.SetValue("buy bread")
@@ -81,6 +108,21 @@ func TestAction_AddTask_EmptyDoesNotPersist(t *testing.T) {
 	stored, _ := repo.Context("todo")
 	if len(stored.Tasks) != 1 || stored.Tasks[0].Raw != "existing" {
 		t.Errorf("repo should be unchanged, got %v", stored.Tasks)
+	}
+}
+
+func TestAction_AddTask_InDoneViewDoesNotPersist(t *testing.T) {
+	// bug_008: AddTask in the done view used to write an uncompleted
+	// entry (no `x ` prefix) into done.txt, producing a phantom task
+	// that rendered as completed but parsed as not completed.
+	m, repo := seedModel(t, domain.DoneContextName, "x already done")
+	m.textInput.SetValue("phantom entry")
+
+	AddTask.Act(m)
+
+	stored, _ := repo.Context(domain.DoneContextName)
+	if len(stored.Tasks) != 1 || stored.Tasks[0].Raw != "x already done" {
+		t.Errorf("done context should be unchanged after AddTask, got %v", stored.Tasks)
 	}
 }
 
@@ -168,6 +210,41 @@ func TestAction_Down_MovesCursorWithinBounds(t *testing.T) {
 	m = asModel(t, result)
 	if m.cursor != 1 {
 		t.Errorf("cursor should clamp at last index; got %d", m.cursor)
+	}
+}
+
+func TestAction_Delete_ClampsCursorAfterLastTaskGoes(t *testing.T) {
+	// bug_013: With cursor on the last task, Delete leaves m.cursor
+	// pointing one past the new end of m.context.Tasks. The next
+	// mutating keypress then hits an out-of-range error and quits the
+	// TUI. clampCursor runs after refresh so the cursor stays valid.
+	m, _ := seedModel(t, "todo", "first", "second")
+	m.cursor = 1
+
+	result, _ := Delete.Act(m)
+	m = asModel(t, result)
+
+	if len(m.context.Tasks) != 1 {
+		t.Fatalf("len(Tasks) = %d after delete, want 1", len(m.context.Tasks))
+	}
+	if m.cursor != 0 {
+		t.Errorf("cursor = %d after deleting last task, want 0 (clamped)", m.cursor)
+	}
+}
+
+func TestAction_Do_ClampsCursorAfterLastTaskGoes(t *testing.T) {
+	// Same bug shape via Do.
+	m, _ := seedModel(t, "todo", "first", "second")
+	m.cursor = 1
+
+	result, _ := Do.Act(m)
+	m = asModel(t, result)
+
+	if len(m.context.Tasks) != 1 {
+		t.Fatalf("len(Tasks) = %d after do, want 1", len(m.context.Tasks))
+	}
+	if m.cursor != 0 {
+		t.Errorf("cursor = %d after completing last task, want 0 (clamped)", m.cursor)
 	}
 }
 

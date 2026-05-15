@@ -179,6 +179,15 @@ func Model(repo domain.Repository, ctx *domain.Context) model {
 	selected := slices.IndexFunc(contexts, func(c *domain.Context) bool {
 		return c.Equals(ctx)
 	})
+	// bug_006: On a fresh install the user opens the TUI before any
+	// data files exist. ctx is the default "todo" context, but the
+	// `contexts` slice contains only the synthetic "done" tab, so
+	// IndexFunc returns -1. Pressing 'h' would then index
+	// m.contexts[-1] in PreviousContext and panic. Clamp to 0 so the
+	// initial tab strip always has a valid selection.
+	if selected < 0 {
+		selected = 0
+	}
 
 	ti := textinput.New()
 	ti.Placeholder = "(A) Do a thing for +project in @context"

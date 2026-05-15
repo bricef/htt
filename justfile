@@ -36,9 +36,17 @@ build:
     mkdir -p bin
     go build -o bin/htt ./cmd/htt
 
+# Install the htt binary into $GOBIN / $GOPATH/bin.
+install:
+    go install github.com/bricef/htt/cmd/htt
+
 # Static analysis across the module.
 vet:
     go vet ./...
+
+# Lint with golangci-lint.
+check:
+    golangci-lint run
 
 # Populate the module cache. Must be run by the user outside the sandbox
 # the first time after a fresh checkout. The sandbox blocks writes to

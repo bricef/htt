@@ -30,3 +30,22 @@ func repo() domain.Repository {
 func SetRepository(r domain.Repository) {
 	defaultRepo = r
 }
+
+// defaultTimelogRepo is the domain.TimelogRepository CLI `log` and
+// `workon` commands reach for. Lazily initialized from viper config
+// on first use; tests override it via SetTimelogRepository.
+var defaultTimelogRepo domain.TimelogRepository
+
+func timelogRepo() domain.TimelogRepository {
+	if defaultTimelogRepo == nil {
+		defaultTimelogRepo = storage.NewFileTimelogRepository(vars.Get(vars.ConfigKeyDataDir))
+	}
+	return defaultTimelogRepo
+}
+
+// SetTimelogRepository overrides the package-level TimelogRepository
+// used by every CLI `log`/`workon` command. Pass nil to reset.
+// Used by tests; main.go does not need to call this.
+func SetTimelogRepository(r domain.TimelogRepository) {
+	defaultTimelogRepo = r
+}

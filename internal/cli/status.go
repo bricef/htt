@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 
-	"github.com/bricef/htt/internal/timelogs"
 	"github.com/bricef/htt/internal/domain"
 	"github.com/spf13/cobra"
 )
@@ -13,7 +12,9 @@ var status = &cobra.Command{
 	Short:   "Show the status of the tasklist and time log.",
 	Aliases: []string{"?"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		timelogs.ShowStatus()
+		if err := printStatus(); err != nil {
+			return err
+		}
 
 		current, err := repo().CurrentContext()
 		if err != nil {

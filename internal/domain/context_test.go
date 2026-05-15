@@ -27,6 +27,7 @@ func (*stubRepository) CurrentContext() (*Context, error)   { panic("stub") }
 func (*stubRepository) CurrentContextName() (string, error) { panic("stub") }
 func (*stubRepository) SetCurrent(string) error             { panic("stub") }
 func (*stubRepository) Save(*Context) error                 { panic("stub") }
+func (*stubRepository) ContextPath(string) string           { panic("stub") }
 
 func TestNewContext_InjectsRepo(t *testing.T) {
 	// Step 2 invariant: NewContext stores the supplied Repository on the

@@ -1,7 +1,7 @@
 # Business Layer Extraction: Domain / Usecase / Storage layering for `htt`
 
 **Date:** 2026-05-14
-**Status:** Proposed
+**Status:** Complete (2026-05-15)
 
 ## Goal
 

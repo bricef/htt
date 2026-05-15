@@ -126,11 +126,16 @@ var Help = mkAction("toggle help", func(m model) (tea.Model, tea.Cmd) {
 })
 
 var EditFile = mkAction("edit file", func(m model) (tea.Model, tea.Cmd) {
-	// Shells out to $EDITOR on the context file. Filepath() builds the
-	// path string from viper-backed config; it doesn't perform I/O. After
+	// Shells out to $EDITOR on the context file. The repo owns path
+	// resolution; an empty path means the repo isn't file-backed
+	// (e.g. memory repo in tests) and editing isn't supported. After
 	// the editor exits we refresh the displayed context from the repo
 	// (the editor may have added or removed tasks).
-	utils.EditFilePath(m.context.Filepath())
+	path := m.repo.ContextPath(m.context.Name)
+	if path == "" {
+		return m, tea.Quit
+	}
+	utils.EditFilePath(path)
 	if err := refresh(&m); err != nil {
 		return m, tea.Quit
 	}

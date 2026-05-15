@@ -272,3 +272,37 @@ func TestFileRepository_Context_SanitizesNameAndStaysInDataDir(t *testing.T) {
 		t.Errorf("expected a sanitized escapee*.txt file in %s, dir contents = %v", dataDir, entries)
 	}
 }
+
+func TestFileRepository_ContextPath_BuildsExpectedLayout(t *testing.T) {
+	// Plain name → <dataDir>/<name>.txt.
+	dir := t.TempDir()
+	r := NewFileRepository(dir, dir)
+
+	got := r.ContextPath("work")
+	want := filepath.Join(dir, "work.txt")
+	if got != want {
+		t.Errorf("ContextPath(\"work\") = %q, want %q", got, want)
+	}
+}
+
+func TestFileRepository_ContextPath_SanitizesAndStaysInDataDir(t *testing.T) {
+	// Path returned for a hostile name must stay inside dataDir, same
+	// guarantee Save / Context already give. Mirrors the bug_011 test.
+	dir := t.TempDir()
+	r := NewFileRepository(dir, dir)
+
+	got := r.ContextPath("../escape")
+	if !strings.HasPrefix(got, dir+string(filepath.Separator)) {
+		t.Errorf("ContextPath(\"../escape\") = %q, expected to start with %q/", got, dir)
+	}
+}
+
+func TestMemoryRepository_ContextPath_ReturnsEmpty(t *testing.T) {
+	// Memory repo has no filesystem path; callers that need a usable
+	// path (htt todo edit-done, TUI EditFile) treat empty as
+	// "unsupported by this repo".
+	r := NewMemoryRepository()
+	if got := r.ContextPath("anything"); got != "" {
+		t.Errorf("memory ContextPath should be empty, got %q", got)
+	}
+}

@@ -6,10 +6,6 @@ will be deleted as obsolete, some will become plan documents under
 `docs/plans/active/` when their time comes. Add new wishlist items here
 freely; the README itself stays a marketing/getting-started doc.
 
-## Known bugs
-
-- [ ] **Parser: `Task.CompletedOn` not populated.** `domain.NewTask("x 2026-05-16 hello")` returns a Task with `Completed=true` but `CompletedOn` left as zero-value. The COMPLETEDAT branch of the todo.txt grammar in `internal/domain/parser.go` matches the date token but the result doesn't surface through `parser.QueryOne("COMPLETEDAT")`. Currently worked around in `internal/cli/report.go` (`completedOnFromRaw`) which parses the date from `task.Raw` directly. Worth a deeper look — every other caller of `task.CompletedOn` is silently producing wrong results.
-
 ## Todo
 
 - [ ] Dedup - Find duplicate and similar tasks. See dedup example

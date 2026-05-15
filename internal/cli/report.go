@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/bricef/htt/internal/domain"
@@ -91,34 +90,27 @@ func reportCompleted(since, until time.Time) error {
 		return fmt.Errorf("load done context: %w", err)
 	}
 
-	type doneEntry struct {
-		task        *domain.Task
-		completedOn time.Time
-	}
 	// Filter on calendar dates, not wall-clock times. done.txt only
-	// stores dates (no time-of-day), so a task completed "today"
-	// parses as today-midnight in local time. If the user runs the
-	// report shortly after their own local midnight, naive
-	// wall-clock comparison would put today-midnight *after* "now"
-	// because of timezone offsets and exclude the day's work.
-	// Truncating since to the start of its local day brings the
-	// comparison to date level.
+	// stores dates (no time-of-day) and the parser surfaces them as
+	// local midnight via time.ParseInLocation. Truncating since to
+	// the start of its local day brings the comparison to date
+	// level, so a task completed "today" still appears in reports
+	// run shortly after the user's own local midnight.
 	sinceDay := startOfDay(since)
-	byCtx := map[string][]doneEntry{}
+	byCtx := map[string][]*domain.Task{}
 	count := 0
 	for _, task := range done.Tasks {
-		on := completedOnFromRaw(task.Raw)
-		if on.IsZero() {
+		if task.CompletedOn.IsZero() {
 			continue
 		}
-		if on.Before(sinceDay) || on.After(until) {
+		if task.CompletedOn.Before(sinceDay) || task.CompletedOn.After(until) {
 			continue
 		}
 		src := task.Annotations["context"]
 		if src == "" {
 			src = "(unknown)"
 		}
-		byCtx[src] = append(byCtx[src], doneEntry{task: task, completedOn: on})
+		byCtx[src] = append(byCtx[src], task)
 		count++
 	}
 
@@ -139,44 +131,20 @@ func reportCompleted(since, until time.Time) error {
 		entries := byCtx[name]
 		// Stable order: by completion date ascending, then by entry text.
 		sort.SliceStable(entries, func(i, j int) bool {
-			if !entries[i].completedOn.Equal(entries[j].completedOn) {
-				return entries[i].completedOn.Before(entries[j].completedOn)
+			if !entries[i].CompletedOn.Equal(entries[j].CompletedOn) {
+				return entries[i].CompletedOn.Before(entries[j].CompletedOn)
 			}
-			return entries[i].task.Entry() < entries[j].task.Entry()
+			return entries[i].Entry() < entries[j].Entry()
 		})
-		for _, e := range entries {
-			display := e.task.Entry()
-			if e.task.Priority != "" {
-				display = fmt.Sprintf("(%s) %s", e.task.Priority, display)
+		for _, t := range entries {
+			display := t.Entry()
+			if t.Priority != "" {
+				display = fmt.Sprintf("(%s) %s", t.Priority, display)
 			}
-			fmt.Printf("    %-50s %s\n", display, e.completedOn.Format("2006-01-02"))
+			fmt.Printf("    %-50s %s\n", display, t.CompletedOn.Format("2006-01-02"))
 		}
 	}
 	return nil
-}
-
-// completedOnFromRaw extracts a completion date from a done.txt
-// entry's Raw form. Bypasses domain.NewTask's parser, which (as of
-// 2026-05-16) silently fails to populate Task.CompletedOn even when
-// the date is present at the expected position. The parser bug is
-// real but its fix lives deeper than the report feature — the
-// workaround here keeps the report functional today.
-//
-// Captured in TODO.md so the parser fix can be promoted into its
-// own piece of work later.
-func completedOnFromRaw(raw string) time.Time {
-	parts := strings.SplitN(raw, " ", 3)
-	if len(parts) < 2 || parts[0] != "x" {
-		return time.Time{}
-	}
-	// Parse in local time so today's tasks compare correctly against
-	// "now" across timezone boundaries. The date in the file is a
-	// calendar date, not a UTC timestamp.
-	t, err := time.ParseInLocation("2006-01-02", parts[1], time.Local)
-	if err != nil {
-		return time.Time{}
-	}
-	return t
 }
 
 func startOfDay(t time.Time) time.Time {

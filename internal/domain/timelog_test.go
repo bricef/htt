@@ -143,3 +143,85 @@ func TestTimelog_Duration_ErrorOnMalformedTimestamp(t *testing.T) {
 		t.Errorf("Duration should error on malformed timestamp")
 	}
 }
+
+// timestampedEntry builds a Task whose ts: annotation is set to a
+// fixed time. Helper for the Spans tests below where we want
+// determinism rather than the "5 seconds ago" relative trick.
+func timestampedEntry(t *testing.T, body string, ts time.Time) *Task {
+	t.Helper()
+	entry := mustTask(t, body)
+	if _, err := entry.Annotate(TimelogTimestampLabel, ts.Format(time.RFC3339)); err != nil {
+		t.Fatalf("Annotate: %v", err)
+	}
+	return entry
+}
+
+func TestTimelog_Spans_EmptyAndSingleEntryYieldNoSpans(t *testing.T) {
+	for _, n := range []int{0, 1} {
+		l := &Timelog{}
+		if n == 1 {
+			l.Entries = []*Task{timestampedEntry(t, "only", time.Now())}
+		}
+		spans, err := l.Spans()
+		if err != nil {
+			t.Errorf("Spans with %d entries: %v", n, err)
+		}
+		if len(spans) != 0 {
+			t.Errorf("Spans with %d entries should be empty, got %d", n, len(spans))
+		}
+	}
+}
+
+func TestTimelog_Spans_PairwiseDurations(t *testing.T) {
+	base := time.Date(2026, 5, 15, 9, 0, 0, 0, time.UTC)
+	l := &Timelog{Entries: []*Task{
+		timestampedEntry(t, "first thing", base),
+		timestampedEntry(t, "second thing", base.Add(15*time.Minute)),
+		timestampedEntry(t, "third thing", base.Add(45*time.Minute)),
+		timestampedEntry(t, "@end", base.Add(60*time.Minute)),
+	}}
+
+	spans, err := l.Spans()
+	if err != nil {
+		t.Fatalf("Spans: %v", err)
+	}
+	want := []time.Duration{15 * time.Minute, 30 * time.Minute, 15 * time.Minute}
+	if len(spans) != len(want) {
+		t.Fatalf("len(spans) = %d, want %d", len(spans), len(want))
+	}
+	for i, span := range spans {
+		if span.Duration != want[i] {
+			t.Errorf("spans[%d].Duration = %v, want %v", i, span.Duration, want[i])
+		}
+		if span.Entry != l.Entries[i] {
+			t.Errorf("spans[%d].Entry should point to Entries[%d]", i, i)
+		}
+	}
+	// The trailing entry (@end) has no closed span — the user is still
+	// in that state from the report's perspective.
+}
+
+func TestTimelog_Spans_ErrorOnMissingAnnotation(t *testing.T) {
+	good := timestampedEntry(t, "ok", time.Now())
+	bad := mustTask(t, "missing ts")
+	l := &Timelog{Entries: []*Task{good, bad}}
+
+	_, err := l.Spans()
+	if err == nil {
+		t.Errorf("Spans should error when an entry's ts: is missing")
+	}
+}
+
+func TestTimelog_Spans_ErrorOnMalformedTimestamp(t *testing.T) {
+	good := timestampedEntry(t, "ok", time.Now())
+	bad := mustTask(t, "garbage ts")
+	if _, err := bad.Annotate(TimelogTimestampLabel, "definitely-not-rfc3339"); err != nil {
+		t.Fatalf("Annotate: %v", err)
+	}
+	l := &Timelog{Entries: []*Task{good, bad}}
+
+	_, err := l.Spans()
+	if err == nil {
+		t.Errorf("Spans should error on a malformed ts:")
+	}
+}

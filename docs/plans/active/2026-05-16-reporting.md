@@ -1,9 +1,25 @@
 # Reporting: "what happened this period?"
 
 **Date:** 2026-05-16
-**Status:** Proposed
+**Status:** Phase 1 complete (2026-05-16); Phases 2 & 3 deferred
 **Builds on:** the timelogs refactor (uses `domain.Timelog` and the
 `ts:` annotation as the source of truth for time spent)
+
+## Resume marker
+
+Phase 1 (the MVP `htt report` from existing data) is on `main` as
+of 2026-05-16. The command groups completions by source context
+and prints per-day time totals plus a grand total. Phases 2
+(created-on stamping for an "Added" section) and 3 (archive-on-delete
+for a "Deleted" section) remain unstarted — they need their own
+follow-up plans. Plan stays under `docs/plans/active/` until all
+three phases ship.
+
+Phase 1 surfaced one bug worth noting: `domain.NewTask` doesn't
+populate `Task.CompletedOn` even when the COMPLETEDAT token is
+present in the input. `internal/cli/report.go` works around it with
+`completedOnFromRaw` (parses `task.Raw` directly); the parser fix
+is captured in `TODO.md` under "Known bugs".
 
 ## Motivation
 

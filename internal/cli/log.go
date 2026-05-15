@@ -70,7 +70,14 @@ var Active = &cobra.Command{
 	Short: "Show active task, if any.",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// bug_004: timelogs.CurrentActive returns nil for an absent or
+		// empty log file (fresh install, day before first entry). The
+		// old code dereferenced unconditionally and panicked.
 		current := timelogs.CurrentActive()
+		if current == nil {
+			fmt.Println("No active task.")
+			return nil
+		}
 		fmt.Printf(
 			"Working on: %s (%s)\n",
 			current.RemoveAnnotation(timelogs.TimestampLabel).ColorString(),

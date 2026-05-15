@@ -81,11 +81,17 @@ func CurrentActive() *domain.Task {
 
 func CurrentDuration() time.Duration {
 	currentTask := CurrentActive()
+	// bug_004: CurrentActive returns nil when the log file is missing
+	// or empty. Returning 0 matches the "no active task" reading of
+	// CurrentActive itself, and stops the call site from nil-deref'ing
+	// before its own guard runs.
+	if currentTask == nil {
+		return 0
+	}
 	startedAt := currentTask.Annotations[TimestampLabel]
 	startTime, err := time.Parse(time.RFC3339, startedAt)
 	if err != nil {
 		utils.Fatal("Failed to parse log entry.")
 	}
 	return time.Since(startTime)
-
 }

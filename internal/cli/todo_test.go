@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/bricef/htt/internal/storage"
+	"github.com/bricef/htt/internal/vars"
+	"github.com/spf13/viper"
 )
 
 // withMemoryRepo swaps the package-level Repository for a fresh in-memory
@@ -88,6 +90,28 @@ func TestCobra_ContextSwitch_PersistsName(t *testing.T) {
 	}
 	if name != "work" {
 		t.Errorf("current = %q, want work", name)
+	}
+}
+
+func TestCobra_LogActive_HandlesEmptyLog(t *testing.T) {
+	// bug_004: timelogs.CurrentActive returns nil for a missing/empty
+	// log file. The old Active command dereferenced unconditionally and
+	// panicked on a fresh install. Now it prints "No active task." and
+	// returns cleanly.
+	withMemoryRepo(t)
+	dir := t.TempDir()
+	prev := viper.Get(vars.ConfigKeyDataDir)
+	viper.Set(vars.ConfigKeyDataDir, dir)
+	t.Cleanup(func() { viper.Set(vars.ConfigKeyDataDir, prev) })
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("log active panicked on empty log: %v", r)
+		}
+	}()
+
+	if err := runCobra(t, "log", "active"); err != nil {
+		t.Errorf("log active should not error on empty log, got %v", err)
 	}
 }
 

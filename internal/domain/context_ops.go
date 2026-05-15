@@ -60,10 +60,21 @@ func (c *Context) Replace(strID string, replacement *Task) (*Task, error) {
 
 // Move transfers the indexed task to another context (loaded via the
 // shared repo) and persists both. Returns the moved task.
+//
+// Save order is destination-first: a partial-save failure (ENOSPC,
+// EROFS, EACCES, quota) on the source then leaves the task in *both*
+// places — recoverable by re-running the move or deleting one copy.
+// Source-first would leave the task in *neither* place, a data loss.
+//
+// Same-context moves are rejected up front so the load-twice path
+// can't duplicate the task into itself.
 func (c *Context) Move(strID, toName string) (*Task, error) {
 	target, err := c.GetTaskByStrId(strID)
 	if err != nil {
 		return nil, err
+	}
+	if toName == c.Name {
+		return nil, fmt.Errorf("cannot move task to its current context %q", c.Name)
 	}
 	to, err := c.repo.Context(toName)
 	if err != nil {
@@ -73,10 +84,10 @@ func (c *Context) Move(strID, toName string) (*Task, error) {
 		return nil, err
 	}
 	to.add(target)
-	if err := c.repo.Save(c); err != nil {
+	if err := c.repo.Save(to); err != nil {
 		return nil, err
 	}
-	if err := c.repo.Save(to); err != nil {
+	if err := c.repo.Save(c); err != nil {
 		return nil, err
 	}
 	return target, nil
@@ -85,10 +96,18 @@ func (c *Context) Move(strID, toName string) (*Task, error) {
 // Complete marks the indexed task complete (annotating it with the
 // originating context name), moves it into the "done" context, and
 // persists both.
+//
+// Same save-order reasoning as Move: done is saved first so a partial
+// failure errs toward duplication over loss. Completing a task that is
+// already in the done context is rejected since the task is already
+// there and the "originating context" annotation would be misleading.
 func (c *Context) Complete(strID string) (*Task, error) {
 	target, err := c.GetTaskByStrId(strID)
 	if err != nil {
 		return nil, err
+	}
+	if c.Name == DoneContextName {
+		return nil, fmt.Errorf("cannot complete a task already in %q", DoneContextName)
 	}
 	done, err := c.repo.Context(DoneContextName)
 	if err != nil {
@@ -101,10 +120,10 @@ func (c *Context) Complete(strID string) (*Task, error) {
 		return nil, err
 	}
 	done.add(target)
-	if err := c.repo.Save(c); err != nil {
+	if err := c.repo.Save(done); err != nil {
 		return nil, err
 	}
-	if err := c.repo.Save(done); err != nil {
+	if err := c.repo.Save(c); err != nil {
 		return nil, err
 	}
 	return target, nil
@@ -112,10 +131,15 @@ func (c *Context) Complete(strID string) (*Task, error) {
 
 // SetPriority assigns priority to the indexed task and persists. Returns
 // (snapshot, mutated) so the CLI can show "Before:" / "After:". Returns
-// an error for priorities outside the valid range [A-F].
+// an error for priorities outside the valid range [A-C].
+//
+// The regex matches Task.setPriority's actual supported range. Wider
+// regexes (e.g. [A-F]) pass validation here but get silently coerced to
+// empty by setPriority — making a typo look like a clean priority-clear,
+// which is data loss without a diagnostic.
 func (c *Context) SetPriority(strID, priority string) (*Task, *Task, error) {
 	if !validPriorityRE.MatchString(priority) {
-		return nil, nil, fmt.Errorf("invalid priority %q", priority)
+		return nil, nil, fmt.Errorf("invalid priority %q (must be one of A, B, C)", priority)
 	}
 	return c.priorityTransform(strID, func(t *Task) *Task { return t.setPriority(priority) })
 }
@@ -130,12 +154,19 @@ func (c *Context) DecreasePriority(strID string) (*Task, *Task, error) {
 	return c.priorityTransform(strID, func(t *Task) *Task { return t.decreasePriority() })
 }
 
-// priorityTransform centralises the snapshot-mutate-save pattern shared by
-// SetPriority / IncreasePriority / DecreasePriority. Snapshot must happen
-// before transform: the Task mutators (t.SetPriority, t.IncreasePriority,
-// t.DecreasePriority) all mutate the receiver in place and return the
-// same pointer, so without a pre-snapshot a "Before:" view would render
-// the post-mutation state.
+// priorityTransform centralises the snapshot-mutate-sort-save pattern
+// shared by SetPriority / IncreasePriority / DecreasePriority.
+//
+// Snapshot must happen before transform: the Task mutators
+// (setPriority / increasePriority / decreasePriority) mutate the
+// receiver in place and return the same pointer, so without a
+// pre-snapshot a "Before:" view would render the post-mutation state.
+//
+// Sort must happen before Save: priority is a sort key, and the
+// on-disk file is the source of truth on the next reload (which both
+// CLI re-invocations and the TUI's refresh path use). Sorting only the
+// in-memory copy after Save would let the displayed order desync from
+// the disk order on the next refresh.
 func (c *Context) priorityTransform(strID string, transform func(*Task) *Task) (*Task, *Task, error) {
 	target, err := c.GetTaskByStrId(strID)
 	if err != nil {
@@ -146,6 +177,7 @@ func (c *Context) priorityTransform(strID string, transform func(*Task) *Task) (
 		return nil, nil, fmt.Errorf("snapshot task: %w", err)
 	}
 	mutated := transform(target)
+	c.Sort()
 	if err := c.repo.Save(c); err != nil {
 		return nil, nil, err
 	}
@@ -182,4 +214,4 @@ func (c *Context) replaceInPlace(old, new *Task) error {
 	return nil
 }
 
-var validPriorityRE = regexp.MustCompile(`^[ABCDEF]$`)
+var validPriorityRE = regexp.MustCompile(`^[ABC]$`)

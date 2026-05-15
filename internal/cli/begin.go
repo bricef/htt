@@ -3,7 +3,7 @@ package cli
 import (
 	"fmt"
 
-	"github.com/bricef/htt/internal/timelogs"
+	"github.com/bricef/htt/internal/domain"
 	"github.com/spf13/cobra"
 )
 
@@ -21,8 +21,16 @@ var Begin = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("find task: %w", err)
 		}
-		timelogs.AddEntry(t)
-		return nil
+		// Make a fresh copy so the ts: annotation Timelog.Append adds
+		// stays in the timelog and doesn't bleed back into the
+		// context's in-memory state. Legacy behaviour was equivalent
+		// (ctx was never saved after the AddEntry call), but the copy
+		// makes the boundary explicit.
+		entry, err := domain.NewTask(t.Raw)
+		if err != nil {
+			return fmt.Errorf("copy task: %w", err)
+		}
+		return appendToday(entry)
 	},
 }
 

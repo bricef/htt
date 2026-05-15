@@ -190,3 +190,48 @@ func TestCobra_LogEnd_ThenStatus_ReportsEndAsActive(t *testing.T) {
 		t.Errorf("log status after end: %v", err)
 	}
 }
+
+func TestCobra_Report_RunsCleanlyWithEmptyData(t *testing.T) {
+	// Smoke: empty repo + empty timelog, default --since 7d, no error.
+	withMemoryRepo(t)
+	withMemoryTimelogRepo(t)
+
+	if err := runCobra(t, "report"); err != nil {
+		t.Errorf("report on empty data should not error, got %v", err)
+	}
+}
+
+func TestCobra_Report_WithSeededData(t *testing.T) {
+	// Seed a completed task and a couple of timelog entries, then run
+	// report. The in-process Cobra runner doesn't capture stdout, so
+	// this is a smoke: the report should walk the data without
+	// erroring on parsing or arithmetic.
+	withMemoryRepo(t)
+	withMemoryTimelogRepo(t)
+
+	if err := runCobra(t, "todo", "add", "buy", "milk"); err != nil {
+		t.Fatalf("todo add: %v", err)
+	}
+	if err := runCobra(t, "todo", "do", "0"); err != nil {
+		t.Fatalf("todo do: %v", err)
+	}
+	if err := runCobra(t, "log", "add", "morning", "review"); err != nil {
+		t.Fatalf("log add #1: %v", err)
+	}
+	if err := runCobra(t, "log", "add", "writing", "code"); err != nil {
+		t.Fatalf("log add #2: %v", err)
+	}
+
+	if err := runCobra(t, "report", "--since", "7d"); err != nil {
+		t.Errorf("report --since 7d: %v", err)
+	}
+}
+
+func TestCobra_Report_InvalidSinceErrors(t *testing.T) {
+	withMemoryRepo(t)
+	withMemoryTimelogRepo(t)
+
+	if err := runCobra(t, "report", "--since", "yesterday"); err == nil {
+		t.Errorf("report --since yesterday should error (unknown format)")
+	}
+}

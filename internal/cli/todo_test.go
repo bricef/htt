@@ -24,6 +24,18 @@ func withMemoryRepo(t *testing.T) *storage.MemoryRepository {
 	return repo
 }
 
+// withMemoryTimelogRepo is the timelogRepo counterpart of
+// withMemoryRepo. Same parallelism caveat: not safe to run alongside
+// other tests that touch RootCmd or the timelogRepo() injection point.
+func withMemoryTimelogRepo(t *testing.T) *storage.MemoryTimelogRepository {
+	t.Helper()
+	repo := storage.NewMemoryTimelogRepository()
+	prev := defaultTimelogRepo
+	SetTimelogRepository(repo)
+	t.Cleanup(func() { SetTimelogRepository(prev) })
+	return repo
+}
+
 // runCobra invokes RootCmd with the given args. Returns the error from
 // Execute() — useful for verifying RunE error propagation. Stdout is not
 // captured (commands use fmt.Printf directly); use the e2e harness for

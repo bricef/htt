@@ -4,6 +4,11 @@
 list manager and time tracker. Tasks live in plain-text files; an
 optional git-backed sync mode is included for cross-machine use.
 
+New to `htt`? [`GETTING-STARTED.md`](GETTING-STARTED.md) is a
+fifteen-minute walkthrough of the realistic workflow — add a task,
+prioritise it, complete it, organise with contexts, log time against
+it.
+
 ## Installation
 
 With a working Go toolchain:

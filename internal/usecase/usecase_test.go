@@ -16,9 +16,9 @@ func newUC(t *testing.T) (*UseCases, *storage.MemoryRepository) {
 
 func mustLoad(t *testing.T, repo *storage.MemoryRepository, name string) *domain.Context {
 	t.Helper()
-	ctx, err := repo.LoadContext(name)
+	ctx, err := repo.Context(name)
 	if err != nil {
-		t.Fatalf("LoadContext(%q): %v", name, err)
+		t.Fatalf("Context(%q): %v", name, err)
 	}
 	return ctx
 }

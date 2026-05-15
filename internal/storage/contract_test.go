@@ -17,15 +17,15 @@ func mustTask(t *testing.T, raw string) *domain.Task {
 	return task
 }
 
-// runRepositoryContract exercises the behaviors every Repository
-// implementation must satisfy. file.go's TestFileRepository_Contract will
-// invoke the same suite against the file-backed impl in Step 6.
-func runRepositoryContract(t *testing.T, newRepo func(t *testing.T) Repository) {
+// runRepositoryContract exercises the behaviors every domain.Repository
+// implementation must satisfy. file_test.go runs the same suite against
+// the file-backed impl.
+func runRepositoryContract(t *testing.T, newRepo func(t *testing.T) domain.Repository) {
 	t.Helper()
 
-	t.Run("LoadContext returns empty for an unknown name", func(t *testing.T) {
+	t.Run("Context returns empty for an unknown name", func(t *testing.T) {
 		r := newRepo(t)
-		ctx, err := r.LoadContext("never-saved")
+		ctx, err := r.Context("never-saved")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -37,19 +37,19 @@ func runRepositoryContract(t *testing.T, newRepo func(t *testing.T) Repository) 
 		}
 	})
 
-	t.Run("SaveContext then LoadContext round-trips", func(t *testing.T) {
+	t.Run("Save then Context round-trips", func(t *testing.T) {
 		r := newRepo(t)
 		original := &domain.Context{
 			Name: "todo",
 			Tasks: []*domain.Task{
-				mustTask(t,"buy milk"),
-				mustTask(t,"(A) call alice"),
+				mustTask(t, "buy milk"),
+				mustTask(t, "(A) call alice"),
 			},
 		}
-		if err := r.SaveContext(original); err != nil {
+		if err := r.Save(original); err != nil {
 			t.Fatalf("save: %v", err)
 		}
-		loaded, err := r.LoadContext("todo")
+		loaded, err := r.Context("todo")
 		if err != nil {
 			t.Fatalf("load: %v", err)
 		}
@@ -67,17 +67,17 @@ func runRepositoryContract(t *testing.T, newRepo func(t *testing.T) Repository) 
 		}
 	})
 
-	t.Run("SaveContext preserves task order", func(t *testing.T) {
+	t.Run("Save preserves task order", func(t *testing.T) {
 		r := newRepo(t)
 		raws := []string{"first", "second", "third", "fourth"}
 		tasks := make([]*domain.Task, len(raws))
 		for i, raw := range raws {
-			tasks[i] = mustTask(t,raw)
+			tasks[i] = mustTask(t, raw)
 		}
-		if err := r.SaveContext(&domain.Context{Name: "ordered", Tasks: tasks}); err != nil {
+		if err := r.Save(&domain.Context{Name: "ordered", Tasks: tasks}); err != nil {
 			t.Fatalf("save: %v", err)
 		}
-		loaded, err := r.LoadContext("ordered")
+		loaded, err := r.Context("ordered")
 		if err != nil {
 			t.Fatalf("load: %v", err)
 		}
@@ -88,17 +88,17 @@ func runRepositoryContract(t *testing.T, newRepo func(t *testing.T) Repository) 
 		}
 	})
 
-	t.Run("SaveContext overwrites prior state", func(t *testing.T) {
+	t.Run("Save overwrites prior state", func(t *testing.T) {
 		r := newRepo(t)
-		_ = r.SaveContext(&domain.Context{
+		_ = r.Save(&domain.Context{
 			Name:  "todo",
-			Tasks: []*domain.Task{mustTask(t,"v1 task")},
+			Tasks: []*domain.Task{mustTask(t, "v1 task")},
 		})
-		_ = r.SaveContext(&domain.Context{
+		_ = r.Save(&domain.Context{
 			Name:  "todo",
-			Tasks: []*domain.Task{mustTask(t,"v2 task a"), mustTask(t,"v2 task b")},
+			Tasks: []*domain.Task{mustTask(t, "v2 task a"), mustTask(t, "v2 task b")},
 		})
-		loaded, err := r.LoadContext("todo")
+		loaded, err := r.Context("todo")
 		if err != nil {
 			t.Fatalf("load: %v", err)
 		}
@@ -110,9 +110,9 @@ func runRepositoryContract(t *testing.T, newRepo func(t *testing.T) Repository) 
 		}
 	})
 
-	t.Run("ListContexts returns all saved context names", func(t *testing.T) {
+	t.Run("ContextNames returns all saved context names", func(t *testing.T) {
 		r := newRepo(t)
-		names, err := r.ListContexts()
+		names, err := r.ContextNames()
 		if err != nil {
 			t.Fatalf("list: %v", err)
 		}
@@ -120,11 +120,11 @@ func runRepositoryContract(t *testing.T, newRepo func(t *testing.T) Repository) 
 			t.Errorf("fresh repo should list 0 contexts, got %v", names)
 		}
 
-		_ = r.SaveContext(&domain.Context{Name: "todo", Tasks: []*domain.Task{mustTask(t,"a")}})
-		_ = r.SaveContext(&domain.Context{Name: "work", Tasks: []*domain.Task{mustTask(t,"b")}})
-		_ = r.SaveContext(&domain.Context{Name: "done", Tasks: []*domain.Task{mustTask(t,"x c")}})
+		_ = r.Save(&domain.Context{Name: "todo", Tasks: []*domain.Task{mustTask(t, "a")}})
+		_ = r.Save(&domain.Context{Name: "work", Tasks: []*domain.Task{mustTask(t, "b")}})
+		_ = r.Save(&domain.Context{Name: "done", Tasks: []*domain.Task{mustTask(t, "x c")}})
 
-		names, err = r.ListContexts()
+		names, err = r.ContextNames()
 		if err != nil {
 			t.Fatalf("list: %v", err)
 		}
@@ -134,28 +134,96 @@ func runRepositoryContract(t *testing.T, newRepo func(t *testing.T) Repository) 
 		}
 		for _, want := range []string{"todo", "work", "done"} {
 			if !got[want] {
-				t.Errorf("ListContexts missing %q; got %v", want, names)
+				t.Errorf("ContextNames missing %q; got %v", want, names)
 			}
 		}
 	})
 
-	t.Run("GetCurrentContextName defaults to todo", func(t *testing.T) {
+	t.Run("Contexts returns every persisted context with tasks loaded", func(t *testing.T) {
 		r := newRepo(t)
-		name, err := r.GetCurrentContextName()
+
+		// Fresh store: empty list, not nil.
+		all, err := r.Contexts()
 		if err != nil {
-			t.Fatalf("get: %v", err)
+			t.Fatalf("Contexts: %v", err)
 		}
-		if name != DefaultContextName {
-			t.Errorf("default current context = %q, want %q", name, DefaultContextName)
+		if all == nil {
+			t.Fatalf("Contexts on empty store returned nil, want empty slice")
+		}
+		if len(all) != 0 {
+			t.Errorf("fresh repo Contexts = %v, want empty", all)
+		}
+
+		_ = r.Save(&domain.Context{Name: "todo", Tasks: []*domain.Task{mustTask(t, "a1"), mustTask(t, "a2")}})
+		_ = r.Save(&domain.Context{Name: "work", Tasks: []*domain.Task{mustTask(t, "b1")}})
+
+		all, err = r.Contexts()
+		if err != nil {
+			t.Fatalf("Contexts: %v", err)
+		}
+		byName := map[string]*domain.Context{}
+		for _, c := range all {
+			byName[c.Name] = c
+		}
+		if got := byName["todo"]; got == nil || len(got.Tasks) != 2 {
+			t.Errorf("todo context not loaded with tasks; got %#v", got)
+		}
+		if got := byName["work"]; got == nil || len(got.Tasks) != 1 {
+			t.Errorf("work context not loaded with tasks; got %#v", got)
 		}
 	})
 
-	t.Run("SetCurrentContextName persists and round-trips", func(t *testing.T) {
+	t.Run("CurrentContextName defaults to todo", func(t *testing.T) {
 		r := newRepo(t)
-		if err := r.SetCurrentContextName("work"); err != nil {
+		name, err := r.CurrentContextName()
+		if err != nil {
+			t.Fatalf("get: %v", err)
+		}
+		if name != domain.DefaultContextName {
+			t.Errorf("default current context = %q, want %q", name, domain.DefaultContextName)
+		}
+	})
+
+	t.Run("CurrentContext defaults to todo and is loaded", func(t *testing.T) {
+		r := newRepo(t)
+
+		// No pointer set, no tasks saved: empty todo context.
+		ctx, err := r.CurrentContext()
+		if err != nil {
+			t.Fatalf("CurrentContext on fresh repo: %v", err)
+		}
+		if ctx.Name != domain.DefaultContextName {
+			t.Errorf("Name = %q, want %q", ctx.Name, domain.DefaultContextName)
+		}
+		if len(ctx.Tasks) != 0 {
+			t.Errorf("fresh CurrentContext should have no tasks, got %v", ctx.Tasks)
+		}
+
+		// After SetCurrent + Save, CurrentContext returns that context with tasks.
+		if err := r.Save(&domain.Context{Name: "work", Tasks: []*domain.Task{mustTask(t, "ship")}}); err != nil {
+			t.Fatalf("save work: %v", err)
+		}
+		if err := r.SetCurrent("work"); err != nil {
+			t.Fatalf("SetCurrent: %v", err)
+		}
+		ctx, err = r.CurrentContext()
+		if err != nil {
+			t.Fatalf("CurrentContext after switch: %v", err)
+		}
+		if ctx.Name != "work" {
+			t.Errorf("Name = %q, want work", ctx.Name)
+		}
+		if len(ctx.Tasks) != 1 || ctx.Tasks[0].Raw != "ship" {
+			t.Errorf("tasks = %v, want one ship task", ctx.Tasks)
+		}
+	})
+
+	t.Run("SetCurrent persists and round-trips", func(t *testing.T) {
+		r := newRepo(t)
+		if err := r.SetCurrent("work"); err != nil {
 			t.Fatalf("set: %v", err)
 		}
-		name, err := r.GetCurrentContextName()
+		name, err := r.CurrentContextName()
 		if err != nil {
 			t.Fatalf("get: %v", err)
 		}
@@ -164,32 +232,49 @@ func runRepositoryContract(t *testing.T, newRepo func(t *testing.T) Repository) 
 		}
 	})
 
-	t.Run("Empty names are rejected", func(t *testing.T) {
+	t.Run("SetCurrent sanitizes non-word characters", func(t *testing.T) {
+		// Sanitization (non-word → underscore) moved from usecase.SwitchContext
+		// into Repository.SetCurrent so every caller benefits. Pinning the
+		// behavior here keeps the contract honest after the move.
 		r := newRepo(t)
-		if err := r.SaveContext(&domain.Context{Name: ""}); !errors.Is(err, ErrInvalidContextName) {
-			t.Errorf("SaveContext(\"\"): err = %v, want ErrInvalidContextName", err)
+		if err := r.SetCurrent("hello world!"); err != nil {
+			t.Fatalf("SetCurrent: %v", err)
 		}
-		if _, err := r.LoadContext(""); !errors.Is(err, ErrInvalidContextName) {
-			t.Errorf("LoadContext(\"\"): err = %v, want ErrInvalidContextName", err)
+		name, err := r.CurrentContextName()
+		if err != nil {
+			t.Fatalf("CurrentContextName: %v", err)
 		}
-		if err := r.SetCurrentContextName(""); !errors.Is(err, ErrInvalidContextName) {
-			t.Errorf("SetCurrentContextName(\"\"): err = %v, want ErrInvalidContextName", err)
+		if name != "hello_world_" {
+			t.Errorf("persisted name = %q, want hello_world_", name)
 		}
 	})
 
-	t.Run("SaveContext does not alias caller's task slice", func(t *testing.T) {
+	t.Run("Empty names are rejected", func(t *testing.T) {
+		r := newRepo(t)
+		if err := r.Save(&domain.Context{Name: ""}); !errors.Is(err, domain.ErrInvalidContextName) {
+			t.Errorf("Save(\"\"): err = %v, want ErrInvalidContextName", err)
+		}
+		if _, err := r.Context(""); !errors.Is(err, domain.ErrInvalidContextName) {
+			t.Errorf("Context(\"\"): err = %v, want ErrInvalidContextName", err)
+		}
+		if err := r.SetCurrent(""); !errors.Is(err, domain.ErrInvalidContextName) {
+			t.Errorf("SetCurrent(\"\"): err = %v, want ErrInvalidContextName", err)
+		}
+	})
+
+	t.Run("Save does not alias caller's task slice", func(t *testing.T) {
 		r := newRepo(t)
 		input := &domain.Context{
 			Name:  "todo",
-			Tasks: []*domain.Task{mustTask(t,"original")},
+			Tasks: []*domain.Task{mustTask(t, "original")},
 		}
-		if err := r.SaveContext(input); err != nil {
+		if err := r.Save(input); err != nil {
 			t.Fatalf("save: %v", err)
 		}
 
-		input.Tasks = append(input.Tasks, mustTask(t,"mutation after save"))
+		input.Tasks = append(input.Tasks, mustTask(t, "mutation after save"))
 
-		loaded, err := r.LoadContext("todo")
+		loaded, err := r.Context("todo")
 		if err != nil {
 			t.Fatalf("load: %v", err)
 		}
@@ -200,7 +285,7 @@ func runRepositoryContract(t *testing.T, newRepo func(t *testing.T) Repository) 
 }
 
 func TestMemoryRepository_Contract(t *testing.T) {
-	runRepositoryContract(t, func(t *testing.T) Repository {
+	runRepositoryContract(t, func(t *testing.T) domain.Repository {
 		return NewMemoryRepository()
 	})
 }

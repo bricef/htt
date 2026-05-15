@@ -4,10 +4,11 @@ import (
 	"sort"
 
 	"github.com/bricef/htt/internal/domain"
+	"github.com/bricef/htt/internal/utils"
 )
 
-// MemoryRepository is an in-memory Repository implementation for tests.
-// Not safe for concurrent use; tests don't need it.
+// MemoryRepository is an in-memory domain.Repository implementation for
+// tests. Not safe for concurrent use; tests don't need it.
 type MemoryRepository struct {
 	contexts map[string][]*domain.Task
 	current  string
@@ -19,7 +20,7 @@ func NewMemoryRepository() *MemoryRepository {
 	}
 }
 
-func (r *MemoryRepository) ListContexts() ([]string, error) {
+func (r *MemoryRepository) ContextNames() ([]string, error) {
 	names := make([]string, 0, len(r.contexts))
 	for name := range r.contexts {
 		names = append(names, name)
@@ -28,9 +29,9 @@ func (r *MemoryRepository) ListContexts() ([]string, error) {
 	return names, nil
 }
 
-func (r *MemoryRepository) LoadContext(name string) (*domain.Context, error) {
+func (r *MemoryRepository) Context(name string) (*domain.Context, error) {
 	if name == "" {
-		return nil, ErrInvalidContextName
+		return nil, domain.ErrInvalidContextName
 	}
 	stored := r.contexts[name]
 	tasks := make([]*domain.Task, len(stored))
@@ -38,9 +39,25 @@ func (r *MemoryRepository) LoadContext(name string) (*domain.Context, error) {
 	return &domain.Context{Name: name, Tasks: tasks}, nil
 }
 
-func (r *MemoryRepository) SaveContext(ctx *domain.Context) error {
+func (r *MemoryRepository) Contexts() ([]*domain.Context, error) {
+	names, err := r.ContextNames()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*domain.Context, 0, len(names))
+	for _, name := range names {
+		ctx, err := r.Context(name)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, ctx)
+	}
+	return out, nil
+}
+
+func (r *MemoryRepository) Save(ctx *domain.Context) error {
 	if ctx == nil || ctx.Name == "" {
-		return ErrInvalidContextName
+		return domain.ErrInvalidContextName
 	}
 	tasks := make([]*domain.Task, len(ctx.Tasks))
 	copy(tasks, ctx.Tasks)
@@ -48,17 +65,26 @@ func (r *MemoryRepository) SaveContext(ctx *domain.Context) error {
 	return nil
 }
 
-func (r *MemoryRepository) GetCurrentContextName() (string, error) {
+func (r *MemoryRepository) CurrentContextName() (string, error) {
 	if r.current == "" {
-		return DefaultContextName, nil
+		return domain.DefaultContextName, nil
 	}
 	return r.current, nil
 }
 
-func (r *MemoryRepository) SetCurrentContextName(name string) error {
-	if name == "" {
-		return ErrInvalidContextName
+func (r *MemoryRepository) CurrentContext() (*domain.Context, error) {
+	name, err := r.CurrentContextName()
+	if err != nil {
+		return nil, err
 	}
-	r.current = name
+	return r.Context(name)
+}
+
+func (r *MemoryRepository) SetCurrent(name string) error {
+	sanitized := utils.StringToFilename(name)
+	if sanitized == "" {
+		return domain.ErrInvalidContextName
+	}
+	r.current = sanitized
 	return nil
 }

@@ -68,9 +68,9 @@ func (e *tuiEnv) start(contextName string) {
 	e.t.Helper()
 	repo := storage.NewFileRepository(e.dataDir)
 	uc := usecase.New(repo)
-	ctx, err := repo.LoadContext(contextName)
+	ctx, err := repo.Context(contextName)
 	if err != nil {
-		e.t.Fatalf("LoadContext(%q): %v", contextName, err)
+		e.t.Fatalf("Context(%q): %v", contextName, err)
 	}
 	e.model = tuipkg.Model(uc, ctx)
 	e.send(tea.WindowSizeMsg{Width: 120, Height: 40})

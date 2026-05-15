@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/bricef/htt/internal/domain"
+	"github.com/bricef/htt/internal/utils"
 )
 
 const (
@@ -23,10 +24,10 @@ const (
 // internal/todo so the file format is preserved byte-for-byte for users
 // migrating from an existing installation.
 //
-// Unlike the legacy todo.Context.Read/Sync pair, LoadContext is read-only:
-// it never writes the file back. This deliberately fixes the long-standing
-// bug where todo.Context.Read called Add (which called Sync) on every line,
-// causing every read to overwrite the file.
+// Unlike the legacy todo.Context.Read/Sync pair, Context is read-only: it
+// never writes the file back. This deliberately fixes the long-standing
+// bug where todo.Context.Read called Add (which called Sync) on every
+// line, causing every read to overwrite the file.
 type FileRepository struct {
 	dataDir string
 }
@@ -43,7 +44,7 @@ func (r *FileRepository) currentPointerPath() string {
 	return filepath.Join(r.dataDir, currentContextFile)
 }
 
-func (r *FileRepository) ListContexts() ([]string, error) {
+func (r *FileRepository) ContextNames() ([]string, error) {
 	entries, err := os.ReadDir(r.dataDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -67,9 +68,9 @@ func (r *FileRepository) ListContexts() ([]string, error) {
 	return names, nil
 }
 
-func (r *FileRepository) LoadContext(name string) (*domain.Context, error) {
+func (r *FileRepository) Context(name string) (*domain.Context, error) {
 	if name == "" {
-		return nil, ErrInvalidContextName
+		return nil, domain.ErrInvalidContextName
 	}
 
 	ctx := &domain.Context{Name: name, Tasks: []*domain.Task{}}
@@ -105,9 +106,25 @@ func (r *FileRepository) LoadContext(name string) (*domain.Context, error) {
 	return ctx, nil
 }
 
-func (r *FileRepository) SaveContext(ctx *domain.Context) error {
+func (r *FileRepository) Contexts() ([]*domain.Context, error) {
+	names, err := r.ContextNames()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*domain.Context, 0, len(names))
+	for _, name := range names {
+		ctx, err := r.Context(name)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, ctx)
+	}
+	return out, nil
+}
+
+func (r *FileRepository) Save(ctx *domain.Context) error {
 	if ctx == nil || ctx.Name == "" {
-		return ErrInvalidContextName
+		return domain.ErrInvalidContextName
 	}
 
 	if err := os.MkdirAll(r.dataDir, dirMode); err != nil {
@@ -137,29 +154,38 @@ func (r *FileRepository) SaveContext(ctx *domain.Context) error {
 	return nil
 }
 
-func (r *FileRepository) GetCurrentContextName() (string, error) {
+func (r *FileRepository) CurrentContextName() (string, error) {
 	b, err := os.ReadFile(r.currentPointerPath())
 	if err != nil {
 		if os.IsNotExist(err) {
-			return DefaultContextName, nil
+			return domain.DefaultContextName, nil
 		}
 		return "", fmt.Errorf("read current-context: %w", err)
 	}
 	name := strings.TrimSpace(string(b))
 	if name == "" {
-		return DefaultContextName, nil
+		return domain.DefaultContextName, nil
 	}
 	return name, nil
 }
 
-func (r *FileRepository) SetCurrentContextName(name string) error {
-	if name == "" {
-		return ErrInvalidContextName
+func (r *FileRepository) CurrentContext() (*domain.Context, error) {
+	name, err := r.CurrentContextName()
+	if err != nil {
+		return nil, err
+	}
+	return r.Context(name)
+}
+
+func (r *FileRepository) SetCurrent(name string) error {
+	sanitized := utils.StringToFilename(name)
+	if sanitized == "" {
+		return domain.ErrInvalidContextName
 	}
 	if err := os.MkdirAll(r.dataDir, dirMode); err != nil {
 		return fmt.Errorf("ensure data dir: %w", err)
 	}
-	if err := os.WriteFile(r.currentPointerPath(), []byte(name), fileMode); err != nil {
+	if err := os.WriteFile(r.currentPointerPath(), []byte(sanitized), fileMode); err != nil {
 		return fmt.Errorf("write current-context: %w", err)
 	}
 	return nil

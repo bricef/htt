@@ -40,9 +40,9 @@ func TestCobra_AddCommand_PersistsToRepo(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	ctx, err := repo.LoadContext("todo")
+	ctx, err := repo.Context("todo")
 	if err != nil {
-		t.Fatalf("LoadContext: %v", err)
+		t.Fatalf("Context: %v", err)
 	}
 	if len(ctx.Tasks) != 1 || ctx.Tasks[0].Raw != "buy milk" {
 		t.Errorf("repo state = %v, want one task 'buy milk'", ctx.Tasks)
@@ -83,9 +83,9 @@ func TestCobra_ContextSwitch_PersistsName(t *testing.T) {
 	if err := runCobra(t, "todo", "context", "work"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	name, err := repo.GetCurrentContextName()
+	name, err := repo.CurrentContextName()
 	if err != nil {
-		t.Fatalf("GetCurrentContextName: %v", err)
+		t.Fatalf("CurrentContextName: %v", err)
 	}
 	if name != "work" {
 		t.Errorf("current = %q, want work", name)
@@ -101,11 +101,11 @@ func TestCobra_DoCommand_MovesToDone(t *testing.T) {
 		t.Fatalf("do: %v", err)
 	}
 
-	todoCtx, _ := repo.LoadContext("todo")
+	todoCtx, _ := repo.Context("todo")
 	if len(todoCtx.Tasks) != 0 {
 		t.Errorf("todo should be empty, got %v", todoCtx.Tasks)
 	}
-	doneCtx, _ := repo.LoadContext("done")
+	doneCtx, _ := repo.Context("done")
 	if len(doneCtx.Tasks) != 1 || !strings.Contains(doneCtx.Tasks[0].Raw, "make tea") {
 		t.Errorf("done should contain completed task, got %v", doneCtx.Tasks)
 	}

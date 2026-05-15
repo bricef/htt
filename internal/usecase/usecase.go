@@ -1,4 +1,4 @@
-// Package usecase wraps storage.Repository with the business operations
+// Package usecase wraps domain.Repository with the business operations
 // that CLI and TUI presentation code call into. Use cases return domain
 // values and errors; they do not print, exit, or read viper config.
 package usecase
@@ -9,8 +9,6 @@ import (
 	"time"
 
 	"github.com/bricef/htt/internal/domain"
-	"github.com/bricef/htt/internal/storage"
-	"github.com/bricef/htt/internal/utils"
 )
 
 // DoneContextName is the conventional target for completed tasks.
@@ -18,16 +16,16 @@ const DoneContextName = "done"
 
 // UseCases bundles every business operation against a single Repository.
 type UseCases struct {
-	repo storage.Repository
+	repo domain.Repository
 }
 
-func New(repo storage.Repository) *UseCases {
+func New(repo domain.Repository) *UseCases {
 	return &UseCases{repo: repo}
 }
 
 // AddTask appends a new task to the current context.
 func (u *UseCases) AddTask(raw string) (*domain.Task, *domain.Context, error) {
-	name, err := u.repo.GetCurrentContextName()
+	name, err := u.repo.CurrentContextName()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -40,12 +38,12 @@ func (u *UseCases) AddTaskTo(contextName, raw string) (*domain.Task, *domain.Con
 	if err != nil {
 		return nil, nil, fmt.Errorf("parse task: %w", err)
 	}
-	ctx, err := u.repo.LoadContext(contextName)
+	ctx, err := u.repo.Context(contextName)
 	if err != nil {
 		return nil, nil, err
 	}
 	ctx.Tasks = append(ctx.Tasks, task)
-	if err := u.repo.SaveContext(ctx); err != nil {
+	if err := u.repo.Save(ctx); err != nil {
 		return nil, nil, err
 	}
 	return task, ctx, nil
@@ -54,11 +52,7 @@ func (u *UseCases) AddTaskTo(contextName, raw string) (*domain.Task, *domain.Con
 // CompleteTask marks the indexed task in the current context complete,
 // annotates it with the originating context, and moves it to "done".
 func (u *UseCases) CompleteTask(strID string) (*domain.Task, error) {
-	currentName, err := u.repo.GetCurrentContextName()
-	if err != nil {
-		return nil, err
-	}
-	current, err := u.repo.LoadContext(currentName)
+	current, err := u.repo.CurrentContext()
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +61,7 @@ func (u *UseCases) CompleteTask(strID string) (*domain.Task, error) {
 		return nil, err
 	}
 
-	done, err := u.repo.LoadContext(DoneContextName)
+	done, err := u.repo.Context(DoneContextName)
 	if err != nil {
 		return nil, err
 	}
@@ -81,10 +75,10 @@ func (u *UseCases) CompleteTask(strID string) (*domain.Task, error) {
 	}
 	done.Tasks = append(done.Tasks, task)
 
-	if err := u.repo.SaveContext(current); err != nil {
+	if err := u.repo.Save(current); err != nil {
 		return nil, err
 	}
-	if err := u.repo.SaveContext(done); err != nil {
+	if err := u.repo.Save(done); err != nil {
 		return nil, err
 	}
 	return task, nil
@@ -92,11 +86,7 @@ func (u *UseCases) CompleteTask(strID string) (*domain.Task, error) {
 
 // DeleteTask removes the indexed task from the current context.
 func (u *UseCases) DeleteTask(strID string) (*domain.Task, error) {
-	currentName, err := u.repo.GetCurrentContextName()
-	if err != nil {
-		return nil, err
-	}
-	ctx, err := u.repo.LoadContext(currentName)
+	ctx, err := u.repo.CurrentContext()
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +97,7 @@ func (u *UseCases) DeleteTask(strID string) (*domain.Task, error) {
 	if err := removeTask(ctx, task); err != nil {
 		return nil, err
 	}
-	if err := u.repo.SaveContext(ctx); err != nil {
+	if err := u.repo.Save(ctx); err != nil {
 		return nil, err
 	}
 	return task, nil
@@ -115,15 +105,15 @@ func (u *UseCases) DeleteTask(strID string) (*domain.Task, error) {
 
 // MoveTask moves the indexed task from the current context to another.
 func (u *UseCases) MoveTask(strID, toContextName string) (*domain.Task, string, string, error) {
-	fromName, err := u.repo.GetCurrentContextName()
+	fromName, err := u.repo.CurrentContextName()
 	if err != nil {
 		return nil, "", "", err
 	}
-	from, err := u.repo.LoadContext(fromName)
+	from, err := u.repo.Context(fromName)
 	if err != nil {
 		return nil, "", "", err
 	}
-	to, err := u.repo.LoadContext(toContextName)
+	to, err := u.repo.Context(toContextName)
 	if err != nil {
 		return nil, "", "", err
 	}
@@ -136,10 +126,10 @@ func (u *UseCases) MoveTask(strID, toContextName string) (*domain.Task, string, 
 	}
 	to.Tasks = append(to.Tasks, task)
 
-	if err := u.repo.SaveContext(from); err != nil {
+	if err := u.repo.Save(from); err != nil {
 		return nil, "", "", err
 	}
-	if err := u.repo.SaveContext(to); err != nil {
+	if err := u.repo.Save(to); err != nil {
 		return nil, "", "", err
 	}
 	return task, fromName, toContextName, nil
@@ -184,31 +174,23 @@ func (u *UseCases) DecreasePriority(strID string) (*domain.Task, *domain.Task, e
 
 // CurrentContext returns the active context with its tasks loaded.
 func (u *UseCases) CurrentContext() (*domain.Context, error) {
-	name, err := u.repo.GetCurrentContextName()
-	if err != nil {
-		return nil, err
-	}
-	return u.repo.LoadContext(name)
+	return u.repo.CurrentContext()
 }
 
 // CurrentContextName returns just the name of the active context.
 func (u *UseCases) CurrentContextName() (string, error) {
-	return u.repo.GetCurrentContextName()
+	return u.repo.CurrentContextName()
 }
 
-// SwitchContext makes the named context active. The name is sanitized
-// to a valid filename component (non-word characters become underscores),
-// matching legacy todo.SetCurrentContext behavior. Returns the sanitized
-// name actually persisted.
+// SwitchContext makes the named context active. Sanitization (non-word
+// characters → underscores) is performed by the repository; this is a
+// passthrough that returns the name actually persisted. Deleted in
+// Step 6 when callers move to repo.SetCurrent directly.
 func (u *UseCases) SwitchContext(rawName string) (string, error) {
-	name := utils.StringToFilename(rawName)
-	if name == "" {
-		return "", storage.ErrInvalidContextName
-	}
-	if err := u.repo.SetCurrentContextName(name); err != nil {
+	if err := u.repo.SetCurrent(rawName); err != nil {
 		return "", err
 	}
-	return name, nil
+	return u.repo.CurrentContextName()
 }
 
 // SearchCurrentContext returns the current context plus the subset of
@@ -232,10 +214,10 @@ func (u *UseCases) SearchCurrentContext(pattern string) (*domain.Context, []*dom
 // ListContextNames returns the names of every persisted context except
 // the conventional "done" target. The done filter matches the legacy
 // todo.GetContexts behavior used by `htt todo status`. Callers that need
-// the full set (including done) can call storage.Repository.ListContexts
+// the full set (including done) can call domain.Repository.ContextNames
 // directly.
 func (u *UseCases) ListContextNames() ([]string, error) {
-	all, err := u.repo.ListContexts()
+	all, err := u.repo.ContextNames()
 	if err != nil {
 		return nil, err
 	}
@@ -258,11 +240,7 @@ func (u *UseCases) ListContextNames() ([]string, error) {
 // return the same pointer. Without snapshotting first, callers that want to
 // print a "Before:" view (the CLI does) would see the post-mutation state.
 func (u *UseCases) swapTask(strID string, transform func(*domain.Task) (*domain.Task, error)) (*domain.Task, *domain.Task, error) {
-	currentName, err := u.repo.GetCurrentContextName()
-	if err != nil {
-		return nil, nil, err
-	}
-	ctx, err := u.repo.LoadContext(currentName)
+	ctx, err := u.repo.CurrentContext()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -281,7 +259,7 @@ func (u *UseCases) swapTask(strID string, transform func(*domain.Task) (*domain.
 	if err := ctx.Replace(target, newTask); err != nil {
 		return nil, nil, err
 	}
-	if err := u.repo.SaveContext(ctx); err != nil {
+	if err := u.repo.Save(ctx); err != nil {
 		return nil, nil, err
 	}
 	return old, newTask, nil

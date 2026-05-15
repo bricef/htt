@@ -17,7 +17,7 @@ type Context struct {
 }
 
 // NewContext returns an empty Context with the given name. Loading tasks
-// from storage is the repository's job (storage.Repository.LoadContext).
+// from storage is the repository's job (domain.Repository.Context).
 func NewContext(name string) *Context {
 	return &Context{
 		Name:  name,
@@ -30,7 +30,7 @@ func (c *Context) Equals(other *Context) bool {
 }
 
 // Add appends a task to the in-memory context. Persistence is the caller's
-// responsibility, via storage.Repository.SaveContext.
+// responsibility, via domain.Repository.Save.
 func (c *Context) Add(t *Task) *Context {
 	c.Tasks = append(c.Tasks, t)
 	return c

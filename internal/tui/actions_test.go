@@ -31,11 +31,11 @@ func seedModel(t *testing.T, contextName string, tasks ...string) (model, *stora
 	for _, raw := range tasks {
 		ctx.Tasks = append(ctx.Tasks, mustTask(t, raw))
 	}
-	if err := repo.SaveContext(ctx); err != nil {
-		t.Fatalf("SaveContext: %v", err)
+	if err := repo.Save(ctx); err != nil {
+		t.Fatalf("Save: %v", err)
 	}
-	if err := repo.SetCurrentContextName(contextName); err != nil {
-		t.Fatalf("SetCurrentContextName: %v", err)
+	if err := repo.SetCurrent(contextName); err != nil {
+		t.Fatalf("SetCurrent: %v", err)
 	}
 
 	return Model(uc, ctx), repo
@@ -58,7 +58,7 @@ func TestAction_AddTask_PersistsToRepo(t *testing.T) {
 	result, _ := AddTask.Act(m)
 	m = asModel(t, result)
 
-	stored, _ := repo.LoadContext("todo")
+	stored, _ := repo.Context("todo")
 	if len(stored.Tasks) != 1 || stored.Tasks[0].Raw != "buy bread" {
 		t.Errorf("repo state = %v", stored.Tasks)
 	}
@@ -73,7 +73,7 @@ func TestAction_AddTask_EmptyDoesNotPersist(t *testing.T) {
 
 	AddTask.Act(m)
 
-	stored, _ := repo.LoadContext("todo")
+	stored, _ := repo.Context("todo")
 	if len(stored.Tasks) != 1 || stored.Tasks[0].Raw != "existing" {
 		t.Errorf("repo should be unchanged, got %v", stored.Tasks)
 	}
@@ -86,7 +86,7 @@ func TestAction_Delete_RemovesFromCurrentContext(t *testing.T) {
 	result, _ := Delete.Act(m)
 	m = asModel(t, result)
 
-	stored, _ := repo.LoadContext("todo")
+	stored, _ := repo.Context("todo")
 	if len(stored.Tasks) != 1 || stored.Tasks[0].Raw != "keep" {
 		t.Errorf("repo state = %v", stored.Tasks)
 	}
@@ -101,11 +101,11 @@ func TestAction_Do_MovesTaskToDone(t *testing.T) {
 	result, _ := Do.Act(m)
 	m = asModel(t, result)
 
-	src, _ := repo.LoadContext("todo")
+	src, _ := repo.Context("todo")
 	if len(src.Tasks) != 0 {
 		t.Errorf("todo should be empty, got %v", src.Tasks)
 	}
-	done, _ := repo.LoadContext("done")
+	done, _ := repo.Context("done")
 	if len(done.Tasks) != 1 || !strings.Contains(done.Tasks[0].Raw, "make tea") {
 		t.Errorf("done should have completed task, got %v", done.Tasks)
 	}
@@ -133,7 +133,7 @@ func TestAction_IncreasePriority_UpdatesRepo(t *testing.T) {
 	result, _ := IncreasePriority.Act(m)
 	asModel(t, result)
 
-	stored, _ := repo.LoadContext("todo")
+	stored, _ := repo.Context("todo")
 	if !strings.Contains(stored.Tasks[0].Raw, "(B)") {
 		t.Errorf("expected (B) prefix, got %q", stored.Tasks[0].Raw)
 	}
@@ -145,7 +145,7 @@ func TestAction_DecreasePriority_UpdatesRepo(t *testing.T) {
 	result, _ := DecreasePriority.Act(m)
 	asModel(t, result)
 
-	stored, _ := repo.LoadContext("todo")
+	stored, _ := repo.Context("todo")
 	if !strings.Contains(stored.Tasks[0].Raw, "(B)") {
 		t.Errorf("expected (B) prefix, got %q", stored.Tasks[0].Raw)
 	}
@@ -177,16 +177,16 @@ func TestAction_Up_ClampsAtZero(t *testing.T) {
 
 func TestAction_NextContext_SwitchesAndRefreshes(t *testing.T) {
 	m, repo := seedModel(t, "todo", "in todo")
-	if err := repo.SaveContext(&domain.Context{
+	if err := repo.Save(&domain.Context{
 		Name:  "work",
-		Tasks: []*domain.Task{mustTask(t,"in work")},
+		Tasks: []*domain.Task{mustTask(t, "in work")},
 	}); err != nil {
 		t.Fatal(err)
 	}
 	// Rebuild model so contexts list includes both. seedModel only knew
 	// about "todo" at construction time.
 	uc := usecase.New(repo)
-	todoCtx, _ := repo.LoadContext("todo")
+	todoCtx, _ := repo.Context("todo")
 	m = Model(uc, todoCtx)
 
 	// Find the position of "todo" and step past it.
@@ -200,7 +200,7 @@ func TestAction_NextContext_SwitchesAndRefreshes(t *testing.T) {
 	result, _ := NextContext.Act(m)
 	m = asModel(t, result)
 
-	currentName, _ := repo.GetCurrentContextName()
+	currentName, _ := repo.CurrentContextName()
 	if currentName == "todo" {
 		t.Errorf("current context should have changed from todo, got %q", currentName)
 	}

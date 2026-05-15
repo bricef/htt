@@ -179,11 +179,11 @@ var editDone = &cobra.Command{
 	Args:    cobra.NoArgs,
 	Aliases: []string{"ed"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx, err := repo().Context(domain.DoneContextName)
-		if err != nil {
-			return fmt.Errorf("load done context: %w", err)
+		path := repo().ContextPath(domain.DoneContextName)
+		if path == "" {
+			return fmt.Errorf("active repository does not expose a file path")
 		}
-		utils.EditFilePath(ctx.Filepath())
+		utils.EditFilePath(path)
 		return nil
 	},
 }

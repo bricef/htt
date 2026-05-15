@@ -500,6 +500,8 @@ func (r *orderTrackingRepo) Save(c *domain.Context) error {
 	return nil
 }
 
+func (r *orderTrackingRepo) ContextPath(string) string { return "" }
+
 func TestContext_PersistentMethodsSaveThroughInjectedRepo(t *testing.T) {
 	// The Step 2 wiring invariant (TestNewContext_InjectsRepo) checks the
 	// field exists. This test verifies it's actually used: a fresh ctx

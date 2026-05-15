@@ -2,7 +2,6 @@ package domain
 
 import (
 	"fmt"
-	"path"
 	"slices"
 	"strconv"
 	"strings"
@@ -52,17 +51,6 @@ func (c *Context) Sort() *Context {
 		return strings.Compare(a, b)
 	})
 	return c
-}
-
-// Filepath returns the on-disk location of this context under the viper-
-// configured data directory. It performs no I/O — purely a path builder.
-// Kept for the two $EDITOR shell-out commands (edit-done, TUI EditFile)
-// that need a path to hand to an external process.
-//
-// TODO(refactor): a future step should move path resolution onto the
-// storage layer so domain stops depending on viper at all.
-func (c *Context) Filepath() string {
-	return path.Join(vars.Get(vars.ConfigKeyDataDir), c.Name+vars.DefaultFileExtension)
 }
 
 func (c *Context) GetTaskById(index int) (*Task, error) {

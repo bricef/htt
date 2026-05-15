@@ -89,3 +89,12 @@ func (r *MemoryRepository) SetCurrent(name string) error {
 	r.current = sanitized
 	return nil
 }
+
+// ContextPath returns the empty string for the in-memory repo; the
+// path concept is meaningless without a filesystem. The CLI's
+// `htt todo edit-done` and the TUI's EditFile action treat an empty
+// path as "not supported by this repo". Production runs with
+// FileRepository where the path is real.
+func (r *MemoryRepository) ContextPath(name string) string {
+	return ""
+}

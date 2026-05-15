@@ -52,7 +52,13 @@ func NewFileRepository(dataDir, pointerDir string) *FileRepository {
 	return &FileRepository{dataDir: dataDir, pointerDir: pointerDir}
 }
 
-func (r *FileRepository) contextPath(name string) string {
+// ContextPath builds the on-disk path for the named context file
+// under dataDir. Pure path builder; performs no I/O. Sanitizes the
+// name the same way SetCurrent does so the path is identical for any
+// caller — programmatic readers (Context / Save) and the $EDITOR
+// shellout (`htt todo edit-done`, TUI EditFile) all agree on where
+// the file lives.
+func (r *FileRepository) ContextPath(name string) string {
 	return filepath.Join(r.dataDir, utils.StringToFilename(name)+fileExtension)
 }
 
@@ -91,12 +97,12 @@ func (r *FileRepository) Context(name string) (*domain.Context, error) {
 
 	ctx := domain.NewContext(r, name)
 
-	f, err := os.Open(r.contextPath(name))
+	f, err := os.Open(r.ContextPath(name))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return ctx, nil
 		}
-		return nil, fmt.Errorf("open %s: %w", r.contextPath(name), err)
+		return nil, fmt.Errorf("open %s: %w", r.ContextPath(name), err)
 	}
 	defer f.Close()
 
@@ -110,14 +116,14 @@ func (r *FileRepository) Context(name string) (*domain.Context, error) {
 		}
 		task, err := domain.NewTask(line)
 		if err != nil {
-			return nil, fmt.Errorf("parse %s:%d: %w", r.contextPath(name), lineNo, err)
+			return nil, fmt.Errorf("parse %s:%d: %w", r.ContextPath(name), lineNo, err)
 		}
 		task.Line = lineNo
 		ctx.Tasks = append(ctx.Tasks, task)
 		lineNo++
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("scan %s: %w", r.contextPath(name), err)
+		return nil, fmt.Errorf("scan %s: %w", r.ContextPath(name), err)
 	}
 	return ctx, nil
 }
@@ -147,7 +153,7 @@ func (r *FileRepository) Save(ctx *domain.Context) error {
 		return fmt.Errorf("ensure data dir: %w", err)
 	}
 
-	path := r.contextPath(ctx.Name)
+	path := r.ContextPath(ctx.Name)
 	if _, err := os.Stat(path); err == nil {
 		if err := os.Rename(path, path+".bak"); err != nil {
 			return fmt.Errorf("backup existing file: %w", err)

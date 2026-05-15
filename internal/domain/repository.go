@@ -48,6 +48,17 @@ type Repository interface {
 	// within a single package, and storage implementations live in a
 	// separate package.
 	Save(ctx *Context) error
+
+	// ContextPath returns the on-disk path for the named context's
+	// file. Pure path builder — performs no I/O. Used by
+	// `htt todo edit-done` and the TUI's EditFile action to hand a
+	// path to $EDITOR; not intended for programmatic reads or writes
+	// (those go through Context / Save / Context.AddTask / etc).
+	//
+	// In-memory implementations have no real path and may return the
+	// empty string; callers that depend on a usable path should
+	// check for it.
+	ContextPath(name string) string
 }
 
 // ErrInvalidContextName is returned when a name fails validation (empty,

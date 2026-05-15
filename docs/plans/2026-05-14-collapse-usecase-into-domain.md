@@ -1,20 +1,19 @@
 # Collapse `usecase` into `domain`: operations as first-class Context methods
 
 **Date:** 2026-05-14
-**Status:** Proposed
+**Status:** Complete (2026-05-15)
 **Builds on:** `2026-05-14-business-layer-extraction.md`
 
-## Resume marker (where this session left off)
+## Resume marker
 
-- Branch: `refactor/collapse-usecase-into-domain`
-- Steps 1, 2, 3, 4, and 6 complete (Step 6 swapped before Step 5 because
-  usecase.go still referenced the to-be-unexported Task mutators).
-  `internal/usecase/` is gone. Architecture test no longer mentions
-  usecase.
-- Next action: Step 5 — unexport `Task.SetPriority` / `IncreasePriority`
-  / `DecreasePriority` and rename `Do` → `markCompleted`. All remaining
-  callers live inside the `domain` package after Step 6's delete, so
-  this is purely an in-package rename.
+All six steps complete on 2026-05-15. The branch is ready for review and
+merge. The `usecase` package no longer exists; the `Context` API is the
+sanctioned mutation path; `Task` mutators (`setPriority`,
+`increasePriority`, `decreasePriority`, `markCompleted`) are unexported.
+
+Step ordering note: Step 6 (delete usecase) ran before Step 5 (unexport
+Task mutators) because usecase.go still called the public mutators. Once
+usecase was gone, Step 5 became a purely in-package rename.
 
 The plan went through two rounds of design dialogue before any code was
 written. The "Decisions captured" section below records the choices that

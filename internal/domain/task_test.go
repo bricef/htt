@@ -51,34 +51,34 @@ func TestTaskCreation(t *testing.T) {
 	})
 
 	t.Run("Can change the priority", func(t *testing.T) {
-		equal(t, mustTask(t, "(B) hello world").SetPriority("A").ConsoleString(), "(A) hello world")
+		equal(t, mustTask(t, "(B) hello world").setPriority("A").ConsoleString(), "(A) hello world")
 	})
 
 	t.Run("Can increase the priority", func(t *testing.T) {
-		equal(t, mustTask(t, "(B) hello world").IncreasePriority().ConsoleString(), "(A) hello world")
+		equal(t, mustTask(t, "(B) hello world").increasePriority().ConsoleString(), "(A) hello world")
 	})
 
 	t.Run("Can decrease the priority", func(t *testing.T) {
-		equal(t, mustTask(t, "(A) hello world").DecreasePriority().ConsoleString(), "(B) hello world")
+		equal(t, mustTask(t, "(A) hello world").decreasePriority().ConsoleString(), "(B) hello world")
 	})
 
 	// NOTE: priorities = ["A", "B", "C", ""]. Decreasing an unknown priority
 	// (anything outside A-C) resets to "" (no priority) rather than clamping
 	// at the lowest valid letter. This test pins that current behavior.
 	t.Run("Decreasing an unknown priority resets to no priority", func(t *testing.T) {
-		equal(t, mustTask(t, "(F) hello world").DecreasePriority().ConsoleString(), "hello world")
+		equal(t, mustTask(t, "(F) hello world").decreasePriority().ConsoleString(), "hello world")
 	})
 
 	t.Run("Decrease from no priority stays at no priority", func(t *testing.T) {
-		equal(t, mustTask(t, "hello world").DecreasePriority().ConsoleString(), "hello world")
+		equal(t, mustTask(t, "hello world").decreasePriority().ConsoleString(), "hello world")
 	})
 
 	t.Run("Can't increase the priority past maximum", func(t *testing.T) {
-		equal(t, mustTask(t, "(A) hello world").IncreasePriority().ConsoleString(), "(A) hello world")
+		equal(t, mustTask(t, "(A) hello world").increasePriority().ConsoleString(), "(A) hello world")
 	})
 
 	t.Run("Increase from no priority steps up to C", func(t *testing.T) {
-		equal(t, mustTask(t, "hello world").IncreasePriority().ConsoleString(), "(C) hello world")
+		equal(t, mustTask(t, "hello world").increasePriority().ConsoleString(), "(C) hello world")
 	})
 
 	t.Run("Can add an annotation", func(t *testing.T) {

@@ -126,11 +126,16 @@ func (t *Task) rebuild() *Task {
 	return t
 }
 
-// SetPriority assigns p as the task's priority. Unknown letters are
+// setPriority assigns p as the task's priority. Unknown letters are
 // silently coerced to the lowest priority (empty string) to preserve
 // legacy behavior — this is asserted in task_test.go and exploited by
-// IncreasePriority / DecreasePriority's "unknown" branches.
-func (t *Task) SetPriority(p string) *Task {
+// increasePriority / decreasePriority's "unknown" branches.
+//
+// Unexported: external callers should mutate priority through
+// Context.SetPriority / IncreasePriority / DecreasePriority, which
+// persist via the injected repo. Going around them produces a mutated
+// Task that never reaches disk.
+func (t *Task) setPriority(p string) *Task {
 	if _, err := indexOf(priorities, p); err != nil {
 		p = priorities[len(priorities)-1]
 	}
@@ -138,26 +143,26 @@ func (t *Task) SetPriority(p string) *Task {
 	return t.rebuild()
 }
 
-func (t *Task) IncreasePriority() *Task {
+func (t *Task) increasePriority() *Task {
 	i, err := indexOf(priorities, t.Priority)
 	if err != nil {
-		return t.SetPriority(priorities[0])
+		return t.setPriority(priorities[0])
 	}
 	if i == 0 {
 		return t
 	}
-	return t.SetPriority(priorities[i-1])
+	return t.setPriority(priorities[i-1])
 }
 
-func (t *Task) DecreasePriority() *Task {
+func (t *Task) decreasePriority() *Task {
 	i, err := indexOf(priorities, t.Priority)
 	if err != nil {
-		return t.SetPriority(priorities[len(priorities)-1])
+		return t.setPriority(priorities[len(priorities)-1])
 	}
 	if i == len(priorities)-1 {
 		return t
 	}
-	return t.SetPriority(priorities[i+1])
+	return t.setPriority(priorities[i+1])
 }
 
 // indexOf replaces utils.StringSliceIndex so the domain doesn't pull in
@@ -182,11 +187,14 @@ func (t *Task) ConsoleString() string {
 	return t.ColorString()
 }
 
-// Do marks the task complete at the given time and annotates it with the
-// originating context. Returns an error if the annotation fails (which
-// shouldn't happen for the static "context" key, but propagated so the
-// signature stays honest).
-func (t *Task) Do(context *Context, when time.Time) (*Task, error) {
+// markCompleted marks the task complete at the given time and annotates
+// it with the originating context. Returns an error if the annotation
+// fails (which shouldn't happen for the static "context" key, but
+// propagated so the signature stays honest).
+//
+// Unexported: external callers should complete a task through
+// Context.Complete, which persists via the injected repo.
+func (t *Task) markCompleted(context *Context, when time.Time) (*Task, error) {
 	t.Completed = true
 	t.CompletedOn = when
 	if _, err := t.Annotate("context", context.Name); err != nil {

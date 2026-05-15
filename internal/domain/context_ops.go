@@ -94,7 +94,7 @@ func (c *Context) Complete(strID string) (*Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err := target.Do(c, time.Now()); err != nil {
+	if _, err := target.markCompleted(c, time.Now()); err != nil {
 		return nil, fmt.Errorf("mark task complete: %w", err)
 	}
 	if err := c.remove(target); err != nil {
@@ -117,17 +117,17 @@ func (c *Context) SetPriority(strID, priority string) (*Task, *Task, error) {
 	if !validPriorityRE.MatchString(priority) {
 		return nil, nil, fmt.Errorf("invalid priority %q", priority)
 	}
-	return c.priorityTransform(strID, func(t *Task) *Task { return t.SetPriority(priority) })
+	return c.priorityTransform(strID, func(t *Task) *Task { return t.setPriority(priority) })
 }
 
 // IncreasePriority raises the indexed task's priority by one step and persists.
 func (c *Context) IncreasePriority(strID string) (*Task, *Task, error) {
-	return c.priorityTransform(strID, func(t *Task) *Task { return t.IncreasePriority() })
+	return c.priorityTransform(strID, func(t *Task) *Task { return t.increasePriority() })
 }
 
 // DecreasePriority lowers the indexed task's priority by one step and persists.
 func (c *Context) DecreasePriority(strID string) (*Task, *Task, error) {
-	return c.priorityTransform(strID, func(t *Task) *Task { return t.DecreasePriority() })
+	return c.priorityTransform(strID, func(t *Task) *Task { return t.decreasePriority() })
 }
 
 // priorityTransform centralises the snapshot-mutate-save pattern shared by

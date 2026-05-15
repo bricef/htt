@@ -1,0 +1,73 @@
+package cli
+
+import (
+	"fmt"
+
+	"github.com/bricef/htt/internal/vars"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+	yaml "gopkg.in/yaml.v2"
+)
+
+var Config = &cobra.Command{
+	Use:   "config",
+	Short: "Manage configuration.",
+}
+
+var Print = &cobra.Command{
+	Use:   "yaml",
+	Short: "Prints out the current configuration in YAML.",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c := viper.AllSettings()
+		bs, err := yaml.Marshal(c)
+		if err != nil {
+			return fmt.Errorf("marshal YAML config: %w", err)
+		}
+		fmt.Print(string(bs))
+		return nil
+	},
+}
+
+var Directory = &cobra.Command{
+	Use:   "where-data",
+	Short: "Outputs the currently configured data directory.",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		fmt.Println(vars.Get(vars.ConfigKeyDataDir))
+		return nil
+	},
+}
+
+var Context = &cobra.Command{
+	Use:   "context",
+	Short: "Output the current context.",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		name, err := repo().CurrentContextName()
+		if err != nil {
+			return fmt.Errorf("get current context name: %w", err)
+		}
+		fmt.Println(name)
+		return nil
+	},
+}
+
+var Where = &cobra.Command{
+	Use:   "dir",
+	Short: "Show the config directory",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		fmt.Println(vars.Get(vars.ConfigKeyTrackerDir))
+		return nil
+	},
+}
+
+func init() {
+	Config.AddCommand(Print)
+	Config.AddCommand(Directory)
+	Config.AddCommand(Context)
+	Config.AddCommand(Where)
+
+	RootCmd.AddCommand(Config)
+}

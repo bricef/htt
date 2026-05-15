@@ -6,7 +6,7 @@ import (
 	"path"
 	"time"
 
-	"github.com/bricef/htt/internal/todo"
+	"github.com/bricef/htt/internal/domain"
 
 	"github.com/bricef/htt/internal/vars"
 
@@ -24,7 +24,7 @@ func LogFilePath(t time.Time) string {
 	return logFilePath
 }
 
-func AddEntry(task *todo.Task) {
+func AddEntry(task *domain.Task) {
 	now := time.Now().UTC()
 
 	currentLog := CurrentLogFilePath()
@@ -33,7 +33,8 @@ func AddEntry(task *todo.Task) {
 	f, err := os.OpenFile(currentLog, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
 	utils.DieOnError("Failed to open log file for writing: ", err)
 
-	task.Annotate(TimestampLabel, now.Format(time.RFC3339))
+	_, err = task.Annotate(TimestampLabel, now.Format(time.RFC3339))
+	utils.DieOnError("Failed to annotate log entry timestamp: ", err)
 
 	// start:
 	// entryWithStart := fmt.Sprintf("start:%s %s \n", now.Format(time.RFC3339), strings.TrimSpace(entry))
@@ -68,22 +69,29 @@ func ShowStatus() {
 	}
 }
 
-func CurrentActive() *todo.Task {
+func CurrentActive() *domain.Task {
 	lines := utils.ReadLines(CurrentLogFilePath())
 	if len(lines) == 0 {
 		return nil
 	}
-	t := todo.NewTask(lines[len(lines)-1])
+	t, err := domain.NewTask(lines[len(lines)-1])
+	utils.DieOnError("Failed to parse last log entry: ", err)
 	return t
 }
 
 func CurrentDuration() time.Duration {
 	currentTask := CurrentActive()
+	// bug_004: CurrentActive returns nil when the log file is missing
+	// or empty. Returning 0 matches the "no active task" reading of
+	// CurrentActive itself, and stops the call site from nil-deref'ing
+	// before its own guard runs.
+	if currentTask == nil {
+		return 0
+	}
 	startedAt := currentTask.Annotations[TimestampLabel]
 	startTime, err := time.Parse(time.RFC3339, startedAt)
 	if err != nil {
 		utils.Fatal("Failed to parse log entry.")
 	}
 	return time.Since(startTime)
-
 }

@@ -62,7 +62,7 @@ func NewTask(raw string) (*Task, error) {
 	}
 
 	if completedAt := parser.QueryOne("COMPLETEDAT"); completedAt != nil {
-		date, err := time.Parse("2006-01-02", completedAt.GetValue())
+		date, err := time.ParseInLocation("2006-01-02", completedAt.GetValue(), time.Local)
 		if err != nil {
 			return nil, fmt.Errorf("%w: parsing completed date %q: %v", ErrMalformedTask, completedAt.GetValue(), err)
 		}
@@ -70,7 +70,7 @@ func NewTask(raw string) (*Task, error) {
 	}
 
 	if createdAt := parser.QueryOne("CREATEDAT"); createdAt != nil {
-		date, err := time.Parse("2006-01-02", createdAt.GetValue())
+		date, err := time.ParseInLocation("2006-01-02", createdAt.GetValue(), time.Local)
 		if err != nil {
 			return nil, fmt.Errorf("%w: parsing created date %q: %v", ErrMalformedTask, createdAt.GetValue(), err)
 		}

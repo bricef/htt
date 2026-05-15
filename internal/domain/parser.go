@@ -14,21 +14,25 @@ func customPriority(name string, s parsec.Scanner, node parsec.Queryable) parsec
 	return t
 }
 
-func customCompleted(name string, s parsec.Scanner, node parsec.Queryable) parsec.Queryable {
-	t := parsec.NewTerminal(name, "x", s.GetCursor())
-	t.SetAttribute("class", "term")
-	return t
-}
-
-// dateValidation rejects nodes that don't parse as YYYY-MM-DD. Returning
-// nil makes the parser treat the production as a non-match and try
-// alternatives — that's the right behavior for an ambiguous grammar, so
-// no logging is needed here (the parser will retry).
-func dateValidation(name string, s parsec.Scanner, node parsec.Queryable) parsec.Queryable {
-	if _, err := time.Parse("2006-01-02", node.GetValue()); err != nil {
+// datePromote rejects nodes that don't parse as YYYY-MM-DD, and on a
+// successful match returns a fresh Terminal carrying the Maybe's own
+// name (COMPLETEDAT / CREATEDAT). The previous implementation returned
+// the inner node unchanged, leaving it under the Token's name
+// (COMPLETIONDATE / CREATIONDATE), so QueryOne("COMPLETEDAT") /
+// QueryOne("CREATEDAT") in task.go silently found nothing and the
+// CompletedOn / CreatedOn fields stayed zero.
+//
+// Returning nil on a non-date signals no-match so the parser can try
+// the alternative production — that's the right behavior for an
+// ambiguous grammar, so no logging is needed here.
+func datePromote(name string, s parsec.Scanner, node parsec.Queryable) parsec.Queryable {
+	value := node.GetValue()
+	if _, err := time.ParseInLocation("2006-01-02", value, time.Local); err != nil {
 		return nil
 	}
-	return node
+	t := parsec.NewTerminal(name, value, s.GetCursor())
+	t.SetAttribute("class", "term")
+	return t
 }
 
 func KVPAIR2String(node parsec.Queryable) (string, string, error) {
@@ -78,17 +82,29 @@ func NewTodoParser() *parseutils.Parser {
 
 	completeMark := parsec.Token(`x[[:space:]]+`, "COMPLETED")
 
+	// The first branch is the "completed task" shape: `x` mark
+	// required, then optional priority, completed-on, created-on.
+	// The second branch is the "open task" shape: optional priority
+	// then optional created-on.
+	//
+	// Making the `x` mark required in the first branch (rather than
+	// Maybe) is what lets the OrdChoice correctly route a bare-date
+	// line like "2026-05-10 hello" into the second branch — where
+	// the date is then tagged CREATEDAT, not COMPLETEDAT. With the
+	// previous Maybe, the first branch matched without `x` and
+	// greedy-grabbed any leading date as COMPLETEDAT, leaving
+	// CreatedOn perpetually zero.
 	TODO := g.And("TODO", nil,
 		g.OrdChoice("PREAMBLE", nil,
 			g.And("PREAMBLE", nil,
-				g.Maybe("COMPLETED", customCompleted, completeMark),
+				completeMark,
 				g.Maybe("PRIORITY", customPriority, priority),
-				g.Maybe("COMPLETEDAT", dateValidation, completeDate),
-				g.Maybe("CREATEDAT", dateValidation, createdDate),
+				g.Maybe("COMPLETEDAT", datePromote, completeDate),
+				g.Maybe("CREATEDAT", datePromote, createdDate),
 			),
 			g.And("PREAMBLE", nil,
 				g.Maybe("PRIORITY", customPriority, priority),
-				g.Maybe("CREATEDAT", nil, createdDate),
+				g.Maybe("CREATEDAT", datePromote, createdDate),
 			),
 		),
 		g.Many("WORDS", nil, token),

@@ -7,16 +7,15 @@
 ## Resume marker (where this session left off)
 
 - Branch: `refactor/collapse-usecase-into-domain`
-- Step 1 complete (uncommitted): Repository moved to `internal/domain/`
-  with the reshaped interface (`Context`, `Contexts`, `ContextNames`,
-  `CurrentContext`, `CurrentContextName`, `SetCurrent`, `Save`). Storage
-  impls renamed + extended. Sanitization moved into `SetCurrent`.
-  `usecase.SwitchContext` is now a passthrough. Three new contract tests:
-  `Contexts returns every persisted context with tasks loaded`,
-  `CurrentContext defaults to todo and is loaded`,
-  `SetCurrent sanitizes non-word characters`. All suites green
-  (e2e, TUI, architecture, in-process Cobra, domain, storage, usecase).
-- Next action: Step 2 — inject `Repository` into `Context`.
+- Steps 1 and 2 complete. Repository lives in `internal/domain/` with the
+  reshaped interface; storage impls renamed + extended; sanitization moved
+  into `SetCurrent`. `Context` now carries a private `repo Repository`,
+  injected by `domain.NewContext(repo, name)`. Storage impls construct
+  Contexts via the constructor and populate `Tasks` afterwards. Pure-method
+  tests still use struct literals. Harness additions: contract tests for
+  `Contexts`, `CurrentContext`, `SetCurrent` sanitization; domain-package
+  `TestNewContext_InjectsRepo` pins the wiring invariant.
+- Next action: Step 3 — port use-case operations to `Context` methods.
 
 The plan went through two rounds of design dialogue before any code was
 written. The "Decisions captured" section below records the choices that

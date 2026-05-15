@@ -20,6 +20,38 @@ func newCtxWithTasks(t *testing.T, name string, raws ...string) *Context {
 	return c
 }
 
+// stubRepository is a placeholder Repository for the NewContext wiring
+// test. Methods panic if invoked: the only thing under test here is
+// identity, not behavior.
+type stubRepository struct{}
+
+func (*stubRepository) Context(string) (*Context, error)    { panic("stub") }
+func (*stubRepository) Contexts() ([]*Context, error)       { panic("stub") }
+func (*stubRepository) ContextNames() ([]string, error)     { panic("stub") }
+func (*stubRepository) CurrentContext() (*Context, error)   { panic("stub") }
+func (*stubRepository) CurrentContextName() (string, error) { panic("stub") }
+func (*stubRepository) SetCurrent(string) error             { panic("stub") }
+func (*stubRepository) Save(*Context) error                 { panic("stub") }
+
+func TestNewContext_InjectsRepo(t *testing.T) {
+	// Step 2 invariant: NewContext stores the supplied Repository on the
+	// Context. Without this, persistent methods added in Step 3 would
+	// nil-deref. The repo field is package-private, so the wiring check
+	// must live in the domain package.
+	stub := &stubRepository{}
+	ctx := NewContext(stub, "wired")
+
+	if ctx.repo != Repository(stub) {
+		t.Errorf("ctx.repo did not get the supplied repo")
+	}
+	if ctx.Name != "wired" {
+		t.Errorf("ctx.Name = %q, want wired", ctx.Name)
+	}
+	if len(ctx.Tasks) != 0 {
+		t.Errorf("ctx.Tasks should start empty, got %v", ctx.Tasks)
+	}
+}
+
 func TestContext_Equals(t *testing.T) {
 	a := &Context{Name: "todo"}
 	b := &Context{Name: "todo"}
@@ -139,7 +171,7 @@ func TestContext_Add_DoesNotTouchDisk(t *testing.T) {
 	dir := t.TempDir()
 	viper.Set(vars.ConfigKeyDataDir, dir)
 
-	ctx := NewContext("invariant")
+	ctx := &Context{Name: "invariant", Tasks: []*Task{}}
 	expectedPath := filepath.Join(dir, "invariant.txt")
 
 	ctx.Add(mustTask(t, "test"))

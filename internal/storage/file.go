@@ -73,7 +73,7 @@ func (r *FileRepository) Context(name string) (*domain.Context, error) {
 		return nil, domain.ErrInvalidContextName
 	}
 
-	ctx := &domain.Context{Name: name, Tasks: []*domain.Task{}}
+	ctx := domain.NewContext(r, name)
 
 	f, err := os.Open(r.contextPath(name))
 	if err != nil {

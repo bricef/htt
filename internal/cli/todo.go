@@ -160,8 +160,10 @@ var editDone = &cobra.Command{
 	Args:    cobra.NoArgs,
 	Aliases: []string{"ed"},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Legacy $EDITOR shell-out; needs the on-disk path.
-		utils.EditFilePath(domain.NewContext("done").Filepath())
+		// Legacy $EDITOR shell-out; needs the on-disk path. Filepath is
+		// pure (uses viper, no repo), so a struct-literal Context is
+		// fine here — matches the display-only pattern used by `move`.
+		utils.EditFilePath((&domain.Context{Name: "done"}).Filepath())
 		return nil
 	},
 }

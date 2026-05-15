@@ -34,9 +34,10 @@ func (r *MemoryRepository) Context(name string) (*domain.Context, error) {
 		return nil, domain.ErrInvalidContextName
 	}
 	stored := r.contexts[name]
-	tasks := make([]*domain.Task, len(stored))
-	copy(tasks, stored)
-	return &domain.Context{Name: name, Tasks: tasks}, nil
+	ctx := domain.NewContext(r, name)
+	ctx.Tasks = make([]*domain.Task, len(stored))
+	copy(ctx.Tasks, stored)
+	return ctx, nil
 }
 
 func (r *MemoryRepository) Contexts() ([]*domain.Context, error) {

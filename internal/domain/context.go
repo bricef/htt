@@ -11,15 +11,25 @@ import (
 	"github.com/fatih/color"
 )
 
+// Context is a named bundle of Tasks plus the Repository they came from.
+// The repo is the seam through which persistent methods (added in Step 3:
+// AddTask, Complete, etc.) save changes back. Pure methods (Search, Sort,
+// GetTaskById, …) never touch it, so tests for those can construct
+// Contexts via &Context{Name: ..., Tasks: ...} struct literals.
 type Context struct {
 	Name  string
 	Tasks []*Task
+	repo  Repository
 }
 
-// NewContext returns an empty Context with the given name. Loading tasks
-// from storage is the repository's job (domain.Repository.Context).
-func NewContext(name string) *Context {
+// NewContext returns a Context wired with the given Repository. Intended
+// for Repository implementations: external callers obtain Contexts via
+// Repository.Context, Repository.Contexts, or Repository.CurrentContext.
+// Storage impls construct via this constructor and then populate Tasks
+// before returning the Context to a caller.
+func NewContext(repo Repository, name string) *Context {
 	return &Context{
+		repo:  repo,
 		Name:  name,
 		Tasks: []*Task{},
 	}

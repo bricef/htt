@@ -39,25 +39,6 @@ func (c *Context) Equals(other *Context) bool {
 	return c.Name == other.Name
 }
 
-// Add appends a task to the in-memory context. Persistence is the caller's
-// responsibility, via domain.Repository.Save.
-func (c *Context) Add(t *Task) *Context {
-	c.Tasks = append(c.Tasks, t)
-	return c
-}
-
-// Remove deletes a task pointer from the in-memory context. Persistence is
-// the caller's responsibility.
-func (c *Context) Remove(task *Task) error {
-	for i, t := range c.Tasks {
-		if t == task {
-			c.Tasks = append(c.Tasks[:i], c.Tasks[i+1:]...)
-			return nil
-		}
-	}
-	return fmt.Errorf("could not find task %v in list", task.Raw)
-}
-
 func (c *Context) Sort() *Context {
 	slices.SortFunc(c.Tasks, func(i, j *Task) int {
 		var a string = i.Priority
@@ -71,14 +52,6 @@ func (c *Context) Sort() *Context {
 		return strings.Compare(a, b)
 	})
 	return c
-}
-
-func (c *Context) RemoveByStrId(strid string) error {
-	t, err := c.GetTaskByStrId(strid)
-	if err != nil {
-		return err
-	}
-	return c.Remove(t)
 }
 
 // Filepath returns the on-disk location of this context under the viper-
@@ -117,15 +90,6 @@ func (c *Context) GetTaskIndex(task *Task) (int, error) {
 		}
 	}
 	return -1, fmt.Errorf("could not find task in context")
-}
-
-func (c *Context) Replace(old *Task, new *Task) error {
-	index, err := c.GetTaskIndex(old)
-	if err != nil {
-		return err
-	}
-	c.Tasks[index] = new
-	return nil
 }
 
 func (c *Context) ConsoleString() string {

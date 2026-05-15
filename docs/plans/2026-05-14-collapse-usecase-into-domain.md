@@ -7,15 +7,18 @@
 ## Resume marker (where this session left off)
 
 - Branch: `refactor/collapse-usecase-into-domain`
-- Steps 1 and 2 complete. Repository lives in `internal/domain/` with the
-  reshaped interface; storage impls renamed + extended; sanitization moved
-  into `SetCurrent`. `Context` now carries a private `repo Repository`,
-  injected by `domain.NewContext(repo, name)`. Storage impls construct
-  Contexts via the constructor and populate `Tasks` afterwards. Pure-method
-  tests still use struct literals. Harness additions: contract tests for
-  `Contexts`, `CurrentContext`, `SetCurrent` sanitization; domain-package
-  `TestNewContext_InjectsRepo` pins the wiring invariant.
-- Next action: Step 3 — port use-case operations to `Context` methods.
+- Steps 1, 2, and 3 complete. Persistent operations now live on Context:
+  AddTask, Delete, Replace (strID, *Task) → snapshot, Move, Complete,
+  SetPriority, IncreasePriority, DecreasePriority. Pure methods (Add,
+  Remove, RemoveByStrId, in-memory Replace) excised. DoneContextName moved
+  into domain. usecase.swapTask now drives `ctx.Replace` (persistent),
+  observable behavior unchanged. New black-box harness
+  `internal/domain/context_ops_test.go` (package `domain_test`) pins the
+  Context API with 13 tests including the cross-package wiring check
+  `TestContext_PersistentMethodsSaveThroughInjectedRepo`. usecase package
+  + usecase_test.go still exist in parallel and pass; CLI/TUI still go
+  through `uc()`.
+- Next action: Step 4 — rewire CLI/TUI to call `ctx.X(...)` directly.
 
 The plan went through two rounds of design dialogue before any code was
 written. The "Decisions captured" section below records the choices that

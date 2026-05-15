@@ -232,8 +232,8 @@ func (u *UseCases) ListContextNames() ([]string, error) {
 }
 
 // swapTask loads the current context, finds the task by string ID, applies
-// transform to produce a new task, replaces in-place, persists, and returns
-// (snapshotOfOriginal, new).
+// transform to produce a new task, replaces in-place via the persistent
+// Context.Replace (which saves), and returns (snapshotOfOriginal, new).
 //
 // The pre-mutation snapshot is critical: Task.SetPriority /
 // IncreasePriority / DecreasePriority all mutate the receiver in place and
@@ -256,10 +256,7 @@ func (u *UseCases) swapTask(strID string, transform func(*domain.Task) (*domain.
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := ctx.Replace(target, newTask); err != nil {
-		return nil, nil, err
-	}
-	if err := u.repo.Save(ctx); err != nil {
+	if _, err := ctx.Replace(strID, newTask); err != nil {
 		return nil, nil, err
 	}
 	return old, newTask, nil

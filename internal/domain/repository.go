@@ -57,3 +57,7 @@ var ErrInvalidContextName = errors.New("invalid context name")
 // DefaultContextName is the name returned by CurrentContextName when no
 // pointer has been set yet. Matches vars.DefaultContext.
 const DefaultContextName = "todo"
+
+// DoneContextName is the conventional target for completed tasks.
+// Context.Complete moves the indexed task into this context.
+const DoneContextName = "done"

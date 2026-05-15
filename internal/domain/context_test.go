@@ -1,12 +1,7 @@
 package domain
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
-
-	"github.com/bricef/htt/internal/vars"
-	"github.com/spf13/viper"
 )
 
 // newCtxWithTasks builds a Context populated with raw task lines, using
@@ -35,9 +30,9 @@ func (*stubRepository) Save(*Context) error                 { panic("stub") }
 
 func TestNewContext_InjectsRepo(t *testing.T) {
 	// Step 2 invariant: NewContext stores the supplied Repository on the
-	// Context. Without this, persistent methods added in Step 3 would
-	// nil-deref. The repo field is package-private, so the wiring check
-	// must live in the domain package.
+	// Context. Without this, persistent methods (AddTask, Complete, …)
+	// would nil-deref. The repo field is package-private, so this
+	// wiring check must live in the domain package.
 	stub := &stubRepository{}
 	ctx := NewContext(stub, "wired")
 
@@ -125,30 +120,6 @@ func TestContext_GetTaskIndex(t *testing.T) {
 	}
 }
 
-func TestContext_Replace(t *testing.T) {
-	ctx := newCtxWithTasks(t, "todo", "old", "keep")
-	old := ctx.Tasks[0]
-	replacement := mustTask(t, "new")
-
-	if err := ctx.Replace(old, replacement); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if ctx.Tasks[0].Raw != "new" {
-		t.Errorf("Tasks[0] = %q, want new", ctx.Tasks[0].Raw)
-	}
-	if ctx.Tasks[1].Raw != "keep" {
-		t.Errorf("Tasks[1] should be unchanged, got %q", ctx.Tasks[1].Raw)
-	}
-}
-
-func TestContext_Replace_TaskNotPresent(t *testing.T) {
-	ctx := newCtxWithTasks(t, "todo", "a")
-	other := mustTask(t, "not there")
-	if err := ctx.Replace(other, mustTask(t, "x")); err == nil {
-		t.Errorf("expected error replacing absent task")
-	}
-}
-
 func TestContext_Search(t *testing.T) {
 	ctx := newCtxWithTasks(t, "todo", "buy milk", "buy bread", "call alice")
 
@@ -160,40 +131,6 @@ func TestContext_Search(t *testing.T) {
 	}
 	if matches[0].Raw != "buy milk" || matches[1].Raw != "buy bread" {
 		t.Errorf("unexpected match order: %q, %q", matches[0].Raw, matches[1].Raw)
-	}
-}
-
-func TestContext_Add_DoesNotTouchDisk(t *testing.T) {
-	// Step 10 invariant: Context.Add only mutates the in-memory slice;
-	// it must not produce a file at Filepath(). Legacy Add called Sync
-	// internally, which was the bug fueling the read-writes-back issue
-	// and the source of the duplicated-Sync calls in CLI/TUI.
-	dir := t.TempDir()
-	viper.Set(vars.ConfigKeyDataDir, dir)
-
-	ctx := &Context{Name: "invariant", Tasks: []*Task{}}
-	expectedPath := filepath.Join(dir, "invariant.txt")
-
-	ctx.Add(mustTask(t, "test"))
-
-	if _, err := os.Stat(expectedPath); !os.IsNotExist(err) {
-		t.Errorf("Add should not write to disk; file %s exists (err=%v)", expectedPath, err)
-	}
-}
-
-func TestContext_Remove_DoesNotTouchDisk(t *testing.T) {
-	dir := t.TempDir()
-	viper.Set(vars.ConfigKeyDataDir, dir)
-
-	ctx := newCtxWithTasks(t, "invariant", "task")
-	expectedPath := filepath.Join(dir, "invariant.txt")
-
-	if err := ctx.Remove(ctx.Tasks[0]); err != nil {
-		t.Fatalf("Remove: %v", err)
-	}
-
-	if _, err := os.Stat(expectedPath); !os.IsNotExist(err) {
-		t.Errorf("Remove should not write to disk; file %s exists (err=%v)", expectedPath, err)
 	}
 }
 
@@ -213,3 +150,4 @@ func TestContext_Sort_ByPriority(t *testing.T) {
 		}
 	}
 }
+

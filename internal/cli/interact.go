@@ -33,7 +33,7 @@ var Interactive = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("open debug log: %w", err)
 			}
-			defer f.Close()
+			defer func() { _ = f.Close() }()
 		}
 		if _, err := p.Run(); err != nil {
 			return fmt.Errorf("tui exited: %w", err)

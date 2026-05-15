@@ -7,16 +7,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-func filter[T any](s []T, predicate func(T) bool) []T {
-	result := make([]T, 0, len(s)) // Pre-allocate for efficiency
-	for _, v := range s {
-		if predicate(v) {
-			result = append(result, v)
-		}
-	}
-	return result
-}
-
 type Binding struct {
 	action  *Action
 	binding key.Binding
@@ -57,18 +47,6 @@ func (k KeyBindingController) ShortHelp() []key.Binding {
 		}
 	}
 	return short
-}
-
-func (k KeyBindingController) Push() {
-	new_bindings := []Binding{}
-	k.stack = append(k.stack, new_bindings)
-	k.current = &new_bindings
-
-}
-
-func (k KeyBindingController) Pop() {
-	k.stack = k.stack[:len(k.stack)-1]
-	k.current = &k.stack[len(k.stack)-1]
 }
 
 func (k KeyBindingController) GetActiveBindings() []Binding {

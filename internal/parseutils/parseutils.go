@@ -10,10 +10,10 @@ import (
 
 func prettyprint(w io.Writer, prefix string, node parsec.Queryable) {
 	if node.IsTerminal() {
-		fmt.Fprintf(w, "%v*%v: %q\n", prefix, node.GetName(), node.GetValue())
+		_, _ = fmt.Fprintf(w, "%v*%v: %q\n", prefix, node.GetName(), node.GetValue())
 		return
 	}
-	fmt.Fprintf(w, "%v%v @ %v\n", prefix, node.GetName(), node.GetPosition())
+	_, _ = fmt.Fprintf(w, "%v%v @ %v\n", prefix, node.GetName(), node.GetPosition())
 	for _, child := range node.GetChildren() {
 		prettyprint(w, prefix+"  ", child)
 	}

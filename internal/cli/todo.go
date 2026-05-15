@@ -113,12 +113,14 @@ var edit = &cobra.Command{
 			return fmt.Errorf("open temp file: %w", err)
 		}
 		name := f.Name()
-		defer os.Remove(name)
+		defer func() { _ = os.Remove(name) }()
 
 		if _, err := f.WriteString(oldTask.Raw + "\n"); err != nil {
 			return fmt.Errorf("write temp file: %w", err)
 		}
-		f.Close()
+		if err := f.Close(); err != nil {
+			return fmt.Errorf("close temp file: %w", err)
+		}
 
 		proc := exec.Command(editor, name)
 		proc.Stdin = os.Stdin

@@ -100,7 +100,7 @@ func CreateCommitFromChanges(repo *git.Repository, message string) (plumbing.Has
 
 	patterns := vars.GetStringSlice(vars.ConfigKeyFilePatterns)
 	for _, pattern := range patterns {
-		wt.AddGlob(pattern)
+		_ = wt.AddGlob(pattern)
 	}
 	status, err := wt.Status()
 	utils.DieOnError("Could not acertain status of working directory: ", err)
@@ -208,7 +208,7 @@ func Sync() {
 	r := EnsureAndGetDataRepo(dataDir)
 
 	// Ensure we have a master
-	EnsureOriginRemote(r, remoteRepoURL)
+	_, _ = EnsureOriginRemote(r, remoteRepoURL)
 
 	// Create commit
 	hash, err := CreateCommitFromChanges(r, "Commiting state via tracker client sync")
@@ -224,9 +224,10 @@ func Sync() {
 
 	// push commit
 	details, err := PushChanges(r, hash)
-	if err == git.NoErrAlreadyUpToDate {
+	switch err {
+	case git.NoErrAlreadyUpToDate:
 		utils.Info("Remote " + details.RemoteName + " is already up to date")
-	} else if err == nil {
+	case nil:
 		utils.Success("Pushed commit " + details.Hash + " to " + details.RemoteName)
 	}
 

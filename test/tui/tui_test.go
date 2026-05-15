@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -73,8 +74,11 @@ func TestTUI_AddTask_WritesToContextFile(t *testing.T) {
 	e.type_("buy bread")
 	e.pressKey(tea.KeyEnter)
 
-	if got := e.readData("todo.txt"); got != "buy bread\n" {
-		t.Errorf("todo.txt = %q, want %q", got, "buy bread\n")
+	// Context.AddTask stamps a creation date; the on-disk Raw is
+	// "<today> buy bread", not the bare entry text.
+	want := time.Now().Format("2006-01-02") + " buy bread\n"
+	if got := e.readData("todo.txt"); got != want {
+		t.Errorf("todo.txt = %q, want %q", got, want)
 	}
 
 	assertViewContains(t, e.view(), "buy bread")

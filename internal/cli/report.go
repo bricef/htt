@@ -39,6 +39,10 @@ Examples:
 			return err
 		}
 		fmt.Println()
+		if err := reportAdded(since, now); err != nil {
+			return err
+		}
+		fmt.Println()
 		return reportTimeLogged(since, now)
 	},
 }
@@ -149,6 +153,83 @@ func reportCompleted(since, until time.Time) error {
 
 func startOfDay(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+}
+
+// reportAdded iterates every context (open and done) and prints tasks
+// whose CreatedOn falls in [since, until], grouped by source context.
+//
+// Open tasks count toward the context they currently live in; done
+// tasks count toward the context recorded in their `context:`
+// annotation (the source they were completed from). Tasks without a
+// CreatedOn are skipped — that's mostly older entries created before
+// Context.AddTask started stamping; they predate the feature and
+// can't be backfilled without losing information.
+func reportAdded(since, until time.Time) error {
+	names, err := repo().ContextNames()
+	if err != nil {
+		return fmt.Errorf("list contexts: %w", err)
+	}
+
+	sinceDay := startOfDay(since)
+	byCtx := map[string][]*domain.Task{}
+	count := 0
+
+	for _, name := range names {
+		ctx, err := repo().Context(name)
+		if err != nil {
+			return fmt.Errorf("load context %s: %w", name, err)
+		}
+		for _, task := range ctx.Tasks {
+			if task.CreatedOn.IsZero() {
+				continue
+			}
+			if task.CreatedOn.Before(sinceDay) || task.CreatedOn.After(until) {
+				continue
+			}
+			var src string
+			if name == domain.DoneContextName {
+				src = task.Annotations["context"]
+				if src == "" {
+					src = "(unknown)"
+				}
+			} else {
+				src = name
+			}
+			byCtx[src] = append(byCtx[src], task)
+			count++
+		}
+	}
+
+	fmt.Printf("Added (%d)\n", count)
+	if count == 0 {
+		fmt.Println("  (none)")
+		return nil
+	}
+
+	ctxNames := make([]string, 0, len(byCtx))
+	for name := range byCtx {
+		ctxNames = append(ctxNames, name)
+	}
+	sort.Strings(ctxNames)
+
+	for _, name := range ctxNames {
+		fmt.Printf("  %s:\n", name)
+		entries := byCtx[name]
+		sort.SliceStable(entries, func(i, j int) bool {
+			if !entries[i].CreatedOn.Equal(entries[j].CreatedOn) {
+				return entries[i].CreatedOn.Before(entries[j].CreatedOn)
+			}
+			return entries[i].Entry() < entries[j].Entry()
+		})
+		for _, t := range entries {
+			display := t.Entry()
+			if t.Priority != "" {
+				display = fmt.Sprintf("(%s) %s", t.Priority, display)
+			}
+			fmt.Printf("    %-50s %s\n", display, t.CreatedOn.Format("2006-01-02"))
+		}
+	}
+	return nil
 }
 
 // reportTimeLogged walks every calendar day in [since, until], loads

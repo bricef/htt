@@ -1,25 +1,36 @@
 # Reporting: "what happened this period?"
 
 **Date:** 2026-05-16
-**Status:** Phase 1 complete (2026-05-16); Phases 2 & 3 deferred
+**Status:** Phases 1 & 2 complete (2026-05-16); Phase 3 deferred
 **Builds on:** the timelogs refactor (uses `domain.Timelog` and the
 `ts:` annotation as the source of truth for time spent)
 
 ## Resume marker
 
-Phase 1 (the MVP `htt report` from existing data) is on `main` as
-of 2026-05-16. The command groups completions by source context
-and prints per-day time totals plus a grand total. Phases 2
-(created-on stamping for an "Added" section) and 3 (archive-on-delete
-for a "Deleted" section) remain unstarted — they need their own
-follow-up plans. Plan stays under `docs/plans/active/` until all
-three phases ship.
+Phases 1 and 2 are on `main`. The report now has three sections:
 
-Phase 1 surfaced one bug worth noting: `domain.NewTask` doesn't
-populate `Task.CompletedOn` even when the COMPLETEDAT token is
-present in the input. `internal/cli/report.go` works around it with
-`completedOnFromRaw` (parses `task.Raw` directly); the parser fix
-is captured in `TODO.md` under "Known bugs".
+- **Completed** — done.txt entries with CompletedOn in range.
+- **Added** — tasks across all contexts with CreatedOn in range.
+  Created-on is stamped on `Context.AddTask` for new tasks; explicit
+  parser-populated dates are preserved.
+- **Time logged** — per-day totals plus grand total from
+  `Timelog.Spans()`.
+
+The completed-on parser bug Phase 1 worked around is fixed as of
+`chore/parser-fix`; the report uses `task.CompletedOn` directly
+without the prior `completedOnFromRaw` workaround.
+
+Phase 2 surfaced a latent inconsistency between `rebuild()` field
+order and what the parser grammar accepts. `rebuild()` was writing
+priority AFTER the dates but the parser only matches priority
+BEFORE dates. Fixed by reordering `rebuild()` to
+`[x] [(P)] [completedOn] [createdOn] entry [k:v…]`, matching the
+todo.txt convention.
+
+Phase 3 (archive-on-delete for a "Deleted" section) is the only
+remaining piece. It needs its own design dialogue: separate file
+per context, single rolling archive log, or a top-level archive
+directory. Plan stays here until that lands.
 
 ## Motivation
 

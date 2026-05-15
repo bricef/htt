@@ -91,7 +91,7 @@ func TestAction_AddTask_PersistsToRepo(t *testing.T) {
 	m = asModel(t, result)
 
 	stored, _ := repo.Context("todo")
-	if len(stored.Tasks) != 1 || stored.Tasks[0].Raw != "buy bread" {
+	if len(stored.Tasks) != 1 || stored.Tasks[0].Entry() != "buy bread" {
 		t.Errorf("repo state = %v", stored.Tasks)
 	}
 	if len(m.context.Tasks) != 1 {

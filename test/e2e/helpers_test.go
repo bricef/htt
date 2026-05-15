@@ -9,7 +9,16 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
+
+// today returns today's local date in YYYY-MM-DD format. Used by
+// e2e assertions that expect Context.AddTask to have stamped each
+// new task with a creation date — the stamp is part of the on-disk
+// Raw so tests that compare file contents need to include it.
+func today() string {
+	return time.Now().Format("2006-01-02")
+}
 
 var binaryPath string
 

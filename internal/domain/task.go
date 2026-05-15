@@ -100,20 +100,31 @@ func NewTask(raw string) (*Task, error) {
 	return t, nil
 }
 
+// rebuild serialises the task back into its todo.txt Raw form.
+//
+// Field order matches what the parser grammar in parser.go accepts:
+//   [x] [(P)] [<completedOn>] [<createdOn>] entry [k:v …]
+//
+// Notably priority comes BEFORE the dates, not after — that's the
+// todo.txt convention and what NewTask round-trips. A previous
+// version of this function put the priority after the dates, which
+// produced strings the parser couldn't parse back: a stamped
+// "<today> (A) task" lost its priority on the next reload because
+// the parser saw "(A)" inside WORDS, not at the priority slot.
 func (t *Task) rebuild() *Task {
 	b := bytes.Buffer{}
 
 	if t.Completed {
 		b.WriteString("x ")
 	}
+	if t.Priority != "" {
+		fmt.Fprintf(&b, "(%s) ", t.Priority)
+	}
 	if !t.CompletedOn.Equal(time.Time{}) {
 		b.WriteString(t.CompletedOn.Format("2006-01-02 "))
 	}
 	if !t.CreatedOn.Equal(time.Time{}) {
 		b.WriteString(t.CreatedOn.Format("2006-01-02 "))
-	}
-	if t.Priority != "" {
-		fmt.Fprintf(&b, "(%s) ", t.Priority)
 	}
 	if t.entry != "" {
 		fmt.Fprintf(&b, "%s ", t.entry)

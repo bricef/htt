@@ -16,7 +16,16 @@ import (
 // AddTask appends a task to the context and persists. Construction and
 // placement are separate concerns: callers do
 // `task, _ := domain.NewTask("foo"); ctx.AddTask(task)`.
+//
+// If the task has no explicit CreatedOn (the user didn't include a
+// `YYYY-MM-DD` prefix in the input), AddTask stamps it with the
+// current local date so a later `htt report` can list "what was
+// added this week". An explicit date from the parser is preserved.
 func (c *Context) AddTask(task *Task) error {
+	if task.CreatedOn.IsZero() {
+		task.CreatedOn = time.Now()
+		task.rebuild()
+	}
 	c.add(task)
 	return c.repo.Save(c)
 }

@@ -57,7 +57,7 @@ func TestCobra_AddCommand_PersistsToRepo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Context: %v", err)
 	}
-	if len(ctx.Tasks) != 1 || ctx.Tasks[0].Raw != "buy milk" {
+	if len(ctx.Tasks) != 1 || ctx.Tasks[0].Entry() != "buy milk" {
 		t.Errorf("repo state = %v, want one task 'buy milk'", ctx.Tasks)
 	}
 }

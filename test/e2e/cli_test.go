@@ -11,7 +11,7 @@ func TestTodoAdd_WritesTaskToCurrentContextFile(t *testing.T) {
 	r := e.mustRun("todo", "add", "buy milk")
 	assertContains(t, "stdout", r.stdout, "Added:")
 	assertContains(t, "stdout", r.stdout, "buy milk")
-	assertEqual(t, "todo.txt", e.readData("todo.txt"), "buy milk\n")
+	assertEqual(t, "todo.txt", e.readData("todo.txt"), today()+" buy milk\n")
 }
 
 func TestTodoAdd_AppendsMultipleTasks(t *testing.T) {
@@ -21,8 +21,9 @@ func TestTodoAdd_AppendsMultipleTasks(t *testing.T) {
 	e.mustRun("todo", "add", "second task")
 	e.mustRun("todo", "add", "third task")
 
+	d := today()
 	assertEqual(t, "todo.txt", e.readData("todo.txt"),
-		"first task\nsecond task\nthird task\n")
+		d+" first task\n"+d+" second task\n"+d+" third task\n")
 }
 
 func TestTodoShow_EmptyContext(t *testing.T) {
@@ -51,7 +52,7 @@ func TestTodoAddTo_WritesToNamedContext(t *testing.T) {
 	assertContains(t, "stdout", r.stdout, "Added:")
 	assertContains(t, "stdout", r.stdout, "ship feature")
 	assertContains(t, "stdout", r.stdout, "work")
-	assertEqual(t, "work.txt", e.readData("work.txt"), "ship feature\n")
+	assertEqual(t, "work.txt", e.readData("work.txt"), today()+" ship feature\n")
 	if e.dataExists("todo.txt") {
 		got := e.readData("todo.txt")
 		if got != "" {
@@ -88,7 +89,7 @@ func TestTodoDelete_RemovesTask(t *testing.T) {
 
 	assertContains(t, "stdout", r.stdout, "Deleted task:")
 	assertContains(t, "stdout", r.stdout, "delete this")
-	assertEqual(t, "todo.txt", e.readData("todo.txt"), "keep this\n")
+	assertEqual(t, "todo.txt", e.readData("todo.txt"), today()+" keep this\n")
 }
 
 func TestTodoMove_BetweenContexts(t *testing.T) {
@@ -100,7 +101,7 @@ func TestTodoMove_BetweenContexts(t *testing.T) {
 	assertContains(t, "stdout", r.stdout, "Moved")
 	assertContains(t, "stdout", r.stdout, "moveme")
 	assertEqual(t, "todo.txt", e.readData("todo.txt"), "")
-	assertEqual(t, "work.txt", e.readData("work.txt"), "moveme\n")
+	assertEqual(t, "work.txt", e.readData("work.txt"), today()+" moveme\n")
 }
 
 func TestTodoPriority_SetsExplicitPriority(t *testing.T) {
@@ -112,7 +113,7 @@ func TestTodoPriority_SetsExplicitPriority(t *testing.T) {
 	assertContains(t, "stdout", r.stdout, "After:")
 	assertContains(t, "stdout", r.stdout, "(A)")
 	assertContains(t, "stdout", r.stdout, "urgent thing")
-	assertEqual(t, "todo.txt", e.readData("todo.txt"), "(A) urgent thing\n")
+	assertEqual(t, "todo.txt", e.readData("todo.txt"), "(A) "+today()+" urgent thing\n")
 }
 
 func TestTodoPriority_BeforeAfterReflectsTransition(t *testing.T) {
@@ -146,7 +147,8 @@ func TestTodoPriorityIncrease_LowersLetter(t *testing.T) {
 	e.mustRun("todo", "add", "(C) something")
 	e.mustRun("todo", "+", "0")
 
-	assertContains(t, "todo.txt", e.readData("todo.txt"), "(B) something")
+	// rebuild's todo.txt-compliant ordering: "(B) <date> something".
+	assertContains(t, "todo.txt", e.readData("todo.txt"), "(B) "+today()+" something")
 }
 
 // NOTE: `htt todo - <id>` is not reachable via subprocess args because
@@ -172,7 +174,7 @@ func TestTodoSearch_MatchesByRegex(t *testing.T) {
 	e.mustRun("todo", "add", "buy milk")
 	e.mustRun("todo", "add", "call alice")
 
-	r := e.mustRun("todo", "search", "^buy")
+	r := e.mustRun("todo", "search", "buy")
 	assertContains(t, "stdout", r.stdout, "buy bread")
 	assertContains(t, "stdout", r.stdout, "buy milk")
 	if strings.Contains(r.stdout, "call alice") {
@@ -197,7 +199,7 @@ func TestTodoContext_SwitchesAndPersists(t *testing.T) {
 	assertContains(t, "stdout", r.stdout, "Now using context: work")
 
 	e.mustRun("todo", "add", "task in work")
-	assertEqual(t, "work.txt", e.readData("work.txt"), "task in work\n")
+	assertEqual(t, "work.txt", e.readData("work.txt"), today()+" task in work\n")
 
 	r2 := e.mustRun("todo", "context")
 	assertContains(t, "stdout", r2.stdout, "work")
@@ -226,7 +228,7 @@ func TestTodoDelete_OutOfRangeFails(t *testing.T) {
 	if r.exitCode == 0 {
 		t.Errorf("expected non-zero exit, got 0\nstdout:\n%s\nstderr:\n%s", r.stdout, r.stderr)
 	}
-	assertEqual(t, "todo.txt", e.readData("todo.txt"), "only task\n")
+	assertEqual(t, "todo.txt", e.readData("todo.txt"), today()+" only task\n")
 }
 
 func TestTodoPriority_InvalidPriorityFails(t *testing.T) {

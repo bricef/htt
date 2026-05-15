@@ -8,6 +8,7 @@ package domain_test
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/bricef/htt/internal/domain"
 	"github.com/bricef/htt/internal/storage"
@@ -57,12 +58,12 @@ func TestContext_AddTask_AppendsAndPersists(t *testing.T) {
 	if err := ctx.AddTask(mustTask(t, "buy milk")); err != nil {
 		t.Fatalf("AddTask: %v", err)
 	}
-	if len(ctx.Tasks) != 1 || ctx.Tasks[0].Raw != "buy milk" {
+	if len(ctx.Tasks) != 1 || ctx.Tasks[0].Entry() != "buy milk" {
 		t.Errorf("in-memory ctx.Tasks = %v, want one buy-milk", ctx.Tasks)
 	}
 
 	stored := loadCtx(t, repo, "todo")
-	if len(stored.Tasks) != 1 || stored.Tasks[0].Raw != "buy milk" {
+	if len(stored.Tasks) != 1 || stored.Tasks[0].Entry() != "buy milk" {
 		t.Errorf("persisted tasks = %v, want one buy-milk", stored.Tasks)
 	}
 }
@@ -75,12 +76,70 @@ func TestContext_AddTask_AppendsToNamedContextNotCurrent(t *testing.T) {
 	}
 
 	storedWork := loadCtx(t, repo, "work")
-	if len(storedWork.Tasks) != 1 || storedWork.Tasks[0].Raw != "ship feature" {
+	if len(storedWork.Tasks) != 1 || storedWork.Tasks[0].Entry() != "ship feature" {
 		t.Errorf("work tasks = %v", storedWork.Tasks)
 	}
 	storedTodo := loadCtx(t, repo, "todo")
 	if len(storedTodo.Tasks) != 0 {
 		t.Errorf("todo should be empty, got %v", storedTodo.Tasks)
+	}
+}
+
+func TestContext_AddTask_StampsCreatedOnWhenMissing(t *testing.T) {
+	repo := newRepo(t)
+	ctx := currentCtx(t, repo)
+
+	before := time.Now().Add(-time.Second)
+	task := mustTask(t, "ship the report")
+	if !task.CreatedOn.IsZero() {
+		t.Fatalf("precondition: expected unset CreatedOn before AddTask, got %v", task.CreatedOn)
+	}
+
+	if err := ctx.AddTask(task); err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+	after := time.Now().Add(time.Second)
+
+	if task.CreatedOn.IsZero() {
+		t.Fatalf("AddTask should have stamped CreatedOn, still zero")
+	}
+	if task.CreatedOn.Before(before) || task.CreatedOn.After(after) {
+		t.Errorf("CreatedOn = %v, expected within [%v, %v]", task.CreatedOn, before, after)
+	}
+
+	// The stamped date must round-trip through Raw — disk-persisted
+	// state has to reflect the stamp, not just the in-memory field.
+	stored := loadCtx(t, repo, "todo")
+	if len(stored.Tasks) != 1 {
+		t.Fatalf("stored len = %d, want 1", len(stored.Tasks))
+	}
+	if stored.Tasks[0].CreatedOn.IsZero() {
+		t.Errorf("re-loaded task lost its CreatedOn; Raw=%q", stored.Tasks[0].Raw)
+	}
+	if stored.Tasks[0].Entry() != "ship the report" {
+		t.Errorf("re-loaded Entry = %q, want 'ship the report' (Raw=%q)",
+			stored.Tasks[0].Entry(), stored.Tasks[0].Raw)
+	}
+}
+
+func TestContext_AddTask_PreservesExplicitCreatedOn(t *testing.T) {
+	// A task whose Raw already includes a creation date (the parser
+	// populated CreatedOn) must keep its explicit date — AddTask must
+	// not overwrite the user's intent.
+	repo := newRepo(t)
+	ctx := currentCtx(t, repo)
+
+	explicit := time.Date(2026, 1, 1, 0, 0, 0, 0, time.Local)
+	task := mustTask(t, "2026-01-01 happy new year")
+	if !task.CreatedOn.Equal(explicit) {
+		t.Fatalf("precondition: parser should have set CreatedOn=%v, got %v", explicit, task.CreatedOn)
+	}
+
+	if err := ctx.AddTask(task); err != nil {
+		t.Fatalf("AddTask: %v", err)
+	}
+	if !task.CreatedOn.Equal(explicit) {
+		t.Errorf("AddTask overwrote explicit CreatedOn: got %v, want %v", task.CreatedOn, explicit)
 	}
 }
 
@@ -96,12 +155,12 @@ func TestContext_Delete_RemovesAndPersists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
-	if task.Raw != "delete me" {
-		t.Errorf("deleted task = %q, want 'delete me'", task.Raw)
+	if task.Entry() != "delete me" {
+		t.Errorf("deleted task = %q, want 'delete me'", task.Entry())
 	}
 
 	stored := loadCtx(t, repo, "todo")
-	if len(stored.Tasks) != 1 || stored.Tasks[0].Raw != "keep" {
+	if len(stored.Tasks) != 1 || stored.Tasks[0].Entry() != "keep" {
 		t.Errorf("stored = %v, want one 'keep'", stored.Tasks)
 	}
 }
@@ -125,12 +184,12 @@ func TestContext_Replace_SwapsAndPersists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Replace: %v", err)
 	}
-	if old.Raw != "old" {
-		t.Errorf("snapshot = %q, want 'old'", old.Raw)
+	if old.Entry() != "old" {
+		t.Errorf("snapshot = %q, want 'old'", old.Entry())
 	}
 
 	stored := loadCtx(t, repo, "todo")
-	if len(stored.Tasks) != 1 || stored.Tasks[0].Raw != "new" {
+	if len(stored.Tasks) != 1 || stored.Tasks[0].Entry() != "new" {
 		t.Errorf("stored = %v, want one 'new'", stored.Tasks)
 	}
 }
@@ -155,8 +214,8 @@ func TestContext_Move_TransfersBetweenContexts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Move: %v", err)
 	}
-	if task.Raw != "moveme" {
-		t.Errorf("moved task = %q, want 'moveme'", task.Raw)
+	if task.Entry() != "moveme" {
+		t.Errorf("moved task = %q, want 'moveme'", task.Entry())
 	}
 
 	source := loadCtx(t, repo, "todo")
@@ -164,7 +223,7 @@ func TestContext_Move_TransfersBetweenContexts(t *testing.T) {
 		t.Errorf("source should be empty, got %v", source.Tasks)
 	}
 	dest := loadCtx(t, repo, "work")
-	if len(dest.Tasks) != 1 || dest.Tasks[0].Raw != "moveme" {
+	if len(dest.Tasks) != 1 || dest.Tasks[0].Entry() != "moveme" {
 		t.Errorf("dest = %v, want one 'moveme'", dest.Tasks)
 	}
 }
@@ -223,8 +282,8 @@ func TestContext_SetPriority_RewritesTaskAndPersists(t *testing.T) {
 		t.Errorf("priority = %q, want A", neu.Priority)
 	}
 	stored := loadCtx(t, repo, "todo")
-	if !strings.HasPrefix(stored.Tasks[0].Raw, "(A) ") {
-		t.Errorf("stored = %q, want (A) prefix", stored.Tasks[0].Raw)
+	if stored.Tasks[0].Priority != "A" {
+		t.Errorf("stored Priority = %q, want A (Raw = %q)", stored.Tasks[0].Priority, stored.Tasks[0].Raw)
 	}
 }
 
@@ -274,8 +333,8 @@ func TestContext_IncreasePriority_StepsUpAndPersists(t *testing.T) {
 		t.Errorf("priority = %q, want B", neu.Priority)
 	}
 	stored := loadCtx(t, repo, "todo")
-	if !strings.HasPrefix(stored.Tasks[0].Raw, "(B) ") {
-		t.Errorf("stored = %q, want (B) prefix", stored.Tasks[0].Raw)
+	if stored.Tasks[0].Priority != "B" {
+		t.Errorf("stored Priority = %q, want B (Raw = %q)", stored.Tasks[0].Priority, stored.Tasks[0].Raw)
 	}
 }
 
@@ -292,8 +351,8 @@ func TestContext_DecreasePriority_StepsDownAndPersists(t *testing.T) {
 		t.Errorf("priority = %q, want B", neu.Priority)
 	}
 	stored := loadCtx(t, repo, "todo")
-	if !strings.HasPrefix(stored.Tasks[0].Raw, "(B) ") {
-		t.Errorf("stored = %q, want (B) prefix", stored.Tasks[0].Raw)
+	if stored.Tasks[0].Priority != "B" {
+		t.Errorf("stored Priority = %q, want B (Raw = %q)", stored.Tasks[0].Priority, stored.Tasks[0].Raw)
 	}
 }
 
@@ -313,7 +372,7 @@ func TestContext_Move_SameContextRejected(t *testing.T) {
 	}
 
 	stored := loadCtx(t, repo, "todo")
-	if len(stored.Tasks) != 1 || stored.Tasks[0].Raw != "stay" {
+	if len(stored.Tasks) != 1 || stored.Tasks[0].Entry() != "stay" {
 		t.Errorf("stored = %v, want one 'stay' (no duplication)", stored.Tasks)
 	}
 }
@@ -376,14 +435,20 @@ func TestContext_IncreasePriority_PersistsSortedOrder(t *testing.T) {
 	}
 
 	stored := loadCtx(t, repo, "todo")
-	wantOrder := []string{"(A) urgent", "(C) low", "(C) no pri"}
+	type want struct{ priority, entry string }
+	wantOrder := []want{
+		{"A", "urgent"},
+		{"C", "low"},
+		{"C", "no pri"},
+	}
 	if len(stored.Tasks) != len(wantOrder) {
 		t.Fatalf("len(stored.Tasks) = %d, want %d", len(stored.Tasks), len(wantOrder))
 	}
-	for i, want := range wantOrder {
-		if stored.Tasks[i].Raw != want {
-			t.Errorf("Tasks[%d] = %q, want %q (disk order should match displayed sort)",
-				i, stored.Tasks[i].Raw, want)
+	for i, w := range wantOrder {
+		got := stored.Tasks[i]
+		if got.Priority != w.priority || got.Entry() != w.entry {
+			t.Errorf("Tasks[%d] = (priority=%q, entry=%q), want (priority=%q, entry=%q) — Raw=%q",
+				i, got.Priority, got.Entry(), w.priority, w.entry, got.Raw)
 		}
 	}
 }
@@ -516,7 +581,7 @@ func TestContext_PersistentMethodsSaveThroughInjectedRepo(t *testing.T) {
 	}
 
 	fresh := loadCtx(t, repo, "alpha")
-	if len(fresh.Tasks) != 1 || fresh.Tasks[0].Raw != "anchored" {
+	if len(fresh.Tasks) != 1 || fresh.Tasks[0].Entry() != "anchored" {
 		t.Errorf("repo round-trip failed; got %v", fresh.Tasks)
 	}
 }

@@ -17,10 +17,9 @@ const modulePath = "github.com/bricef/htt"
 // TestArchitecture_DependencyDirections is the structural invariant the
 // refactor promises:
 //
-//   - domain imports nothing from storage, usecase, cli, tui
+//   - domain imports nothing from storage, cli, tui
 //   - storage may import domain
-//   - usecase may import domain, storage
-//   - tui imports usecase, storage, domain — but NOT cli
+//   - tui imports storage, domain — but NOT cli
 //   - cli imports tui (to register the `interactive` subcommand) and
 //     everything below. cli → tui is one-way: the CLI is the program's
 //     entry point and may launch the TUI as a mode.
@@ -31,17 +30,11 @@ func TestArchitecture_DependencyDirections(t *testing.T) {
 	forbidden := map[string][]string{
 		"internal/domain": {
 			"internal/storage",
-			"internal/usecase",
 			"internal/cli",
 			"internal/tui",
 			"internal/utils",
 		},
 		"internal/storage": {
-			"internal/usecase",
-			"internal/cli",
-			"internal/tui",
-		},
-		"internal/usecase": {
 			"internal/cli",
 			"internal/tui",
 		},

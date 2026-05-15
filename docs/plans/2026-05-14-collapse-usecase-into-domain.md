@@ -7,14 +7,14 @@
 ## Resume marker (where this session left off)
 
 - Branch: `refactor/collapse-usecase-into-domain`
-- Steps 1, 2, 3, and 4 complete. CLI and TUI now talk to `domain.Repository`
-  directly: `cli.repo()` / `cli.SetRepository` replace `cli.uc()` /
-  `cli.SetUseCases`; TUI's model holds a `repo domain.Repository` and its
-  actions drive `m.context.X(...)` directly. `domain.SwitchableContextNames`
-  is the shared "all contexts except done" helper used by both
-  `htt status` and the TUI tab strip. `usecase` package still exists in
-  isolation (nothing imports it now); deleted in Step 6.
-- Next action: Step 5 — unexport Task mutators, rename `Do` → `markCompleted`.
+- Steps 1, 2, 3, 4, and 6 complete (Step 6 swapped before Step 5 because
+  usecase.go still referenced the to-be-unexported Task mutators).
+  `internal/usecase/` is gone. Architecture test no longer mentions
+  usecase.
+- Next action: Step 5 — unexport `Task.SetPriority` / `IncreasePriority`
+  / `DecreasePriority` and rename `Do` → `markCompleted`. All remaining
+  callers live inside the `domain` package after Step 6's delete, so
+  this is purely an in-package rename.
 
 The plan went through two rounds of design dialogue before any code was
 written. The "Decisions captured" section below records the choices that

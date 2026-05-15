@@ -145,3 +145,48 @@ func TestCobra_DoCommand_MovesToDone(t *testing.T) {
 		t.Errorf("done should contain completed task, got %v", doneCtx.Tasks)
 	}
 }
+
+func TestCobra_LogAdd_PersistsToTimelogRepo(t *testing.T) {
+	withMemoryRepo(t)
+	tlRepo := withMemoryTimelogRepo(t)
+
+	if err := runCobra(t, "log", "add", "wrote", "tests"); err != nil {
+		t.Fatalf("log add: %v", err)
+	}
+
+	tl, err := tlRepo.Today()
+	if err != nil {
+		t.Fatalf("Today: %v", err)
+	}
+	if len(tl.Entries) != 1 {
+		t.Fatalf("len(Entries) = %d, want 1", len(tl.Entries))
+	}
+	if !strings.Contains(tl.Entries[0].Raw, "wrote tests") {
+		t.Errorf("entry should contain 'wrote tests', got %q", tl.Entries[0].Raw)
+	}
+	if !strings.Contains(tl.Entries[0].Raw, "ts:") {
+		t.Errorf("entry should carry ts: annotation, got %q", tl.Entries[0].Raw)
+	}
+}
+
+func TestCobra_LogEnd_ThenStatus_ReportsEndAsActive(t *testing.T) {
+	// Pins the naive "Latest is whatever was last appended" semantic
+	// across the CLI seam. After `htt log end`, `htt log active` says
+	// "Working on: @end (...)" — current product behaviour;
+	// sentinel-aware semantics are feature work.
+	withMemoryRepo(t)
+	withMemoryTimelogRepo(t)
+
+	if err := runCobra(t, "log", "start"); err != nil {
+		t.Fatalf("log start: %v", err)
+	}
+	if err := runCobra(t, "log", "end"); err != nil {
+		t.Fatalf("log end: %v", err)
+	}
+	if err := runCobra(t, "log", "active"); err != nil {
+		t.Errorf("log active after end: %v", err)
+	}
+	if err := runCobra(t, "log", "status"); err != nil {
+		t.Errorf("log status after end: %v", err)
+	}
+}

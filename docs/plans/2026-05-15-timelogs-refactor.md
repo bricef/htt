@@ -1,7 +1,7 @@
 # Extract `TimelogRepository`, idiomize `internal/timelogs`
 
 **Date:** 2026-05-15
-**Status:** Proposed
+**Status:** Complete (2026-05-15)
 **Builds on:** `2026-05-14-collapse-usecase-into-domain.md`
 
 ## Motivation

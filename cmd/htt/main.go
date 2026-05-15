@@ -44,7 +44,7 @@ func main() {
 	// global flags
 	var nocolor = false
 	cli.RootCmd.PersistentFlags().BoolVarP(&nocolor, vars.NoColorFlag, "", false, "Disable color output for coloured commands")
-	viper.BindPFlag(vars.NoColorFlag, cli.RootCmd.PersistentFlags().Lookup(vars.NoColorFlag))
+	_ = viper.BindPFlag(vars.NoColorFlag, cli.RootCmd.PersistentFlags().Lookup(vars.NoColorFlag))
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {

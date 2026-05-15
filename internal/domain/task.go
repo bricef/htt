@@ -113,13 +113,13 @@ func (t *Task) rebuild() *Task {
 		b.WriteString(t.CreatedOn.Format("2006-01-02 "))
 	}
 	if t.Priority != "" {
-		b.WriteString(fmt.Sprintf("(%s) ", t.Priority))
+		fmt.Fprintf(&b, "(%s) ", t.Priority)
 	}
 	if t.entry != "" {
-		b.WriteString(fmt.Sprintf("%s ", t.entry))
+		fmt.Fprintf(&b, "%s ", t.entry)
 	}
 	for k, v := range t.Annotations {
-		b.WriteString(fmt.Sprintf("%s:%s ", k, v))
+		fmt.Fprintf(&b, "%s:%s ", k, v)
 	}
 
 	t.Raw = strings.TrimSpace(b.String())

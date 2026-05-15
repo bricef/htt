@@ -40,8 +40,8 @@ func (c *Context) Equals(other *Context) bool {
 
 func (c *Context) Sort() *Context {
 	slices.SortFunc(c.Tasks, func(i, j *Task) int {
-		var a string = i.Priority
-		var b string = j.Priority
+		var a = i.Priority
+		var b = j.Priority
 		if a == "" {
 			a = "Z"
 		}

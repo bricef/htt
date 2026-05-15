@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"image/color"
 	"log"
 	"slices"
 
@@ -13,7 +12,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	lipgloss "github.com/charmbracelet/lipgloss"
-	"github.com/lucasb-eyer/go-colorful"
 )
 
 // {
@@ -54,30 +52,6 @@ var (
 	selected_color   = lipgloss.Color(Cerulean)
 	cursor_color     = lipgloss.Color(Verdigris)
 )
-
-func saturation(color color.Color, s float64) color.Color {
-	r, g, b, _ := color.RGBA()
-	c := colorful.Color{
-		R: float64(r) / 255,
-		G: float64(g) / 255,
-		B: float64(b) / 255,
-	}
-	h, l, _ := c.HSLuv()
-	c = colorful.HSLuv(h, s, l)
-	return lipgloss.Color(c.Hex())
-}
-
-func luminance(color color.Color, l float64) color.Color {
-	r, g, b, _ := color.RGBA()
-	c := colorful.Color{
-		R: float64(r) / 255,
-		G: float64(g) / 255,
-		B: float64(b) / 255,
-	}
-	h, _, s := c.HSLuv()
-	c = colorful.HSLuv(h, s, l)
-	return lipgloss.Color(c.Hex())
-}
 
 // var color_subtle = lipgloss.AdaptiveColor{
 // 	Light: "#909090",

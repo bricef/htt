@@ -33,7 +33,7 @@ func dateValidation(name string, s parsec.Scanner, node parsec.Queryable) parsec
 
 func KVPAIR2String(node parsec.Queryable) (string, string, error) {
 	if node.GetName() != "KVPAIR" { // annoying we can't use the type system for this.
-		return "", "", errors.New("Tried to parse something other than a KVPAIR")
+		return "", "", errors.New("tried to parse something other than a KVPAIR")
 	}
 	key := node.GetChildren()[0].GetValue()
 	value := node.GetChildren()[2].GetValue()

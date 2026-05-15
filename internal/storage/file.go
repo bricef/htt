@@ -104,7 +104,7 @@ func (r *FileRepository) Context(name string) (*domain.Context, error) {
 		}
 		return nil, fmt.Errorf("open %s: %w", r.ContextPath(name), err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	lineNo := 0
@@ -166,7 +166,7 @@ func (r *FileRepository) Save(ctx *domain.Context) error {
 	if err != nil {
 		return fmt.Errorf("create %s: %w", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	for _, task := range ctx.Tasks {
 		if _, err := fmt.Fprintln(f, task.Raw); err != nil {

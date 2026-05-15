@@ -60,7 +60,7 @@ func (r *FileTimelogRepository) Day(date time.Time) (*domain.Timelog, error) {
 		}
 		return nil, fmt.Errorf("open %s: %w", r.logPath(date), err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	lineNo := 0
@@ -106,7 +106,7 @@ func (r *FileTimelogRepository) Save(l *domain.Timelog) error {
 	if err != nil {
 		return fmt.Errorf("create %s: %w", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	for _, entry := range l.Entries {
 		if _, err := fmt.Fprintln(f, entry.Raw); err != nil {

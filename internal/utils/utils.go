@@ -115,7 +115,7 @@ func StringSliceIndex(slice []string, item string) (int, error) {
 			return i, nil
 		}
 	}
-	return 0, errors.New("Could not find item in slice")
+	return 0, errors.New("could not find item in slice")
 }
 
 func EditFilePath(filepath string) {

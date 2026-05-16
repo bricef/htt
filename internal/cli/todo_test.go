@@ -15,11 +15,18 @@ import (
 //
 // Tests using this helper must NOT run in parallel because RootCmd and
 // the repo() injection point are package-level state.
+//
+// Cobra flag values are package-level globals that persist across
+// RootCmd.Execute calls in the same process. Reset every stateful
+// flag here so a test that sets --due (or any future flag) can't
+// poison the next test.
 func withMemoryRepo(t *testing.T) *storage.MemoryRepository {
 	t.Helper()
 	repo := storage.NewMemoryRepository()
 	prev := defaultRepo
 	SetRepository(repo)
+	addDue = ""
+	addToDue = ""
 	t.Cleanup(func() { SetRepository(prev) })
 	return repo
 }
@@ -233,6 +240,43 @@ func TestCobra_Report_InvalidSinceErrors(t *testing.T) {
 
 	if err := runCobra(t, "report", "--since", "yesterday"); err == nil {
 		t.Errorf("report --since yesterday should error (unknown format)")
+	}
+}
+
+func TestCobra_AddWithDue_StampsAnnotation(t *testing.T) {
+	// `htt todo add --due 2026-12-25 ...` should stamp the resolved
+	// date as a due: annotation. Round-trip through the repo proves
+	// the annotation survives Save/Load.
+	repo := withMemoryRepo(t)
+
+	if err := runCobra(t, "todo", "add", "--due", "2026-12-25", "wrap presents"); err != nil {
+		t.Fatalf("add --due: %v", err)
+	}
+
+	ctx, _ := repo.Context("todo")
+	if len(ctx.Tasks) != 1 {
+		t.Fatalf("expected one task, got %d", len(ctx.Tasks))
+	}
+	got := ctx.Tasks[0]
+	if got.Annotations["due"] != "2026-12-25" {
+		t.Errorf("due annotation = %q, want 2026-12-25 (Raw=%q)",
+			got.Annotations["due"], got.Raw)
+	}
+	if got.Entry() != "wrap presents" {
+		t.Errorf("Entry = %q, want 'wrap presents' (Raw=%q)", got.Entry(), got.Raw)
+	}
+}
+
+func TestCobra_AddWithDue_RejectsNonsense(t *testing.T) {
+	// Gibberish in --due must surface as an error rather than silently
+	// dropping the flag — silent no-op is worse than a clear diagnostic.
+	withMemoryRepo(t)
+	err := runCobra(t, "todo", "add", "--due", "xyzzy", "bad input")
+	if err == nil {
+		t.Fatalf("expected error from --due xyzzy, got nil")
+	}
+	if !strings.Contains(err.Error(), "parse --due") {
+		t.Errorf("error should mention 'parse --due', got %q", err.Error())
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/bricef/htt/internal/domain"
 	"github.com/bricef/htt/internal/utils"
@@ -30,11 +31,20 @@ var TodoCommand = &cobra.Command{
 	},
 }
 
+var addDue string
+
 var add = &cobra.Command{
 	Use:     "add <entry...>",
 	Aliases: []string{"a"},
 	Short:   "Add an item to the current tasklist",
-	Args:    cobra.MinimumNArgs(1),
+	Long: `Add an item to the current tasklist.
+
+The --due flag accepts an absolute date (YYYY-MM-DD) or a natural-
+language phrase ("Friday", "tomorrow", "in two weeks", "next Monday").
+The phrase is resolved to a date and stored as a due: annotation on
+the task — the file always carries a structured date, regardless of
+how the user typed it.`,
+	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx, err := repo().CurrentContext()
 		if err != nil {
@@ -44,6 +54,9 @@ var add = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("parse task: %w", err)
 		}
+		if err := applyDueFlag(task, addDue); err != nil {
+			return err
+		}
 		if err := ctx.AddTask(task); err != nil {
 			return fmt.Errorf("add task: %w", err)
 		}
@@ -51,6 +64,8 @@ var add = &cobra.Command{
 		return nil
 	},
 }
+
+var addToDue string
 
 var addTo = &cobra.Command{
 	Use:   "add-to <context> <entry...>",
@@ -65,12 +80,34 @@ var addTo = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("parse task: %w", err)
 		}
+		if err := applyDueFlag(task, addToDue); err != nil {
+			return err
+		}
 		if err := ctx.AddTask(task); err != nil {
 			return fmt.Errorf("add task to %s: %w", args[0], err)
 		}
 		fmt.Printf("Added: %v to %v", task.ConsoleString(), ctx.ConsoleString())
 		return nil
 	},
+}
+
+// applyDueFlag resolves a --due flag value (absolute date or natural-
+// language phrase) and stamps it as a due: annotation on task.
+// Empty flag is a no-op so callers don't pre-filter. Anchored at
+// time.Now() because the flag is a user-facing convenience —
+// deterministic clocks are only needed in the parseDue unit tests.
+func applyDueFlag(task *domain.Task, value string) error {
+	if value == "" {
+		return nil
+	}
+	due, err := parseDue(value, time.Now())
+	if err != nil {
+		return fmt.Errorf("parse --due: %w", err)
+	}
+	if _, err := task.Annotate("due", due.Format("2006-01-02")); err != nil {
+		return fmt.Errorf("annotate due date: %w", err)
+	}
+	return nil
 }
 
 var show = &cobra.Command{
@@ -430,6 +467,11 @@ var search = &cobra.Command{
 }
 
 func init() {
+	add.Flags().StringVar(&addDue, "due", "",
+		"Due date: absolute (YYYY-MM-DD) or phrase (Friday, tomorrow, in two weeks)")
+	addTo.Flags().StringVar(&addToDue, "due", "",
+		"Due date: absolute (YYYY-MM-DD) or phrase (Friday, tomorrow, in two weeks)")
+
 	TodoCommand.AddCommand(add)
 	TodoCommand.AddCommand(addTo)
 	TodoCommand.AddCommand(show)

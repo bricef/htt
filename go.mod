@@ -32,6 +32,7 @@ require (
 	github.com/charmbracelet/x/ansi v0.9.3 // indirect
 	github.com/charmbracelet/x/cellbuf v0.0.13 // indirect
 	github.com/charmbracelet/x/term v0.2.1 // indirect
+	github.com/chzyer/readline v1.5.1 // indirect
 	github.com/cloudflare/circl v1.6.3 // indirect
 	github.com/cyphar/filepath-securejoin v0.6.1 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect

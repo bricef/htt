@@ -1,0 +1,200 @@
+package cli
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/bricef/htt/internal/vars"
+	"github.com/chzyer/readline"
+	"github.com/spf13/cobra"
+)
+
+// Repl runs an interactive todo-mode shell.
+//
+// Each cycle clears the screen, renders the current context, and
+// reads one command line. Inputs without a leading slash dispatch
+// as `todo <input>` (todo-mode default); inputs starting with `/`
+// have the slash stripped and dispatch as a full CLI command.
+//
+// Exit on Ctrl-D, Ctrl-C, or by typing `quit`, `exit`, or `q`. An
+// empty Enter refreshes the view.
+var Repl = &cobra.Command{
+	Use:   "repl",
+	Short: "Interactive todo-mode shell.",
+	Long: `Interactive todo-mode shell.
+
+Inputs are dispatched as ` + "`todo <input>`" + ` by default — typing
+` + "`add buy milk`" + ` runs ` + "`htt todo add buy milk`" + `. Prefix a
+line with ` + "`/`" + ` to escape to a full CLI command:
+` + "`/log start review`" + ` runs ` + "`htt log start review`" + `.
+
+Exit with Ctrl-D, Ctrl-C, or by typing quit / exit / q.`,
+	Args: cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runRepl()
+	},
+}
+
+func init() {
+	RootCmd.AddCommand(Repl)
+}
+
+// runRepl owns the readline loop. Errors from individual commands
+// print to stderr but don't break the loop — only EOF, interrupt,
+// or an exit word exits.
+func runRepl() error {
+	rl, err := readline.NewEx(&readline.Config{
+		Prompt:          replPrompt(),
+		HistoryFile:     replHistoryPath(),
+		InterruptPrompt: "^C",
+		EOFPrompt:       "exit",
+	})
+	if err != nil {
+		return fmt.Errorf("init readline: %w", err)
+	}
+	defer func() { _ = rl.Close() }()
+
+	for {
+		rl.SetPrompt(replPrompt())
+		renderReplView()
+
+		line, err := rl.Readline()
+		if errors.Is(err, io.EOF) || errors.Is(err, readline.ErrInterrupt) {
+			fmt.Println()
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("readline: %w", err)
+		}
+
+		kind, parsed := classifyReplInput(line)
+		switch kind {
+		case replInputNone:
+			continue
+		case replInputExit:
+			return nil
+		case replInputDispatch:
+			if isDisabledInRepl(parsed) {
+				fmt.Fprintf(os.Stderr, "%q is not available inside the REPL\n", parsed[0])
+				continue
+			}
+			resetReplFlags()
+			RootCmd.SetArgs(parsed)
+			if err := RootCmd.Execute(); err != nil {
+				fmt.Fprintln(os.Stderr, err)
+			}
+		}
+	}
+}
+
+type replInputKind int
+
+const (
+	replInputNone replInputKind = iota
+	replInputExit
+	replInputDispatch
+)
+
+// classifyReplInput maps a raw input line to the action the loop
+// should take. Pure function for testability.
+//
+//   - empty / whitespace-only      → (none, nil)
+//   - "quit" / "exit" / "q"        → (exit, nil)
+//   - "/<rest>"                    → (dispatch, strings.Fields(rest))
+//                                    or (none, nil) if rest is empty
+//   - "<anything>"                 → (dispatch, ["todo", ...fields])
+func classifyReplInput(line string) (replInputKind, []string) {
+	s := strings.TrimSpace(line)
+	if s == "" {
+		return replInputNone, nil
+	}
+	switch s {
+	case "quit", "exit", "q":
+		return replInputExit, nil
+	}
+	if strings.HasPrefix(s, "/") {
+		rest := strings.TrimSpace(s[1:])
+		fields := strings.Fields(rest)
+		if len(fields) == 0 {
+			return replInputNone, nil
+		}
+		return replInputDispatch, fields
+	}
+	return replInputDispatch, append([]string{"todo"}, strings.Fields(s)...)
+}
+
+// isDisabledInRepl rejects commands that don't make sense inside
+// the REPL — `interactive` (would launch the TUI on top of the
+// REPL's terminal) and `repl` itself (recursive REPL).
+func isDisabledInRepl(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	switch args[0] {
+	case "interactive", "repl":
+		return true
+	}
+	return false
+}
+
+// resetReplFlags zeroes the package-level Cobra flag globals so
+// state from a prior loop iteration can't bleed into the next
+// dispatch. Cobra writes the flag's value into the bound variable
+// during Parse but doesn't reset to the default when the flag is
+// absent — so a single --due / --since from one command would
+// stick across subsequent runs without this reset.
+//
+// New stateful flags added elsewhere need to be added here.
+func resetReplFlags() {
+	addDue = ""
+	addToDue = ""
+	reportSince = "7d"
+}
+
+// renderReplView clears the screen and prints the current context.
+// Errors here print but don't break the loop — a load failure
+// shouldn't lock the user out of the prompt.
+func renderReplView() {
+	_, _ = readline.ClearScreen(os.Stdout)
+	ctx, err := repo().CurrentContext()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Could not load current context:", err)
+		return
+	}
+	ctx.Show()
+}
+
+// replPrompt returns the per-cycle prompt string. The context name
+// is fetched live so it tracks `context <name>` switches.
+func replPrompt() string {
+	name, err := repo().CurrentContextName()
+	if err != nil || name == "" {
+		name = "?"
+	}
+	return fmt.Sprintf("htt(%s)> ", name)
+}
+
+// replHistoryPath returns a usable history file path under the
+// configured config directory, or "" to disable history.
+//
+// Resolution order: viper's config_path key (matches the rest of
+// the config-aware code), then $HOME/.config/htt, then disabled.
+func replHistoryPath() string {
+	dir := vars.Get(vars.ConfigKeyConfigPath)
+	if dir == "" {
+		if h, err := os.UserHomeDir(); err == nil {
+			dir = filepath.Join(h, vars.DefaultConfigDir)
+		}
+	}
+	if dir == "" {
+		return ""
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return ""
+	}
+	return filepath.Join(dir, "repl-history")
+}

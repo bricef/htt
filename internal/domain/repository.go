@@ -73,9 +73,15 @@ const DefaultContextName = "todo"
 // Context.Complete moves the indexed task into this context.
 const DoneContextName = "done"
 
+// ArchiveContextName is the conventional target for deleted tasks.
+// Context.Delete moves the indexed task into this context, annotating
+// it with archived-from:<source> and deleted-on:<date>. Deleting from
+// the archive itself is true removal (no further archival).
+const ArchiveContextName = "archive"
+
 // SwitchableContextNames returns every persisted context name except
-// DoneContextName — the contexts a user can usefully switch to. Order
-// matches Repository.ContextNames.
+// the reserved ones (done, archive) — the contexts a user can
+// usefully switch to. Order matches Repository.ContextNames.
 //
 // This is a presentation-layer helper hoisted into the domain package so
 // CLI and TUI share a single definition (avoids a tiny six-line filter
@@ -87,9 +93,10 @@ func SwitchableContextNames(r Repository) ([]string, error) {
 	}
 	out := make([]string, 0, len(all))
 	for _, n := range all {
-		if n != DoneContextName {
-			out = append(out, n)
+		if n == DoneContextName || n == ArchiveContextName {
+			continue
 		}
+		out = append(out, n)
 	}
 	return out, nil
 }

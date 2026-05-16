@@ -235,3 +235,21 @@ func TestCobra_Report_InvalidSinceErrors(t *testing.T) {
 		t.Errorf("report --since yesterday should error (unknown format)")
 	}
 }
+
+func TestCobra_Report_DeletedSectionWalksArchive(t *testing.T) {
+	// Seed: add a task, delete it. The archive context should hold one
+	// annotated entry; the report should walk it without error.
+	withMemoryRepo(t)
+	withMemoryTimelogRepo(t)
+
+	if err := runCobra(t, "todo", "add", "throwaway"); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	if err := runCobra(t, "todo", "delete", "0"); err != nil {
+		t.Fatalf("delete: %v", err)
+	}
+
+	if err := runCobra(t, "report", "--since", "7d"); err != nil {
+		t.Errorf("report after delete should succeed, got %v", err)
+	}
+}

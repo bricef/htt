@@ -30,20 +30,53 @@ func (c *Context) AddTask(task *Task) error {
 	return c.repo.Save(c)
 }
 
-// Delete removes the indexed task from the context and persists.
-// Returns the deleted task for callers that want to confirm what went.
+// Delete moves the indexed task to the archive context (annotating
+// it with archived-from:<source> and deleted-on:<date>) and persists
+// both. Returns the moved task so callers can confirm what went.
+//
+// Deleting from the archive itself is true removal — the task is
+// dropped from the in-memory slice and the archive is re-saved.
+// Otherwise we'd loop forever (move into the same file, re-annotate,
+// never actually drop). This is the seam for manual garbage
+// collection: open archive.txt in $EDITOR or call `htt todo delete`
+// while in the archive context.
+//
+// Same save-order reasoning as Move / Complete: archive is saved
+// first so a partial failure (ENOSPC, EROFS, quota) errs toward
+// duplication over loss — the user can rerun the delete or remove
+// the duplicate, but a lost task is gone.
 func (c *Context) Delete(strID string) (*Task, error) {
-	task, err := c.GetTaskByStrId(strID)
+	target, err := c.GetTaskByStrId(strID)
 	if err != nil {
 		return nil, err
 	}
-	if err := c.remove(task); err != nil {
+	if c.Name == ArchiveContextName {
+		if err := c.remove(target); err != nil {
+			return nil, err
+		}
+		if err := c.repo.Save(c); err != nil {
+			return nil, err
+		}
+		return target, nil
+	}
+	archive, err := c.repo.Context(ArchiveContextName)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := target.markDeleted(c, time.Now()); err != nil {
+		return nil, fmt.Errorf("mark task deleted: %w", err)
+	}
+	if err := c.remove(target); err != nil {
+		return nil, err
+	}
+	archive.add(target)
+	if err := c.repo.Save(archive); err != nil {
 		return nil, err
 	}
 	if err := c.repo.Save(c); err != nil {
 		return nil, err
 	}
-	return task, nil
+	return target, nil
 }
 
 // Replace swaps the indexed task for replacement, persists, and returns

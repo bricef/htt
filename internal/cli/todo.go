@@ -190,6 +190,21 @@ var editDone = &cobra.Command{
 	},
 }
 
+var editArchive = &cobra.Command{
+	Use:     "edit-archive",
+	Short:   "Open the archive file using $EDITOR (for manual garbage collection)",
+	Args:    cobra.NoArgs,
+	Aliases: []string{"ea"},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		path := repo().ContextPath(domain.ArchiveContextName)
+		if path == "" {
+			return fmt.Errorf("active repository does not expose a file path")
+		}
+		utils.EditFilePath(path)
+		return nil
+	},
+}
+
 var deleteTodo = &cobra.Command{
 	Use:     "delete <item index>",
 	Short:   "Delete the item specified",
@@ -421,6 +436,7 @@ func init() {
 	TodoCommand.AddCommand(edit)
 	TodoCommand.AddCommand(do)
 	TodoCommand.AddCommand(editDone)
+	TodoCommand.AddCommand(editArchive)
 	TodoCommand.AddCommand(deleteTodo)
 	TodoCommand.AddCommand(random)
 	TodoCommand.AddCommand(priPlus)

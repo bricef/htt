@@ -215,6 +215,26 @@ func (t *Task) markCompleted(context *Context, when time.Time) (*Task, error) {
 	return t, nil
 }
 
+// markDeleted stamps two annotations on a task being archived:
+//   - archived-from:<source.Name> — the context the task was deleted from
+//   - deleted-on:<YYYY-MM-DD>      — the date of deletion
+//
+// A distinct "archived-from" key (rather than reusing the completion-
+// time "context" annotation) avoids overwriting completion history
+// when a done.txt entry is deleted — the task keeps both context:work
+// (where it was completed) and archived-from:done (where it was
+// deleted). Symmetric with markCompleted; unexported for the same
+// reason.
+func (t *Task) markDeleted(source *Context, when time.Time) (*Task, error) {
+	if _, err := t.Annotate("archived-from", source.Name); err != nil {
+		return nil, fmt.Errorf("annotate archived-from: %w", err)
+	}
+	if _, err := t.Annotate("deleted-on", when.Format("2006-01-02")); err != nil {
+		return nil, fmt.Errorf("annotate deleted-on: %w", err)
+	}
+	return t, nil
+}
+
 // annotateKeyRE and annotateValueRE are the anchored validation forms of
 // the parser's tokenization regexes. The parser uses the unanchored
 // versions to tokenize from a cursor position; for whole-string input

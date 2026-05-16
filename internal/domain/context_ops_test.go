@@ -145,7 +145,7 @@ func TestContext_AddTask_PreservesExplicitCreatedOn(t *testing.T) {
 
 // --- Delete ---------------------------------------------------------------
 
-func TestContext_Delete_RemovesAndPersists(t *testing.T) {
+func TestContext_Delete_RemovesFromSourceAndArchives(t *testing.T) {
 	repo := newRepo(t)
 	ctx := currentCtx(t, repo)
 	_ = ctx.AddTask(mustTask(t, "keep"))
@@ -162,6 +162,98 @@ func TestContext_Delete_RemovesAndPersists(t *testing.T) {
 	stored := loadCtx(t, repo, "todo")
 	if len(stored.Tasks) != 1 || stored.Tasks[0].Entry() != "keep" {
 		t.Errorf("stored = %v, want one 'keep'", stored.Tasks)
+	}
+
+	archive := loadCtx(t, repo, domain.ArchiveContextName)
+	if len(archive.Tasks) != 1 {
+		t.Fatalf("archive should contain one task, got %v", archive.Tasks)
+	}
+	got := archive.Tasks[0]
+	if got.Annotations["archived-from"] != "todo" {
+		t.Errorf("archived-from = %q, want todo", got.Annotations["archived-from"])
+	}
+	if got.Annotations["deleted-on"] == "" {
+		t.Errorf("deleted-on annotation should be set")
+	}
+	if _, err := time.Parse("2006-01-02", got.Annotations["deleted-on"]); err != nil {
+		t.Errorf("deleted-on = %q should be YYYY-MM-DD: %v",
+			got.Annotations["deleted-on"], err)
+	}
+	if got.Entry() != "delete me" {
+		t.Errorf("archived Entry = %q, want 'delete me' (Raw=%q)", got.Entry(), got.Raw)
+	}
+}
+
+func TestContext_Delete_PreservesCompletionContextAnnotation(t *testing.T) {
+	// A task completed (and thus carrying context:work from
+	// markCompleted) must keep that annotation when later deleted
+	// from done. archived-from:done captures the delete source;
+	// context:work captures the completion source. Both useful.
+	repo := newRepo(t)
+	work := loadCtx(t, repo, "work")
+	_ = work.AddTask(mustTask(t, "the thing"))
+	if _, err := work.Complete("0"); err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+
+	done := loadCtx(t, repo, domain.DoneContextName)
+	if _, err := done.Delete("0"); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+
+	archive := loadCtx(t, repo, domain.ArchiveContextName)
+	if len(archive.Tasks) != 1 {
+		t.Fatalf("archive should hold one task, got %v", archive.Tasks)
+	}
+	got := archive.Tasks[0]
+	if got.Annotations["context"] != "work" {
+		t.Errorf("context annotation = %q, want work (lost on delete?)",
+			got.Annotations["context"])
+	}
+	if got.Annotations["archived-from"] != domain.DoneContextName {
+		t.Errorf("archived-from = %q, want done", got.Annotations["archived-from"])
+	}
+}
+
+func TestContext_Delete_FromArchiveIsTrueRemoval(t *testing.T) {
+	// Deleting from the archive must drop the entry entirely — no
+	// recursive re-archive. This is the seam for manual GC: a user
+	// editing archive.txt or running `htt todo delete` from the
+	// archive context can actually remove entries.
+	repo := newRepo(t)
+	archive := loadCtx(t, repo, domain.ArchiveContextName)
+	_ = archive.AddTask(mustTask(t, "purge me archived-from:todo deleted-on:2026-05-10"))
+
+	if _, err := archive.Delete("0"); err != nil {
+		t.Fatalf("Delete from archive: %v", err)
+	}
+	stored := loadCtx(t, repo, domain.ArchiveContextName)
+	if len(stored.Tasks) != 0 {
+		t.Errorf("archive should be empty after delete, got %v", stored.Tasks)
+	}
+}
+
+func TestContext_Delete_SavesArchiveFirst(t *testing.T) {
+	// bug_015 reasoning: a partial-save failure between the two Saves
+	// is recoverable only when destination is saved first.
+	// Source-first risks losing the task; destination-first leaves a
+	// recoverable duplicate.
+	repo := newOrderTrackingRepo()
+	if err := repo.SetCurrent("todo"); err != nil {
+		t.Fatalf("SetCurrent: %v", err)
+	}
+	repo.seed("todo", mustTask(t, "deleteme"))
+
+	ctx, _ := repo.Context("todo")
+	if _, err := ctx.Delete("0"); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+
+	if len(repo.saved) != 2 {
+		t.Fatalf("expected 2 Save calls, got %d (%v)", len(repo.saved), repo.saved)
+	}
+	if repo.saved[0] != domain.ArchiveContextName {
+		t.Errorf("first Save should be 'archive', got order %v", repo.saved)
 	}
 }
 

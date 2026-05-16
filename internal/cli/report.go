@@ -43,6 +43,10 @@ Examples:
 			return err
 		}
 		fmt.Println()
+		if err := reportDeleted(since, now); err != nil {
+			return err
+		}
+		fmt.Println()
 		return reportTimeLogged(since, now)
 	},
 }
@@ -230,6 +234,92 @@ func reportAdded(since, until time.Time) error {
 		}
 	}
 	return nil
+}
+
+// reportDeleted iterates the archive context and prints tasks whose
+// deleted-on annotation falls in [since, until], grouped by their
+// archived-from annotation.
+//
+// Entries missing or with malformed deleted-on are skipped rather
+// than erroring the whole report — the archive accumulates over
+// time and the cost of a single corrupt line shouldn't be a
+// non-functional `htt report`.
+func reportDeleted(since, until time.Time) error {
+	archive, err := repo().Context(domain.ArchiveContextName)
+	if err != nil {
+		return fmt.Errorf("load archive context: %w", err)
+	}
+
+	sinceDay := startOfDay(since)
+	byCtx := map[string][]archivedTask{}
+	count := 0
+	for _, task := range archive.Tasks {
+		deletedOn, ok := parseAnnotationDate(task.Annotations["deleted-on"])
+		if !ok {
+			continue
+		}
+		if deletedOn.Before(sinceDay) || deletedOn.After(until) {
+			continue
+		}
+		src := task.Annotations["archived-from"]
+		if src == "" {
+			src = "(unknown)"
+		}
+		byCtx[src] = append(byCtx[src], archivedTask{task: task, deletedOn: deletedOn})
+		count++
+	}
+
+	fmt.Printf("Deleted (%d)\n", count)
+	if count == 0 {
+		fmt.Println("  (none)")
+		return nil
+	}
+
+	ctxNames := make([]string, 0, len(byCtx))
+	for name := range byCtx {
+		ctxNames = append(ctxNames, name)
+	}
+	sort.Strings(ctxNames)
+
+	for _, name := range ctxNames {
+		fmt.Printf("  %s:\n", name)
+		entries := byCtx[name]
+		sort.SliceStable(entries, func(i, j int) bool {
+			if !entries[i].deletedOn.Equal(entries[j].deletedOn) {
+				return entries[i].deletedOn.Before(entries[j].deletedOn)
+			}
+			return entries[i].task.Entry() < entries[j].task.Entry()
+		})
+		for _, e := range entries {
+			display := e.task.Entry()
+			if e.task.Priority != "" {
+				display = fmt.Sprintf("(%s) %s", e.task.Priority, display)
+			}
+			fmt.Printf("    %-50s %s\n", display, e.deletedOn.Format("2006-01-02"))
+		}
+	}
+	return nil
+}
+
+// archivedTask pairs a task with its parsed deleted-on date so the
+// sort comparator can avoid re-parsing the annotation per call.
+type archivedTask struct {
+	task      *domain.Task
+	deletedOn time.Time
+}
+
+// parseAnnotationDate parses a YYYY-MM-DD annotation value in local
+// time. Returns (zero, false) for empty or malformed input — callers
+// should treat that as "skip this entry" rather than erroring.
+func parseAnnotationDate(raw string) (time.Time, bool) {
+	if raw == "" {
+		return time.Time{}, false
+	}
+	t, err := time.ParseInLocation("2006-01-02", raw, time.Local)
+	if err != nil {
+		return time.Time{}, false
+	}
+	return t, true
 }
 
 // reportTimeLogged walks every calendar day in [since, until], loads

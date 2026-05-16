@@ -155,11 +155,18 @@ func resetReplFlags() {
 	reportSince = "7d"
 }
 
+// ansiClearScreen homes the cursor and clears the entire visible
+// screen. readline.ClearScreen only emits the cursor-home half of
+// this sequence (\033[H) and leaves any pre-existing content on
+// screen — so if the new render is shorter than the previous one,
+// trailing characters from the prior task list bleed through.
+const ansiClearScreen = "\033[H\033[2J"
+
 // renderReplView clears the screen and prints the current context.
 // Errors here print but don't break the loop — a load failure
 // shouldn't lock the user out of the prompt.
 func renderReplView() {
-	_, _ = readline.ClearScreen(os.Stdout)
+	_, _ = fmt.Fprint(os.Stdout, ansiClearScreen)
 	ctx, err := repo().CurrentContext()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Could not load current context:", err)

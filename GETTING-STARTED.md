@@ -295,6 +295,33 @@ the keymap help. `q` or `esc` quits.
 The TUI works on the same data files as the CLI — you can switch
 between them in the same session without anything getting out of sync.
 
+## Optional: REPL mode
+
+`htt repl` opens a todo-mode shell — handy for a focused pass over
+your tasks without retyping `htt todo` on every line. Each cycle
+clears the screen, shows the current context, then prompts:
+
+```
+(work)
+  0 (A) ship the auth refactor
+  1 review PR for the new auth flow
+(work): 2 tasks
+
+htt(work)> add update on-call runbook
+Added: update on-call runbook
+htt(work)>
+```
+
+Commands without a prefix dispatch as `todo <cmd>`: `add foo`,
+`delete 0`, `+ 1`, `do 0`, `context home`. Prefix a line with `/`
+to escape to a full CLI command: `/log start review PRs`,
+`/report --since 7d`, `/sync`. `/interactive` and `/repl` are
+disabled inside the REPL (no nested screens / recursive prompts).
+
+Exit with Ctrl-D, Ctrl-C, or by typing `quit`, `exit`, or `q`. An
+empty Enter refreshes the view. Up/down arrows walk command
+history (persisted across sessions under your config dir).
+
 ## Optional: git sync
 
 `htt sync` commits the data directory into a local git repo and

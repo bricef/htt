@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"bytes"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -35,6 +37,13 @@ func TestClassifyReplInput(t *testing.T) {
 		{"slash log start", "/log start review PRs", replInputDispatch, []string{"log", "start", "review", "PRs"}},
 		{"slash report", "/report --since 7d", replInputDispatch, []string{"report", "--since", "7d"}},
 		{"slash trims rest", "/   log start", replInputDispatch, []string{"log", "start"}},
+
+		// /help builtin
+		{"slash help", "/help", replInputHelp, nil},
+		{"slash help with trailers", "/help extra args", replInputHelp, nil},
+		{"slash help surrounded", "  /help  ", replInputHelp, nil},
+		// Bare `help` (no slash) is just a todo dispatch — REPL help is /help only.
+		{"bare help is a todo dispatch", "help", replInputDispatch, []string{"todo", "help"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -119,5 +128,27 @@ func TestResetReplFlags_ClearsBleedingState(t *testing.T) {
 	}
 	if reportSince != "7d" {
 		t.Errorf("reportSince = %q, want 7d", reportSince)
+	}
+}
+
+func TestPrintReplHelp_MentionsKeyConcepts(t *testing.T) {
+	// The help text is curated rather than generated, so a regression
+	// would be removing a load-bearing line. Pin the most important
+	// concepts: the / escape, the exit words, todo-mode defaulting.
+	var buf bytes.Buffer
+	printReplHelp(&buf)
+	out := buf.String()
+
+	for _, want := range []string{
+		"todo-mode",
+		"/<command>",
+		"/help",
+		"quit",
+		"Ctrl-D",
+		"add <entry...>",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("help text missing %q\n--- got ---\n%s", want, out)
+		}
 	}
 }

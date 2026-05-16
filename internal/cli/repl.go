@@ -46,6 +46,11 @@ func init() {
 // runRepl owns the readline loop. Errors from individual commands
 // print to stderr but don't break the loop — only EOF, interrupt,
 // or an exit word exits.
+//
+// The view shown above the prompt is either the current context
+// (the default) or the REPL help text (after `/help`). Any
+// dispatch returns the user to the context view on the next
+// cycle.
 func runRepl() error {
 	rl, err := readline.NewEx(&readline.Config{
 		Prompt:          replPrompt(),
@@ -58,9 +63,15 @@ func runRepl() error {
 	}
 	defer func() { _ = rl.Close() }()
 
+	showHelp := false
 	for {
 		rl.SetPrompt(replPrompt())
-		renderReplView()
+		if showHelp {
+			_, _ = fmt.Fprint(os.Stdout, ansiClearScreen)
+			printReplHelp(os.Stdout)
+		} else {
+			renderReplView()
+		}
 
 		line, err := rl.Readline()
 		if errors.Is(err, io.EOF) || errors.Is(err, readline.ErrInterrupt) {
@@ -74,10 +85,15 @@ func runRepl() error {
 		kind, parsed := classifyReplInput(line)
 		switch kind {
 		case replInputNone:
+			// Empty Enter refreshes whichever view is current.
 			continue
 		case replInputExit:
 			return nil
+		case replInputHelp:
+			showHelp = true
+			continue
 		case replInputDispatch:
+			showHelp = false
 			if isDisabledInRepl(parsed) {
 				fmt.Fprintf(os.Stderr, "%q is not available inside the REPL\n", parsed[0])
 				continue
@@ -96,6 +112,7 @@ type replInputKind int
 const (
 	replInputNone replInputKind = iota
 	replInputExit
+	replInputHelp
 	replInputDispatch
 )
 
@@ -104,6 +121,7 @@ const (
 //
 //   - empty / whitespace-only      → (none, nil)
 //   - "quit" / "exit" / "q"        → (exit, nil)
+//   - "/help" (with any trailers)  → (help, nil)
 //   - "/<rest>"                    → (dispatch, strings.Fields(rest))
 //                                    or (none, nil) if rest is empty
 //   - "<anything>"                 → (dispatch, ["todo", ...fields])
@@ -121,6 +139,9 @@ func classifyReplInput(line string) (replInputKind, []string) {
 		fields := strings.Fields(rest)
 		if len(fields) == 0 {
 			return replInputNone, nil
+		}
+		if fields[0] == "help" {
+			return replInputHelp, nil
 		}
 		return replInputDispatch, fields
 	}
@@ -174,6 +195,41 @@ func renderReplView() {
 	}
 	ctx.Show()
 }
+
+// printReplHelp writes the REPL keymap to w. Curated rather than
+// generated from Cobra so the message can highlight REPL-specific
+// behaviour (todo-mode default, `/` escape, exit words) that Cobra
+// wouldn't know to mention. For per-command details the user runs
+// `/<command> --help`.
+func printReplHelp(w io.Writer) {
+	_, _ = fmt.Fprintln(w, replHelpText)
+}
+
+const replHelpText = `htt REPL — todo-mode shell
+
+Common commands (run implicitly as todo <command>):
+  add <entry...>            add a task to the current context
+  delete <index>            archive the task at <index>
+  do <index>                complete the task
+  + <index>                 raise priority
+  - <index>                 lower priority
+  priority <index> <A|B|C>  set priority explicitly
+  move <index> <context>    move task to another context
+  replace <index> <entry>   replace the task
+  context [name]            show or switch context
+  show                      re-render the view (or hit Enter on empty line)
+  search <regex>            filter the current view
+  random                    pick a task at random
+  edit <index>              open the task in $EDITOR
+  edit-done                 open done.txt in $EDITOR
+  edit-archive              open archive.txt in $EDITOR
+
+REPL controls:
+  /<command> [args...]      run any htt command (e.g. /log start, /report)
+  /help                     this message
+  quit, exit, q             leave the REPL (Ctrl-D / Ctrl-C also work)
+
+For per-command details, use /<command> --help (e.g. /todo add --help).`
 
 // replPrompt returns the per-cycle prompt string. The context name
 // is fetched live so it tracks `context <name>` switches.

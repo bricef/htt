@@ -244,7 +244,8 @@ Current Context: work
   todo.txt                         ← one file per context
   work.txt
   home.txt
-  done.txt
+  done.txt                         ← completed tasks
+  archive.txt                      ← deleted tasks (manual GC)
   timelogs/                        ← daily activity logs
     2026-05-15.log
     2026-05-14.log
@@ -253,7 +254,10 @@ Current Context: work
 
 Each context file is plain todo.txt format — one task per line, no
 header. You can edit them by hand if you want; `htt todo edit-done`
-will open the done file in `$EDITOR`.
+opens the done file and `htt todo edit-archive` opens the archive
+file in `$EDITOR`. Deleted tasks are not lost — they move to
+`archive.txt` annotated with `archived-from:` and `deleted-on:`,
+visible in `htt report`'s Deleted section.
 
 `htt config where-data` prints the resolved data directory if you
 ever forget where it lives.

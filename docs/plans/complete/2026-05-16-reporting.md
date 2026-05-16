@@ -1,18 +1,21 @@
 # Reporting: "what happened this period?"
 
 **Date:** 2026-05-16
-**Status:** Phases 1 & 2 complete (2026-05-16); Phase 3 deferred
+**Status:** Complete (2026-05-16)
 **Builds on:** the timelogs refactor (uses `domain.Timelog` and the
 `ts:` annotation as the source of truth for time spent)
 
-## Resume marker
+## Outcome
 
-Phases 1 and 2 are on `main`. The report now has three sections:
+All three phases shipped on 2026-05-16. The report has four sections:
 
 - **Completed** — done.txt entries with CompletedOn in range.
 - **Added** — tasks across all contexts with CreatedOn in range.
   Created-on is stamped on `Context.AddTask` for new tasks; explicit
   parser-populated dates are preserved.
+- **Deleted** — archive.txt entries with `deleted-on:` in range,
+  grouped by `archived-from:`. Delivered by the sibling plan
+  [2026-05-16-archive-on-delete.md](2026-05-16-archive-on-delete.md).
 - **Time logged** — per-day totals plus grand total from
   `Timelog.Spans()`.
 
@@ -26,11 +29,6 @@ priority AFTER the dates but the parser only matches priority
 BEFORE dates. Fixed by reordering `rebuild()` to
 `[x] [(P)] [completedOn] [createdOn] entry [k:v…]`, matching the
 todo.txt convention.
-
-Phase 3 (archive-on-delete for a "Deleted" section) is the only
-remaining piece. It needs its own design dialogue: separate file
-per context, single rolling archive log, or a top-level archive
-directory. Plan stays here until that lands.
 
 ## Motivation
 

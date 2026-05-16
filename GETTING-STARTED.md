@@ -136,6 +136,29 @@ $ htt todo add-to home pay credit card bill
 Added: pay credit card bill to home
 ```
 
+## Due dates
+
+`htt todo add` (and `add-to`) accept a `--due` flag that takes either
+an absolute date or a natural-language phrase. The phrase is resolved
+to a date and stored as a `due:` annotation on the task — the file
+always carries a structured date, regardless of how you typed it.
+
+```
+$ htt todo add --due "next Friday" ship the auth refactor
+Added: 2026-05-22 ship the auth refactor due:2026-05-29
+
+$ htt todo add --due 2026-12-25 wrap presents
+Added: 2026-05-22 wrap presents due:2026-12-25
+
+$ htt todo add --due "in two weeks" review the migration plan
+Added: 2026-05-22 review the migration plan due:2026-06-05
+```
+
+Phrases the parser understands include `Friday`, `next Monday`,
+`tomorrow`, `in 3 days`, `in two weeks`, and absolute dates as
+`YYYY-MM-DD`. A phrase the parser doesn't recognise surfaces as
+an error rather than silently dropping the flag.
+
 `htt todo status` (alias `htt t ?`) lists every available context and
 shows the current one's tasks:
 

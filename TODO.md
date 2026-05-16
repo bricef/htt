@@ -27,8 +27,6 @@ freely; the README itself stays a marketing/getting-started doc.
   - [ ] Commit on all modifications.
 - UX
   - [ ] Enable managing contexts (archive, delete, merge)
-  - [ ] Add `due:Friday` smart parsing
-  - [ ] Add `due:"in two weeks"` smart parsing
   - [ ] Enable showing in priority order
   - [ ] Add deduplicate command (smart with edit distance?)
   - [ ] Add "log@" command to log at a particular time

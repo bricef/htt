@@ -183,6 +183,59 @@ func TestTodoSearch_MatchesByRegex(t *testing.T) {
 	assertContains(t, "stdout", r.stdout, "2 out of 3")
 }
 
+func TestTodoShow_SortKeepsOriginalIndices(t *testing.T) {
+	e := newEnv(t)
+
+	e.mustRun("todo", "add", "--due", "2030-01-03", "alpha")
+	e.mustRun("todo", "add", "beta")
+	e.mustRun("todo", "add", "--due", "2030-01-01", "gamma")
+
+	d := today()
+	r := e.mustRun("todo", "show", "--sort", "due")
+	assertInOrder(t, "show --sort due", r.stdout,
+		"  2 "+d+" gamma", "  0 "+d+" alpha", "  1 "+d+" beta")
+	assertContains(t, "stdout", r.stdout, "3 of 3 tasks shown.")
+
+	// Reversed, the undated task still comes last.
+	r = e.mustRun("todo", "show", "--sort", "-due")
+	assertInOrder(t, "show --sort -due", r.stdout,
+		"  0 "+d+" alpha", "  2 "+d+" gamma", "  1 "+d+" beta")
+
+	// The index printed beside gamma is the one delete acts on.
+	e.mustRun("todo", "delete", "2")
+	assertEqual(t, "todo.txt", e.readData("todo.txt"),
+		d+" alpha due:2030-01-03\n"+d+" beta\n")
+}
+
+func TestTodoShow_FiltersCombineAndCountTheView(t *testing.T) {
+	e := newEnv(t)
+
+	e.mustRun("todo", "add", "buy milk @home")
+	e.mustRun("todo", "add", "--due", "2030-01-01", "fix the sink @home")
+	e.mustRun("todo", "add", "write report")
+
+	r := e.mustRun("todo", "show", "--filter", "has-tag:home", "--filter", "no-due")
+	assertContains(t, "stdout", r.stdout, "  0 "+today()+" buy milk @home")
+	if strings.Contains(r.stdout, "sink") || strings.Contains(r.stdout, "report") {
+		t.Errorf("filters should leave only 'buy milk', got:\n%s", r.stdout)
+	}
+	assertContains(t, "stdout", r.stdout, "1 of 3 tasks shown.")
+
+	r = e.mustRun("todo", "show", "--filter", "overdue")
+	assertContains(t, "stdout", r.stdout, "No tasks matched query.")
+}
+
+func TestTodoShow_UnknownFilterFails(t *testing.T) {
+	e := newEnv(t)
+	e.mustRun("todo", "add", "alpha")
+
+	r := e.run("todo", "show", "--filter", "someday")
+	if r.exitCode == 0 {
+		t.Errorf("expected non-zero exit for an unknown filter, got 0")
+	}
+	assertContains(t, "stderr", r.stderr, `invalid --filter "someday"`)
+}
+
 func TestTodoContext_ShowsCurrent(t *testing.T) {
 	e := newEnv(t)
 

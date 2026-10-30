@@ -27,7 +27,6 @@ freely; the README itself stays a marketing/getting-started doc.
   - [ ] Commit on all modifications.
 - UX
   - [ ] Enable managing contexts (archive, delete, merge)
-  - [ ] Enable showing in priority order
   - [ ] Add deduplicate command (smart with edit distance?)
   - [ ] Add "log@" command to log at a particular time
   - [ ] Review jrnl command to see if we can take inspiration from this

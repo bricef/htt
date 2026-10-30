@@ -174,6 +174,8 @@ func resetReplFlags() {
 	addDue = ""
 	addToDue = ""
 	reportSince = "7d"
+	showSortKey = ""
+	showFilters = nil
 }
 
 // ansiClearScreen homes the cursor and clears the entire visible

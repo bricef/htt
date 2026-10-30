@@ -117,6 +117,8 @@ func TestResetReplFlags_ClearsBleedingState(t *testing.T) {
 	addDue = "Friday"
 	addToDue = "tomorrow"
 	reportSince = "yesterday"
+	showSortKey = "-due"
+	showFilters = []string{"overdue"}
 
 	resetReplFlags()
 
@@ -128,6 +130,33 @@ func TestResetReplFlags_ClearsBleedingState(t *testing.T) {
 	}
 	if reportSince != "7d" {
 		t.Errorf("reportSince = %q, want 7d", reportSince)
+	}
+	if showSortKey != "" {
+		t.Errorf("showSortKey = %q, want empty", showSortKey)
+	}
+	if showFilters != nil {
+		t.Errorf("showFilters = %v, want nil", showFilters)
+	}
+}
+
+// TestRepl_ShowFiltersDoNotBleedAcrossCycles runs two show commands
+// the way the REPL loop does. pflag's StringSlice appends to the
+// bound slice once the flag has been set in the process, so without
+// the reset the second cycle would filter on both expressions.
+func TestRepl_ShowFiltersDoNotBleedAcrossCycles(t *testing.T) {
+	withMemoryRepo(t)
+
+	for _, line := range []string{"show --filter overdue", "show --filter no-due"} {
+		_, args := classifyReplInput(line)
+		resetReplFlags()
+		RootCmd.SetArgs(args)
+		if err := RootCmd.Execute(); err != nil {
+			t.Fatalf("%q: Execute: %v", line, err)
+		}
+	}
+
+	if want := []string{"no-due"}; !slices.Equal(showFilters, want) {
+		t.Errorf("showFilters after second cycle = %v, want %v", showFilters, want)
 	}
 }
 

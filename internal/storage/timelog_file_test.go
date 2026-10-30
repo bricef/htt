@@ -133,4 +133,9 @@ func TestFileTimelogRepository_Day_SkipsBlankLines(t *testing.T) {
 	if len(l.Entries) != 2 {
 		t.Fatalf("len(Entries) = %d, want 2 (blanks skipped)", len(l.Entries))
 	}
+	for i, entry := range l.Entries {
+		if entry.Line != i {
+			t.Errorf("Entries[%d].Line = %d, want %d", i, entry.Line, i)
+		}
+	}
 }

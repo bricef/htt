@@ -118,7 +118,10 @@ func (r *FileRepository) Context(name string) (*domain.Context, error) {
 		if err != nil {
 			return nil, fmt.Errorf("parse %s:%d: %w", r.ContextPath(name), lineNo, err)
 		}
-		task.Line = lineNo
+		// Line is the task's index in ctx.Tasks, the number commands
+		// like delete take. It is not the file line: blank lines are
+		// skipped, so the two differ once a file has one.
+		task.Line = len(ctx.Tasks)
 		ctx.Tasks = append(ctx.Tasks, task)
 		lineNo++
 	}

@@ -140,6 +140,13 @@ func TestFileRepository_Context_SkipsBlankLines(t *testing.T) {
 	if ctx.Tasks[0].Raw != "first" || ctx.Tasks[1].Raw != "second" {
 		t.Errorf("unexpected tasks: %q, %q", ctx.Tasks[0].Raw, ctx.Tasks[1].Raw)
 	}
+	// Line is what show prints and delete takes, so it must count
+	// tasks, not file lines.
+	for i, task := range ctx.Tasks {
+		if task.Line != i {
+			t.Errorf("Tasks[%d].Line = %d, want %d", i, task.Line, i)
+		}
+	}
 }
 
 func TestFileRepository_ContextNames_IgnoresNonTxtAndDirs(t *testing.T) {

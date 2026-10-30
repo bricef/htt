@@ -2,6 +2,8 @@ module github.com/bricef/htt
 
 go 1.26.0
 
+toolchain go1.26.10
+
 require (
 	github.com/buger/goterm v1.0.3
 	github.com/charmbracelet/bubbles v0.21.0

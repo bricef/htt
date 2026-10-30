@@ -225,6 +225,19 @@ func TestTodoShow_FiltersCombineAndCountTheView(t *testing.T) {
 	assertContains(t, "stdout", r.stdout, "No tasks matched query.")
 }
 
+func TestTodoShow_IndicesSurviveBlankLines(t *testing.T) {
+	// A hand-edited file can carry blank lines. The index show prints
+	// must still be the one delete acts on.
+	e := newEnv(t)
+	e.writeData("todo.txt", "alpha\n\nbeta\ngamma\n")
+
+	r := e.mustRun("todo", "show")
+	assertInOrder(t, "show", r.stdout, "  0 alpha", "  1 beta", "  2 gamma")
+
+	e.mustRun("todo", "delete", "1")
+	assertEqual(t, "todo.txt", e.readData("todo.txt"), "alpha\ngamma\n")
+}
+
 func TestTodoShow_UnknownFilterFails(t *testing.T) {
 	e := newEnv(t)
 	e.mustRun("todo", "add", "alpha")

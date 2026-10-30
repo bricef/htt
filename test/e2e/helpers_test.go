@@ -124,6 +124,19 @@ func (e *env) readData(rel string) string {
 	return string(b)
 }
 
+// writeData seeds a data file directly, for content htt itself
+// wouldn't write (blank lines, hand edits).
+func (e *env) writeData(rel, content string) {
+	e.t.Helper()
+	p := filepath.Join(e.dataDir, rel)
+	if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
+		e.t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(content), 0644); err != nil {
+		e.t.Fatal(err)
+	}
+}
+
 func (e *env) dataExists(rel string) bool {
 	_, err := os.Stat(filepath.Join(e.dataDir, rel))
 	return err == nil

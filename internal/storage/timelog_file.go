@@ -74,7 +74,9 @@ func (r *FileTimelogRepository) Day(date time.Time) (*domain.Timelog, error) {
 		if err != nil {
 			return nil, fmt.Errorf("parse %s:%d: %w", r.logPath(date), lineNo, err)
 		}
-		task.Line = lineNo
+		// Line is the entry's index in l.Entries, as for todo tasks,
+		// not its file line.
+		task.Line = len(l.Entries)
 		l.Entries = append(l.Entries, task)
 		lineNo++
 	}

@@ -136,6 +136,22 @@ func assertContains(t *testing.T, label, haystack, needle string) {
 	}
 }
 
+// assertInOrder checks that each needle appears in haystack, each
+// one after the needle before it.
+func assertInOrder(t *testing.T, label, haystack string, needles ...string) {
+	t.Helper()
+	rest := haystack
+	for _, needle := range needles {
+		i := strings.Index(rest, needle)
+		if i < 0 {
+			t.Errorf("%s: expected %q in this order, %q missing or out of order, got:\n%s",
+				label, needles, needle, haystack)
+			return
+		}
+		rest = rest[i+len(needle):]
+	}
+}
+
 func assertEqual(t *testing.T, label, got, want string) {
 	t.Helper()
 	if got != want {

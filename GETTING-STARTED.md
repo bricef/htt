@@ -182,6 +182,43 @@ $ htt todo context "weekend hacks"
 Now using context: weekend_hacks
 ```
 
+## Sorting and filtering
+
+`htt todo show` lists tasks in file order. Two flags turn it into a
+view of the list instead:
+
+- `--sort` orders by `priority`, `created` or `due`. A `-` prefix
+  reverses it, so `--sort -created` puts the newest task first.
+  Tasks with no created or due date stay at the bottom either way.
+- `--filter` keeps only the tasks that match: `overdue`, `due-soon`
+  (due in the next seven days), `no-due`, `has-tag:NAME` or
+  `priority:A`/`B`/`C`. Repeat it to combine filters; a task has to
+  match every one.
+
+```
+$ htt todo show --filter overdue --sort due
+
+  4 (A) 2026-05-02 submit timesheet due:2026-05-14
+  1 2026-05-08 review PR for the new auth flow due:2026-05-15
+
+(work): 2 of 5 tasks shown.
+
+$ htt todo show --filter has-tag:home
+
+  2 2026-05-10 buy milk @home
+  5 2026-05-12 fix the sink +home
+
+(work): 2 of 5 tasks shown.
+```
+
+`has-tag:home` matches `@home`, `+home` and `#home`; write
+`has-tag:+home` to match only the `+` kind.
+
+The number beside each task is still its position in the full list,
+so a sorted view can look out of order. That's deliberate:
+`htt todo do 4` or `htt todo delete 4` acts on the task shown as `4`,
+whatever order the view is in.
+
 ## Time logging
 
 The activity log is a separate stream from todos — it's an append-only

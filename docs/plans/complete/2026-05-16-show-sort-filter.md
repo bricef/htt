@@ -1,7 +1,45 @@
 # `htt todo show --sort / --filter`
 
 **Date:** 2026-05-16
-**Status:** Proposed
+**Status:** Complete (2026-10-30)
+
+## Outcome
+
+Shipped as planned on 2026-10-30: `--sort priority|created|due`
+with a `-` prefix, and repeatable `--filter` for `overdue`,
+`due-soon`, `no-due`, `has-tag:<x>` and `priority:<X>`. The
+unflagged path still calls `ctx.Show()` unchanged. Choices made
+while implementing, where the plan was silent or loose:
+
+- **Reversal keeps missing values last.** `-created` and `-due`
+  reverse only the tasks that have a date; undated tasks stay at
+  the bottom in both directions. No priority is a value (it ranks
+  below C, as in `Context.Sort`), so `-priority` lists
+  unprioritised tasks first.
+- **A malformed `due:` counts as no due date** for `--sort due`
+  and for every due filter, so such tasks surface under `no-due`
+  rather than vanishing from all due views.
+- **`has-tag:` accepts an optional sigil.** Tag values keep their
+  sigil (`@home`), so `has-tag:home` matches any of `@home`,
+  `+home` and `#home`, and `has-tag:+home` matches only `+home`.
+- **Comparators are `cmp`-style** (`func(a, b) int` for
+  `slices.SortStableFunc`) rather than `less` funcs, and
+  `parseFilter` takes `now` so the date filters test against a
+  fixed clock.
+- **Output follows `Context.Show`.** No `(name)` header line, unlike
+  the example sessions below; `--filter` on an empty context still
+  prints `Context is empty.`
+- **Tests go beyond the plan's smoke tests.** `runCobra` can't see
+  stdout, so e2e tests against the real binary pin the printed
+  indices, the footer, and `delete <N>` acting on the index shown
+  in a sorted view. A REPL test pins the flag reset: pflag's
+  StringSlice appends once a flag has been set, so without
+  `resetReplFlags` a second `show --filter` would AND in the first
+  one's expressions.
+
+Found along the way: a blank line in a context file desyncs the
+index `show` prints from the one `delete <N>` uses. That predates
+this feature and is fixed separately.
 
 ## Motivation
 

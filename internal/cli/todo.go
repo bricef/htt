@@ -110,21 +110,6 @@ func applyDueFlag(task *domain.Task, value string) error {
 	return nil
 }
 
-var show = &cobra.Command{
-	Use:     "show",
-	Aliases: []string{"s", "ls", "l"},
-	Short:   "Show the current tasklist.",
-	Long:    `Show the current tasklist.`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx, err := repo().CurrentContext()
-		if err != nil {
-			return fmt.Errorf("load current context: %w", err)
-		}
-		ctx.Show()
-		return nil
-	},
-}
-
 var edit = &cobra.Command{
 	Use:     "edit <item index>",
 	Short:   "Edit the item specified using $EDITOR",

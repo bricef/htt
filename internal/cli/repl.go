@@ -176,6 +176,8 @@ func resetReplFlags() {
 	reportSince = "7d"
 	showSortKey = ""
 	showFilters = nil
+	tuiLogFile = ""
+	tuiLogLevel = "debug"
 }
 
 // ansiClearScreen homes the cursor and clears the entire visible

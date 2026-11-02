@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"bytes"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -43,7 +45,7 @@ func seedModel(t *testing.T, contextName string, tasks ...string) (model, *stora
 	if err != nil {
 		t.Fatalf("Context(%q): %v", contextName, err)
 	}
-	return Model(repo, loaded), repo
+	return Model(repo, loaded, nil), repo
 }
 
 // asModel asserts the tea.Model returned by an action is back to model.
@@ -68,7 +70,7 @@ func TestModel_FreshInstall_ContextCursorIsNonNegative(t *testing.T) {
 		t.Fatalf("CurrentContext: %v", err)
 	}
 
-	m := Model(repo, ctx)
+	m := Model(repo, ctx, nil)
 	if m.contextCursor < 0 {
 		t.Errorf("contextCursor = %d on fresh install, want >= 0", m.contextCursor)
 	}
@@ -268,7 +270,7 @@ func TestAction_NextContext_SwitchesAndRefreshes(t *testing.T) {
 	// Rebuild model so contexts list includes both. seedModel only knew
 	// about "todo" at construction time.
 	todoCtx, _ := repo.Context("todo")
-	m = Model(repo, todoCtx)
+	m = Model(repo, todoCtx, nil)
 
 	// Find the position of "todo" and step past it.
 	for i, c := range m.contexts {
@@ -309,4 +311,75 @@ func TestAction_Quit_EmitsTeaQuit(t *testing.T) {
 	if _, ok := msg.(tea.QuitMsg); !ok {
 		t.Errorf("expected QuitMsg, got %T", msg)
 	}
+}
+
+// withLogBuffer points the model's logger at a debug-level text
+// handler writing to the returned buffer, so tests can read back what
+// Act recorded.
+func withLogBuffer(m model) (model, *bytes.Buffer) {
+	var buf bytes.Buffer
+	m.logger = slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	return m, &buf
+}
+
+func assertLogged(t *testing.T, log string, wants ...string) {
+	t.Helper()
+	for _, want := range wants {
+		if !strings.Contains(log, want) {
+			t.Errorf("log missing %q\n--- log ---\n%s", want, log)
+		}
+	}
+}
+
+func isQuit(cmd tea.Cmd) bool {
+	if cmd == nil {
+		return false
+	}
+	_, ok := cmd().(tea.QuitMsg)
+	return ok
+}
+
+func TestAct_KeypressLogsActionAtDebug(t *testing.T) {
+	m, _ := seedModel(t, "todo", "first", "second")
+	m, buf := withLogBuffer(m)
+
+	// Through Update, the way a real keypress arrives.
+	if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}); isQuit(cmd) {
+		t.Fatalf("moving down should not quit")
+	}
+	assertLogged(t, buf.String(), "level=DEBUG", "msg=action", `action="move down"`)
+	if strings.Contains(buf.String(), "level=WARN") || strings.Contains(buf.String(), "level=ERROR") {
+		t.Errorf("a successful action should log nothing above debug, got:\n%s", buf.String())
+	}
+}
+
+func TestAct_UnavailableActionLogsWarnAndKeepsBehaviour(t *testing.T) {
+	m, _ := seedModel(t, domain.DoneContextName, "x already done")
+	m, buf := withLogBuffer(m)
+
+	_, cmd := Do.Act(m)
+	if !isQuit(cmd) {
+		t.Errorf("do in the done tab should still quit the TUI")
+	}
+	assertLogged(t, buf.String(), "level=WARN", `msg="action unavailable"`, "action=do", "done tab")
+
+	// Adding a task in the done tab is refused without quitting.
+	m.textInput.SetValue("sneaky task")
+	_, cmd = AddTask.Act(m)
+	if isQuit(cmd) {
+		t.Errorf("add task in the done tab should not quit the TUI")
+	}
+	assertLogged(t, buf.String(), `action="add task"`, "can't go in the done tab")
+}
+
+func TestAct_FailedActionLogsErrorAndQuits(t *testing.T) {
+	// An empty context has no task 0 to complete.
+	m, _ := seedModel(t, "todo")
+	m, buf := withLogBuffer(m)
+
+	_, cmd := Do.Act(m)
+	if !isQuit(cmd) {
+		t.Errorf("a failed do should still quit the TUI")
+	}
+	assertLogged(t, buf.String(), "level=ERROR", `msg="action failed"`, "action=do", "complete task 0")
 }

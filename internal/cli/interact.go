@@ -1,7 +1,11 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
+	"log/slog"
+	"os"
+	"strings"
 
 	"github.com/bricef/htt/internal/tui"
 	"github.com/spf13/cobra"
@@ -9,40 +13,95 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-var debug = false
+var (
+	tuiLogFile  string
+	tuiLogLevel = "debug"
+)
 
 var Interactive = &cobra.Command{
 	Use:     "interactive",
 	Short:   "Enter interactive mode",
-	Args:    cobra.NoArgs,
 	Aliases: []string{"i"},
+	Long: `Enter interactive mode: a full-screen view over the same data files
+as the CLI.
+
+The TUI writes nothing outside its own screen. To see what it is doing,
+pass --log-file: diagnostics are appended to that file at debug level,
+the most detailed, unless --log-level picks another:
+
+  debug   every action the TUI runs (each keypress)
+  info    the TUI starting and exiting
+  warn    an action that doesn't apply in the current view
+  error   an action that failed; most failures also close the TUI
+
+Each level also includes the levels below it in this list.
+
+Examples:
+  htt interactive --log-file ~/htt-tui.log
+  htt interactive --log-file ~/htt-tui.log --log-level warn`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if cmd.Flags().Changed("log-level") && tuiLogFile == "" {
+			return errors.New("--log-level needs --log-file")
+		}
+		logger, closeLog, err := tuiLogger(tuiLogFile, tuiLogLevel)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = closeLog() }()
+
 		r := repo()
 		ctx, err := r.CurrentContext()
 		if err != nil {
 			return fmt.Errorf("load current context: %w", err)
 		}
 		p := tea.NewProgram(
-			tui.Model(r, ctx),
+			tui.Model(r, ctx, logger),
 			tea.WithAltScreen(),
 			tea.WithMouseCellMotion(),
 		)
 
-		if debug {
-			f, err := tea.LogToFile("debug.log", "debug")
-			if err != nil {
-				return fmt.Errorf("open debug log: %w", err)
-			}
-			defer func() { _ = f.Close() }()
-		}
+		logger.Info("tui started", "context", ctx.Name)
 		if _, err := p.Run(); err != nil {
+			logger.Error("tui failed", "err", err)
 			return fmt.Errorf("tui exited: %w", err)
 		}
+		logger.Info("tui exited")
 		return nil
 	},
 }
 
+// logLevels maps --log-level values onto slog levels.
+var logLevels = map[string]slog.Level{
+	"debug": slog.LevelDebug,
+	"info":  slog.LevelInfo,
+	"warn":  slog.LevelWarn,
+	"error": slog.LevelError,
+}
+
+// tuiLogger builds the TUI's logger from --log-file and --log-level.
+// With no file it discards everything. The level is checked before
+// the file is opened, so a typo doesn't leave an empty log behind.
+// The returned close func is always safe to call.
+func tuiLogger(path, level string) (*slog.Logger, func() error, error) {
+	lvl, ok := logLevels[strings.ToLower(level)]
+	if !ok {
+		return nil, nil, fmt.Errorf("invalid --log-level %q (want debug, info, warn or error)", level)
+	}
+	if path == "" {
+		return slog.New(slog.DiscardHandler), func() error { return nil }, nil
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return nil, nil, fmt.Errorf("open --log-file: %w", err)
+	}
+	return slog.New(slog.NewTextHandler(f, &slog.HandlerOptions{Level: lvl})), f.Close, nil
+}
+
 func init() {
-	Interactive.Flags().BoolVarP(&debug, "debug", "d", false, "Enable debug mode")
+	Interactive.Flags().StringVar(&tuiLogFile, "log-file", "",
+		"Append TUI diagnostics to this file (off by default; logs at debug level unless --log-level is set)")
+	Interactive.Flags().StringVar(&tuiLogLevel, "log-level", "debug",
+		"Lowest level written to --log-file: debug, info, warn or error")
 	RootCmd.AddCommand(Interactive)
 }

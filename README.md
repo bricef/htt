@@ -95,10 +95,13 @@ Available recipes:
     vet          # Static analysis across the module.
 ```
 
-Quick dev loop for the TUI:
+Quick dev loop for the TUI. It never writes to the terminal outside
+its own screen; `--log-file` appends its diagnostics to a file, at
+debug level unless `--log-level` (`debug`, `info`, `warn`, `error`)
+says otherwise:
 
 ```shell
-$ go run cmd/htt/main.go interactive --debug
+$ go run cmd/htt/main.go interactive --log-file debug.log
 # in another shell:
 $ tail -f debug.log
 ```

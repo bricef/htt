@@ -119,6 +119,8 @@ func TestResetReplFlags_ClearsBleedingState(t *testing.T) {
 	reportSince = "yesterday"
 	showSortKey = "-due"
 	showFilters = []string{"overdue"}
+	tuiLogFile = "tui.log"
+	tuiLogLevel = "error"
 
 	resetReplFlags()
 
@@ -136,6 +138,12 @@ func TestResetReplFlags_ClearsBleedingState(t *testing.T) {
 	}
 	if showFilters != nil {
 		t.Errorf("showFilters = %v, want nil", showFilters)
+	}
+	if tuiLogFile != "" {
+		t.Errorf("tuiLogFile = %q, want empty", tuiLogFile)
+	}
+	if tuiLogLevel != "debug" {
+		t.Errorf("tuiLogLevel = %q, want debug", tuiLogLevel)
 	}
 }
 

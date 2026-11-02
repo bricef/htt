@@ -1,7 +1,25 @@
 # `htt interactive --log-file / --log-level`
 
 **Date:** 2026-11-02
-**Status:** In progress
+**Status:** Complete (2026-11-02)
+
+## Outcome
+
+Shipped as planned. Beyond the plan:
+
+- **An architecture test** (`TestArchitecture_TUIDoesNotUseTheGlobalLogger`)
+  fails if `internal/tui` imports `log` again, so a stray `log.Printf`
+  can't quietly put stderr output back over the screen.
+- **`AddTask`'s silent failures** (it never quit, it just dropped the
+  task) are logged at error too, and adding a task in the done tab
+  logs at warn.
+- **Checked on a real terminal.** A pty driver ran the same keys
+  (down, complete, done tab, complete) through the old and new
+  binaries: the old one wrote 139 bytes of `action:` lines to stderr,
+  the new one none. With `--log-file` the log held start, each action,
+  the done-tab warning and exit, in a `0600` file; `--log-level warn`
+  kept only the warning. The TUI test suites, which used to print 12
+  `action:` lines per run, print none.
 
 ## Motivation
 

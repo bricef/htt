@@ -70,7 +70,7 @@ func (e *tuiEnv) start(contextName string) {
 	if err != nil {
 		e.t.Fatalf("Context(%q): %v", contextName, err)
 	}
-	e.model = tuipkg.Model(repo, ctx)
+	e.model = tuipkg.Model(repo, ctx, nil)
 	e.send(tea.WindowSizeMsg{Width: 120, Height: 40})
 }
 

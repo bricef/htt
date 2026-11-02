@@ -332,6 +332,31 @@ the keymap help. `q` or `esc` quits.
 The TUI works on the same data files as the CLI — you can switch
 between them in the same session without anything getting out of sync.
 
+The TUI writes nothing outside its own screen. If something goes
+wrong (say it closes unexpectedly), run it with `--log-file` and it
+appends what it's doing to that file. The log is written at **debug**
+level, the most detailed, unless you pick another with `--log-level`:
+
+| `--log-level` | What gets logged                                        |
+| ------------- | ------------------------------------------------------- |
+| `debug`       | every action the TUI runs (each keypress)               |
+| `info`        | the TUI starting and exiting                            |
+| `warn`        | an action that doesn't apply where you are, like completing a task in the done tab |
+| `error`       | an action that failed, with the reason; most failures also close the TUI |
+
+Each level also includes the levels below it in the table.
+
+```
+$ htt interactive --log-file ~/htt-tui.log
+# in another shell:
+$ tail -f ~/htt-tui.log
+time=2026-11-02T10:15:02.114Z level=INFO msg="tui started" context=todo
+time=2026-11-02T10:15:04.870Z level=DEBUG msg=action action="move down"
+time=2026-11-02T10:15:05.392Z level=DEBUG msg=action action=do
+```
+
+`--log-level` needs `--log-file`; on its own it's an error.
+
 ## Optional: REPL mode
 
 `htt repl` opens a todo-mode shell — handy for a focused pass over

@@ -1,7 +1,7 @@
 package tui
 
 import (
-	"log"
+	"log/slog"
 	"slices"
 
 	"github.com/bricef/htt/internal/domain"
@@ -82,6 +82,7 @@ type model struct {
 	showHelp      bool
 	newTask       bool
 	textInput     textinput.Model
+	logger        *slog.Logger // diagnostics; never the terminal
 }
 
 var controller = NewKeyBindingController().
@@ -139,8 +140,14 @@ var controller = NewKeyBindingController().
 	))
 
 // Model constructs the TUI model rooted at ctx, backed by repo for all
-// mutating actions and context lookups.
-func Model(repo domain.Repository, ctx *domain.Context) model {
+// mutating actions and context lookups. Diagnostics go to logger; a
+// nil logger discards them. The TUI owns the terminal, so it never
+// logs to stdout or stderr.
+func Model(repo domain.Repository, ctx *domain.Context, logger *slog.Logger) model {
+	if logger == nil {
+		logger = slog.New(slog.DiscardHandler)
+	}
+
 	// Names-only view of the contexts; the tab strip only renders Name.
 	// Tasks for each tab are loaded on demand when the user switches to it.
 	names, _ := domain.SwitchableContextNames(repo)
@@ -181,6 +188,7 @@ func Model(repo domain.Repository, ctx *domain.Context) model {
 		keys:          controller,
 		newTask:       false,
 		textInput:     ti,
+		logger:        logger,
 	}
 }
 
@@ -212,9 +220,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.textInput, cmd = m.textInput.Update(msg)
 			return m, cmd
 		} else {
-			action := m.keys.GetAction(msg)
-			log.Printf("action: %s", action.description)
-			return action.Act(m)
+			return m.keys.GetAction(msg).Act(m)
 		}
 	}
 

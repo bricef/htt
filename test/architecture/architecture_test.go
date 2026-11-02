@@ -56,6 +56,19 @@ func TestArchitecture_DependencyDirections(t *testing.T) {
 	}
 }
 
+// TestArchitecture_TUIDoesNotUseTheGlobalLogger pins where TUI
+// diagnostics go. The TUI owns the terminal while it runs, and the
+// process-wide log package writes to stderr by default, so a stray
+// log.Printf would scribble over the screen. The TUI logs through the
+// *slog.Logger handed to tui.Model instead (htt interactive --log-file).
+func TestArchitecture_TUIDoesNotUseTheGlobalLogger(t *testing.T) {
+	for _, imp := range scanImports(t, "internal/tui") {
+		if imp == "log" {
+			t.Errorf("internal/tui must not import log; log through the model's *slog.Logger")
+		}
+	}
+}
+
 // scanImports walks the files in repo-relative pkg path and returns the
 // deduplicated list of imported package paths.
 func scanImports(t *testing.T, pkg string) []string {

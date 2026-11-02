@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/bricef/htt/internal/domain"
@@ -8,16 +9,34 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// errUnavailable marks an action that doesn't apply in the current
+// view, such as completing a task in the done tab. Act logs these as
+// warnings rather than errors.
+var errUnavailable = errors.New("not available here")
+
 type Action struct {
-	act         func(m model) (tea.Model, tea.Cmd)
+	act         func(m model) (tea.Model, tea.Cmd, error)
 	description string
 }
 
+// Act runs the action and records it in the TUI log: every action at
+// debug, an action that doesn't apply in the current view at warn, and
+// a failure at error. The action has already chosen what the TUI does
+// next (quit or carry on); Act doesn't change that.
 func (a *Action) Act(m model) (tea.Model, tea.Cmd) {
-	return a.act(m)
+	m.logger.Debug("action", "action", a.description)
+	next, cmd, err := a.act(m)
+	switch {
+	case err == nil:
+	case errors.Is(err, errUnavailable):
+		m.logger.Warn("action unavailable", "action", a.description, "reason", err)
+	default:
+		m.logger.Error("action failed", "action", a.description, "err", err)
+	}
+	return next, cmd
 }
 
-func mkAction(description string, f func(m model) (tea.Model, tea.Cmd)) *Action {
+func mkAction(description string, f func(m model) (tea.Model, tea.Cmd, error)) *Action {
 	return &Action{act: f, description: description}
 }
 
@@ -33,7 +52,7 @@ func strID(i int) string {
 func refresh(m *model) error {
 	ctx, err := m.repo.CurrentContext()
 	if err != nil {
-		return err
+		return fmt.Errorf("reload current context: %w", err)
 	}
 	m.context = ctx
 	return nil
@@ -55,77 +74,77 @@ func clampCursor(m *model) {
 	}
 }
 
-var Noop = mkAction("noop", func(m model) (tea.Model, tea.Cmd) { return m, nil })
+var Noop = mkAction("noop", func(m model) (tea.Model, tea.Cmd, error) { return m, nil, nil })
 
-var Up = mkAction("move up", func(m model) (tea.Model, tea.Cmd) {
+var Up = mkAction("move up", func(m model) (tea.Model, tea.Cmd, error) {
 	if m.cursor > 0 {
 		m.cursor--
 	}
-	return m, nil
+	return m, nil, nil
 })
 
-var Down = mkAction("move down", func(m model) (tea.Model, tea.Cmd) {
+var Down = mkAction("move down", func(m model) (tea.Model, tea.Cmd, error) {
 	if m.cursor < len(m.context.Tasks)-1 {
 		m.cursor++
 	}
-	return m, nil
+	return m, nil, nil
 })
 
-var NextContext = mkAction("move right", func(m model) (tea.Model, tea.Cmd) {
+var NextContext = mkAction("move right", func(m model) (tea.Model, tea.Cmd, error) {
 	if m.contextCursor < len(m.contexts)-1 {
 		m.contextCursor++
 	}
 	newName := m.contexts[m.contextCursor].Name
 	if err := m.repo.SetCurrent(newName); err != nil {
-		return m, tea.Quit
+		return m, tea.Quit, fmt.Errorf("switch to %s: %w", newName, err)
 	}
 	if err := refresh(&m); err != nil {
-		return m, tea.Quit
+		return m, tea.Quit, err
 	}
 	m.cursor = 0
-	return m, nil
+	return m, nil, nil
 })
 
-var PreviousContext = mkAction("move left", func(m model) (tea.Model, tea.Cmd) {
+var PreviousContext = mkAction("move left", func(m model) (tea.Model, tea.Cmd, error) {
 	if m.contextCursor > 0 {
 		m.contextCursor--
 	}
 	newName := m.contexts[m.contextCursor].Name
 	if err := m.repo.SetCurrent(newName); err != nil {
-		return m, tea.Quit
+		return m, tea.Quit, fmt.Errorf("switch to %s: %w", newName, err)
 	}
 	if err := refresh(&m); err != nil {
-		return m, tea.Quit
+		return m, tea.Quit, err
 	}
 	m.cursor = 0
-	return m, nil
+	return m, nil, nil
 })
 
-var Do = mkAction("do", func(m model) (tea.Model, tea.Cmd) {
+var Do = mkAction("do", func(m model) (tea.Model, tea.Cmd, error) {
 	// Doing something in the "done" view doesn't make sense — bail out.
 	if m.context.Name == domain.DoneContextName {
-		return m, tea.Quit
+		return m, tea.Quit, fmt.Errorf("%w: tasks in the done tab are already complete", errUnavailable)
 	}
 	if _, err := m.context.Complete(strID(m.cursor)); err != nil {
-		return m, tea.Quit
+		return m, tea.Quit, fmt.Errorf("complete task %d: %w", m.cursor, err)
 	}
 	if err := refresh(&m); err != nil {
-		return m, tea.Quit
+		return m, tea.Quit, err
 	}
 	clampCursor(&m)
-	return m, nil
+	return m, nil, nil
 })
 
-var Quit = mkAction("quit", func(m model) (tea.Model, tea.Cmd) {
-	return m, tea.Quit
+var Quit = mkAction("quit", func(m model) (tea.Model, tea.Cmd, error) {
+	return m, tea.Quit, nil
 })
 
-var Help = mkAction("toggle help", func(m model) (tea.Model, tea.Cmd) {
+var Help = mkAction("toggle help", func(m model) (tea.Model, tea.Cmd, error) {
 	m.showHelp = !m.showHelp
-	return m, nil
+	return m, nil, nil
 })
 
-var EditFile = mkAction("edit file", func(m model) (tea.Model, tea.Cmd) {
+var EditFile = mkAction("edit file", func(m model) (tea.Model, tea.Cmd, error) {
 	// Shells out to $EDITOR on the context file. The repo owns path
 	// resolution; an empty path means the repo isn't file-backed
 	// (e.g. memory repo in tests) and editing isn't supported. After
@@ -133,40 +152,40 @@ var EditFile = mkAction("edit file", func(m model) (tea.Model, tea.Cmd) {
 	// (the editor may have added or removed tasks).
 	path := m.repo.ContextPath(m.context.Name)
 	if path == "" {
-		return m, tea.Quit
+		return m, tea.Quit, fmt.Errorf("%w: context %s has no file to edit", errUnavailable, m.context.Name)
 	}
 	utils.EditFilePath(path)
 	if err := refresh(&m); err != nil {
-		return m, tea.Quit
+		return m, tea.Quit, err
 	}
-	return m, tea.ClearScreen
+	return m, tea.ClearScreen, nil
 })
 
-var NewTask = mkAction("new task", func(m model) (tea.Model, tea.Cmd) {
+var NewTask = mkAction("new task", func(m model) (tea.Model, tea.Cmd, error) {
 	m.newTask = true
 	m.textInput.Focus()
 	m.textInput.Cursor.Blink = true
-	return m, tea.ClearScreen
+	return m, tea.ClearScreen, nil
 })
 
-var CommandMode = mkAction("command mode", func(m model) (tea.Model, tea.Cmd) {
-	return m, tea.ClearScreen
+var CommandMode = mkAction("command mode", func(m model) (tea.Model, tea.Cmd, error) {
+	return m, tea.ClearScreen, nil
 })
 
-var CancelNewTask = mkAction("cancel new task", func(m model) (tea.Model, tea.Cmd) {
+var CancelNewTask = mkAction("cancel new task", func(m model) (tea.Model, tea.Cmd, error) {
 	m.newTask = false
 	m.textInput.SetValue("")
 	m.textInput.Blur()
-	return m, tea.ClearScreen
+	return m, tea.ClearScreen, nil
 })
 
-var AddTask = mkAction("add task", func(m model) (tea.Model, tea.Cmd) {
+var AddTask = mkAction("add task", func(m model) (tea.Model, tea.Cmd, error) {
 	m.newTask = false
 	value := m.textInput.Value()
 	m.textInput.SetValue("")
 	m.textInput.Blur()
 	if value == "" {
-		return m, tea.ClearScreen
+		return m, tea.ClearScreen, nil
 	}
 	// bug_008: Adding an uncompleted task to the done context produces
 	// a phantom entry (no `x ` prefix) that renders as completed but
@@ -174,7 +193,7 @@ var AddTask = mkAction("add task", func(m model) (tea.Model, tea.Cmd) {
 	// path from inside the TUI. The Do action has the same guard; this
 	// just mirrors it for AddTask.
 	if m.context.Name == domain.DoneContextName {
-		return m, tea.ClearScreen
+		return m, tea.ClearScreen, fmt.Errorf("%w: new tasks can't go in the done tab", errUnavailable)
 	}
 	// Add to the visible context regardless of what the repo considers
 	// "current". The TUI's NextContext action syncs the two (calls
@@ -182,50 +201,50 @@ var AddTask = mkAction("add task", func(m model) (tea.Model, tea.Cmd) {
 	// explicitly here for clarity.
 	target, err := m.repo.Context(m.context.Name)
 	if err != nil {
-		return m, tea.ClearScreen
+		return m, tea.ClearScreen, fmt.Errorf("load %s: %w", m.context.Name, err)
 	}
 	task, err := domain.NewTask(value)
 	if err != nil {
-		return m, tea.ClearScreen
+		return m, tea.ClearScreen, fmt.Errorf("parse task %q: %w", value, err)
 	}
 	if err := target.AddTask(task); err != nil {
-		return m, tea.ClearScreen
+		return m, tea.ClearScreen, fmt.Errorf("add task: %w", err)
 	}
 	if err := refresh(&m); err != nil {
-		return m, tea.ClearScreen
+		return m, tea.ClearScreen, err
 	}
-	return m, tea.ClearScreen
+	return m, tea.ClearScreen, nil
 })
 
-var Delete = mkAction("delete", func(m model) (tea.Model, tea.Cmd) {
+var Delete = mkAction("delete", func(m model) (tea.Model, tea.Cmd, error) {
 	if _, err := m.context.Delete(strID(m.cursor)); err != nil {
-		return m, tea.Quit
+		return m, tea.Quit, fmt.Errorf("delete task %d: %w", m.cursor, err)
 	}
 	if err := refresh(&m); err != nil {
-		return m, tea.Quit
+		return m, tea.Quit, err
 	}
 	clampCursor(&m)
-	return m, tea.ClearScreen
+	return m, tea.ClearScreen, nil
 })
 
-var IncreasePriority = mkAction("increase priority", func(m model) (tea.Model, tea.Cmd) {
+var IncreasePriority = mkAction("increase priority", func(m model) (tea.Model, tea.Cmd, error) {
 	if _, _, err := m.context.IncreasePriority(strID(m.cursor)); err != nil {
-		return m, tea.Quit
+		return m, tea.Quit, fmt.Errorf("raise priority of task %d: %w", m.cursor, err)
 	}
 	if err := refresh(&m); err != nil {
-		return m, tea.Quit
+		return m, tea.Quit, err
 	}
 	m.context.Sort()
-	return m, tea.ClearScreen
+	return m, tea.ClearScreen, nil
 })
 
-var DecreasePriority = mkAction("decrease priority", func(m model) (tea.Model, tea.Cmd) {
+var DecreasePriority = mkAction("decrease priority", func(m model) (tea.Model, tea.Cmd, error) {
 	if _, _, err := m.context.DecreasePriority(strID(m.cursor)); err != nil {
-		return m, tea.Quit
+		return m, tea.Quit, fmt.Errorf("lower priority of task %d: %w", m.cursor, err)
 	}
 	if err := refresh(&m); err != nil {
-		return m, tea.Quit
+		return m, tea.Quit, err
 	}
 	m.context.Sort()
-	return m, tea.ClearScreen
+	return m, tea.ClearScreen, nil
 })

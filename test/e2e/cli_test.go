@@ -1,6 +1,8 @@
 package e2e
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -323,5 +325,41 @@ func TestErrorPath_StderrCarriesPrefixAndExitCode(t *testing.T) {
 	}
 	if r.stdout != "" {
 		t.Errorf("error should not pollute stdout, got: %q", r.stdout)
+	}
+}
+
+func TestInteractive_LogFlagsAreCheckedBeforeTheTUIStarts(t *testing.T) {
+	// Each of these fails before the TUI takes over the terminal, so
+	// they run fine without a TTY.
+	e := newEnv(t)
+	logPath := filepath.Join(e.home, "tui.log")
+
+	cases := []struct {
+		args []string
+		want string
+	}{
+		{[]string{"interactive", "--log-level", "warn"}, "--log-level needs --log-file"},
+		{[]string{"interactive", "--log-file", logPath, "--log-level", "loud"}, `invalid --log-level "loud"`},
+		{[]string{"interactive", "--log-file", filepath.Join(e.home, "missing", "tui.log")}, "open --log-file"},
+	}
+	for _, tc := range cases {
+		r := e.run(tc.args...)
+		if r.exitCode == 0 {
+			t.Errorf("htt %s: expected non-zero exit", strings.Join(tc.args, " "))
+		}
+		assertContains(t, "stderr", r.stderr, tc.want)
+	}
+	if _, err := os.Stat(logPath); !os.IsNotExist(err) {
+		t.Errorf("rejected flags should not create %s (stat err = %v)", logPath, err)
+	}
+}
+
+func TestInteractive_HelpStatesTheDebugDefault(t *testing.T) {
+	e := newEnv(t)
+	r := e.mustRun("interactive", "--help")
+	assertContains(t, "help", r.stdout, "logs at debug level unless --log-level is set")
+	assertContains(t, "help", r.stdout, `(default "debug")`)
+	if strings.Contains(r.stdout, "--debug") {
+		t.Errorf("--debug was replaced by --log-file and should be gone:\n%s", r.stdout)
 	}
 }

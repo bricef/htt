@@ -83,6 +83,7 @@ type model struct {
 	newTask       bool
 	textInput     textinput.Model
 	logger        *slog.Logger // diagnostics; never the terminal
+	status        string       // one-line message for the user; cleared on the next key
 }
 
 var controller = NewKeyBindingController().
@@ -206,8 +207,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
+	case editorFinishedMsg:
+		return editorFinished(m, msg)
+
 	// Is it a key press?
 	case tea.KeyMsg:
+		// A status message lasts until the user does something else.
+		m.status = ""
 		if m.textInput.Focused() {
 			switch msg.Type {
 			case tea.KeyEnter:
@@ -234,6 +240,7 @@ func selected(l lipgloss.Style) lipgloss.Style {
 		Bold(true)
 }
 
+var statusStyle = lipgloss.NewStyle().Foreground(cursor_color).Bold(true).Padding(0, 1)
 var keyStyle = lipgloss.NewStyle().Foreground(color_subtle).Bold(true)
 var descStyle = lipgloss.NewStyle().Foreground(color_subtle_desc)
 var sepStyle = lipgloss.NewStyle().Foreground(color_subtle_separator)
@@ -305,9 +312,14 @@ func (m model) View() string {
 		addWidget = m.textInput.View()
 	}
 
+	statusWidget := ""
+	if m.status != "" {
+		statusWidget = statusStyle.Width(m.width).Render(m.status)
+	}
+
 	content := baseStyle.
 		Width(m.width).
-		Height(m.height - lipgloss.Height(header) - lipgloss.Height(addWidget) - lipgloss.Height(footer)).
+		Height(m.height - lipgloss.Height(header) - lipgloss.Height(addWidget) - lipgloss.Height(statusWidget) - lipgloss.Height(footer)).
 		Align(lipgloss.Left)
 
 	s := ""
@@ -323,6 +335,7 @@ func (m model) View() string {
 		header,
 		content.Render(s),
 		addWidget,
+		statusWidget,
 		footer,
 	)
 

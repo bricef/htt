@@ -3,9 +3,10 @@ package tui
 import (
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
 
 	"github.com/bricef/htt/internal/domain"
-	"github.com/bricef/htt/internal/utils"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -145,21 +146,58 @@ var Help = mkAction("toggle help", func(m model) (tea.Model, tea.Cmd, error) {
 })
 
 var EditFile = mkAction("edit file", func(m model) (tea.Model, tea.Cmd, error) {
-	// Shells out to $EDITOR on the context file. The repo owns path
-	// resolution; an empty path means the repo isn't file-backed
-	// (e.g. memory repo in tests) and editing isn't supported. After
-	// the editor exits we refresh the displayed context from the repo
-	// (the editor may have added or removed tasks).
+	// Opens the context file in $EDITOR. tea.ExecProcess hands the
+	// terminal over: Bubble Tea leaves the alt screen and stops
+	// reading keys until the editor exits, then sends
+	// editorFinishedMsg. Nothing here closes the TUI: when the editor
+	// can't run, the status line says why and the user carries on.
+	// The repo owns path resolution; an empty path means the repo
+	// isn't file-backed (e.g. memory repo in tests).
 	path := m.repo.ContextPath(m.context.Name)
 	if path == "" {
-		return m, tea.Quit, fmt.Errorf("%w: context %s has no file to edit", errUnavailable, m.context.Name)
+		m.status = fmt.Sprintf("%s has no file to edit.", m.context.Name)
+		return m, nil, fmt.Errorf("%w: context %s has no file to edit", errUnavailable, m.context.Name)
 	}
-	utils.EditFilePath(path)
-	if err := refresh(&m); err != nil {
-		return m, tea.Quit, err
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		m.status = "Set $EDITOR to edit files from here."
+		return m, nil, fmt.Errorf("%w: $EDITOR is not set", errUnavailable)
 	}
-	return m, tea.ClearScreen, nil
+	return m, tea.ExecProcess(exec.Command(editor, path), func(err error) tea.Msg {
+		return editorFinishedMsg{editor: editor, err: err}
+	}), nil
 })
+
+// editorFinishedMsg reports that the editor EditFile started has
+// exited, or failed to start. err is nil after a clean exit.
+type editorFinishedMsg struct {
+	editor string
+	err    error
+}
+
+// editorFinished reloads the edited context and reports how the editor
+// session went. The file is reloaded even after an editor error: the
+// editor may have written it anyway, and the view must match disk. A
+// failed reload still quits, as other actions do; staying open on a
+// stale context would let the next keypress save over the edits.
+func editorFinished(m model, msg editorFinishedMsg) (tea.Model, tea.Cmd) {
+	var exitErr *exec.ExitError
+	switch {
+	case msg.err == nil:
+	case errors.As(msg.err, &exitErr):
+		m.status = fmt.Sprintf("$EDITOR exited with status %d; showing the file as it is on disk.", exitErr.ExitCode())
+		m.logger.Error("editor exited with an error", "editor", msg.editor, "err", msg.err)
+	default:
+		m.status = fmt.Sprintf("Couldn't run $EDITOR: %v", msg.err)
+		m.logger.Error("editor failed to run", "editor", msg.editor, "err", msg.err)
+	}
+	if err := refresh(&m); err != nil {
+		m.logger.Error("reload after editing failed", "err", err)
+		return m, tea.Quit
+	}
+	clampCursor(&m)
+	return m, tea.ClearScreen
+}
 
 var NewTask = mkAction("new task", func(m model) (tea.Model, tea.Cmd, error) {
 	m.newTask = true

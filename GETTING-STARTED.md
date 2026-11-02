@@ -329,6 +329,12 @@ keys navigate tasks, `x` completes, `d` deletes, `+`/`-` change
 priority, `n`/`a` add a new task, `h`/`l` switch contexts, `?` toggles
 the keymap help. `q` or `esc` quits.
 
+`f` opens the current tab's file in `$EDITOR`. The TUI steps aside
+while the editor runs and reloads the file when it exits. If
+`$EDITOR` isn't set, or the editor won't start or exits with an
+error, the TUI says so on a line above the keymap and carries on;
+after an editor error it still reloads, in case the file was saved.
+
 The TUI works on the same data files as the CLI — you can switch
 between them in the same session without anything getting out of sync.
 
@@ -341,8 +347,8 @@ level, the most detailed, unless you pick another with `--log-level`:
 | ------------- | ------------------------------------------------------- |
 | `debug`       | every action the TUI runs (each keypress)               |
 | `info`        | the TUI starting and exiting                            |
-| `warn`        | an action that doesn't apply where you are, like completing a task in the done tab |
-| `error`       | an action that failed, with the reason; most failures also close the TUI |
+| `warn`        | an action that can't run right now, like completing a task in the done tab or editing with no `$EDITOR` set |
+| `error`       | an action or the editor failed, with the reason; most action failures also close the TUI, editor failures don't |
 
 Each level also includes the levels below it in the table.
 

@@ -1,8 +1,33 @@
 # TUI: hand the terminal to `$EDITOR` properly
 
 **Date:** 2026-11-02
-**Status:** In progress
-**Builds on:** [2026-11-02-tui-log-file.md](../complete/2026-11-02-tui-log-file.md)
+**Status:** Complete (2026-11-02)
+**Builds on:** [2026-11-02-tui-log-file.md](2026-11-02-tui-log-file.md)
+
+## Outcome
+
+Shipped as planned. Beyond the plan:
+
+- **The cursor is clamped after the reload**, since the editor may
+  have removed tasks; a cursor past the end would make the next
+  action fail (the bug `clampCursor` already guards for delete and
+  complete).
+- **The architecture test forbids `internal/tui` importing
+  `internal/utils`**, whose editor and `Fatal` helpers exit the
+  process and write to the terminal.
+
+Checked on a real terminal with a pty driver, old binary against new,
+pressing `f` under four `$EDITOR` settings. Old: unset, missing and
+exit-1 editors each killed htt (exit 1, message on stderr, mid alt
+screen); an editor reading a line from the terminal hung, because the
+TUI kept stealing the keys. New: all four stay open with nothing on
+stderr; the failures show on the status line and in the log (warn for
+unset, error for the other two), and the reading editor got its line,
+which the TUI then showed after reloading.
+
+Found along the way: the task parser accepts a malformed date such as
+`2026-13-45` as plain text, so file content can't make the reload
+fail; an unreadable file can, and that's what the test uses.
 
 ## Motivation
 

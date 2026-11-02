@@ -31,8 +31,9 @@ the most detailed, unless --log-level picks another:
 
   debug   every action the TUI runs (each keypress)
   info    the TUI starting and exiting
-  warn    an action that doesn't apply in the current view
-  error   an action that failed; most failures also close the TUI
+  warn    an action that can't run right now (e.g. editing with no $EDITOR)
+  error   an action or the editor failed; most action failures also
+          close the TUI, editor failures don't
 
 Each level also includes the levels below it in this list.
 

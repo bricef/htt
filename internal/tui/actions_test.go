@@ -3,6 +3,9 @@ package tui
 import (
 	"bytes"
 	"log/slog"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -382,4 +385,180 @@ func TestAct_FailedActionLogsErrorAndQuits(t *testing.T) {
 		t.Errorf("a failed do should still quit the TUI")
 	}
 	assertLogged(t, buf.String(), "level=ERROR", `msg="action failed"`, "action=do", "complete task 0")
+}
+
+// seedFileModel is seedModel backed by a FileRepository in a temp dir,
+// for the editor actions, which need a real file. Returns the model and
+// the context file's path.
+func seedFileModel(t *testing.T, contextName string, tasks ...string) (model, string) {
+	t.Helper()
+	dir := t.TempDir()
+	repo := storage.NewFileRepository(dir, dir)
+	seed := domain.NewContext(repo, contextName)
+	for _, raw := range tasks {
+		seed.Tasks = append(seed.Tasks, mustTask(t, raw))
+	}
+	if err := repo.Save(seed); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if err := repo.SetCurrent(contextName); err != nil {
+		t.Fatalf("SetCurrent: %v", err)
+	}
+	ctx, err := repo.Context(contextName)
+	if err != nil {
+		t.Fatalf("Context(%q): %v", contextName, err)
+	}
+	return Model(repo, ctx, nil), repo.ContextPath(contextName)
+}
+
+// editorErr runs a real command to get the error type exec produces.
+func editorErr(t *testing.T, cmd *exec.Cmd) error {
+	t.Helper()
+	err := cmd.Run()
+	if err == nil {
+		t.Fatalf("%v: expected an error", cmd.Args)
+	}
+	return err
+}
+
+func TestEditFile_WithoutEditorStaysOpen(t *testing.T) {
+	t.Setenv("EDITOR", "")
+	m, _ := seedFileModel(t, "todo", "first")
+	m, buf := withLogBuffer(m)
+
+	result, cmd := EditFile.Act(m)
+	if cmd != nil {
+		t.Errorf("no $EDITOR: expected no command (no quit, no exec), got one")
+	}
+	if got := asModel(t, result).status; !strings.Contains(got, "$EDITOR") {
+		t.Errorf("status = %q, want it to mention $EDITOR", got)
+	}
+	assertLogged(t, buf.String(), "level=WARN", `action="edit file"`, "$EDITOR is not set")
+}
+
+func TestEditFile_WithoutAFileStaysOpen(t *testing.T) {
+	t.Setenv("EDITOR", "vi")
+	m, _ := seedModel(t, "todo", "first") // memory repo: no file path
+	m, buf := withLogBuffer(m)
+
+	result, cmd := EditFile.Act(m)
+	if cmd != nil {
+		t.Errorf("no file: expected no command, got one")
+	}
+	if got := asModel(t, result).status; !strings.Contains(got, "no file") {
+		t.Errorf("status = %q, want it to say there's no file", got)
+	}
+	assertLogged(t, buf.String(), "level=WARN", "has no file to edit")
+}
+
+func TestEditFile_HandsTheTerminalToTheEditor(t *testing.T) {
+	t.Setenv("EDITOR", "vi")
+	m, _ := seedFileModel(t, "todo", "first")
+	m, buf := withLogBuffer(m)
+
+	result, cmd := EditFile.Act(m)
+	if cmd == nil || isQuit(cmd) {
+		t.Fatalf("expected an exec command for the editor")
+	}
+	if got := asModel(t, result).status; got != "" {
+		t.Errorf("status = %q, want none before the editor runs", got)
+	}
+	if strings.Contains(buf.String(), "level=WARN") || strings.Contains(buf.String(), "level=ERROR") {
+		t.Errorf("launching the editor should log nothing above debug:\n%s", buf.String())
+	}
+}
+
+func TestEditorFinished_ReloadsWhatTheEditorSaved(t *testing.T) {
+	m, path := seedFileModel(t, "todo", "first", "second", "third")
+	m.cursor = 2
+	if err := os.WriteFile(path, []byte("only one left\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, cmd := m.Update(editorFinishedMsg{editor: "vi"})
+	if isQuit(cmd) {
+		t.Fatalf("a clean editor exit should not quit")
+	}
+	got := asModel(t, result)
+	if len(got.context.Tasks) != 1 || got.context.Tasks[0].Entry() != "only one left" {
+		t.Errorf("context after editing = %v, want the file's one task", got.context.Tasks)
+	}
+	if got.cursor != 0 {
+		t.Errorf("cursor = %d, want it clamped to the shorter list", got.cursor)
+	}
+	if got.status != "" {
+		t.Errorf("status = %q, want none after a clean exit", got.status)
+	}
+}
+
+func TestEditorFinished_NonZeroExitReportsAndStillReloads(t *testing.T) {
+	m, path := seedFileModel(t, "todo", "first")
+	m, buf := withLogBuffer(m)
+	if err := os.WriteFile(path, []byte("first\nsaved before failing\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := editorErr(t, exec.Command("sh", "-c", "exit 3"))
+	result, cmd := m.Update(editorFinishedMsg{editor: "vi", err: err})
+	if isQuit(cmd) {
+		t.Fatalf("an editor error should not quit the TUI")
+	}
+	got := asModel(t, result)
+	if !strings.Contains(got.status, "status 3") {
+		t.Errorf("status = %q, want the exit status", got.status)
+	}
+	if len(got.context.Tasks) != 2 {
+		t.Errorf("context has %d tasks, want the 2 on disk", len(got.context.Tasks))
+	}
+	assertLogged(t, buf.String(), "level=ERROR", `msg="editor exited with an error"`, "editor=vi")
+}
+
+func TestEditorFinished_StartFailureReports(t *testing.T) {
+	m, _ := seedFileModel(t, "todo", "first")
+	m, buf := withLogBuffer(m)
+
+	missing := filepath.Join(t.TempDir(), "no-such-editor")
+	err := editorErr(t, exec.Command(missing))
+	result, cmd := m.Update(editorFinishedMsg{editor: missing, err: err})
+	if isQuit(cmd) {
+		t.Fatalf("an editor that won't start should not quit the TUI")
+	}
+	if got := asModel(t, result).status; !strings.Contains(got, "Couldn't run $EDITOR") {
+		t.Errorf("status = %q, want a start failure message", got)
+	}
+	assertLogged(t, buf.String(), "level=ERROR", `msg="editor failed to run"`)
+}
+
+func TestEditorFinished_UnreadableFileStillQuits(t *testing.T) {
+	// Staying open on a stale context would let the next keypress
+	// save over the user's edits, so a failed reload quits as before.
+	if os.Geteuid() == 0 {
+		t.Skip("root reads files regardless of mode")
+	}
+	m, path := seedFileModel(t, "todo", "first")
+	m, buf := withLogBuffer(m)
+	if err := os.Chmod(path, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(path, 0o644) })
+
+	_, cmd := m.Update(editorFinishedMsg{editor: "vi"})
+	if !isQuit(cmd) {
+		t.Errorf("a reload failure should quit")
+	}
+	assertLogged(t, buf.String(), "level=ERROR", `msg="reload after editing failed"`)
+}
+
+func TestStatus_ShownInViewAndClearedByTheNextKey(t *testing.T) {
+	m, _ := seedModel(t, "todo", "first", "second")
+	m.width, m.height = 80, 24
+	m.status = "Set $EDITOR to edit files from here."
+
+	if view := m.View(); !strings.Contains(view, "Set $EDITOR to edit files from here.") {
+		t.Errorf("view should show the status line:\n%s", view)
+	}
+	result, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})
+	if got := asModel(t, result).status; got != "" {
+		t.Errorf("status = %q after a keypress, want it cleared", got)
+	}
 }

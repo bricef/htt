@@ -15,8 +15,11 @@ var reportSince string
 var Report = &cobra.Command{
 	Use:   "report",
 	Short: "Summarise activity in a time period.",
-	Long: `Show tasks completed and time logged since a given date or
-duration.
+	Long: `Show what happened since a given date or duration: tasks
+completed, tasks added, tasks deleted, and time logged per day.
+
+--since takes a date (YYYY-MM-DD) or a duration counted back from now
+in days, weeks or hours (7d, 2w, 24h).
 
 Examples:
   htt report                 # defaults to --since 7d

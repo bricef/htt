@@ -229,7 +229,7 @@ var editArchive = &cobra.Command{
 
 var deleteTodo = &cobra.Command{
 	Use:     "delete <item index>",
-	Short:   "Delete the item specified",
+	Short:   "Delete the item specified (it moves to the archive)",
 	Aliases: []string{"rm"},
 	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -371,11 +371,13 @@ var context = &cobra.Command{
 	Use:     "context [context]",
 	Short:   "Show or change the context for tasks",
 	Aliases: []string{"switch", "c"},
-	Long: `This will change the default context for todos. Note that
-the only supported characters are [A-Za-z_]. Other
-characters will be replaced by underscores. This
-means that different arguments may map to the
-same context.`,
+	Long: `With no argument, print the current context. With one, switch to
+that context; a new name starts an empty one.
+
+Context names keep only letters, digits and underscores; any other
+character becomes an underscore, so different names can map to the
+same context ("weekend hacks!" becomes weekend_hacks_). The name
+actually used is printed.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
@@ -430,7 +432,7 @@ var search = &cobra.Command{
 	Use:     "search <expression...>",
 	Aliases: []string{"query", "q"},
 	Short:   "Search in current context for tasks matching the given expression.",
-	Long:    "Search in current context for tasks matching the given expression.\nThe Expression will be interepreted as a Golang regular expression.",
+	Long:    "Search in current context for tasks matching the given expression.\nThe expression is a Go regular expression, matched case-insensitively\nagainst the whole task line (dates, priority and annotations included).",
 	Args:    cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		current, err := repo().CurrentContext()

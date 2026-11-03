@@ -86,7 +86,7 @@ var addTo = &cobra.Command{
 		if err := ctx.AddTask(task); err != nil {
 			return fmt.Errorf("add task to %s: %w", args[0], err)
 		}
-		fmt.Printf("Added: %v to %v", task.ConsoleString(), ctx.ConsoleString())
+		fmt.Printf("Added: %v to %v\n", task.ConsoleString(), ctx.ConsoleString())
 		return nil
 	},
 }

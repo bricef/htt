@@ -137,6 +137,15 @@ func (e *env) writeData(rel, content string) {
 	}
 }
 
+// writeConfig replaces the env's config.yaml.
+func (e *env) writeConfig(content string) {
+	e.t.Helper()
+	p := filepath.Join(e.home, ".config", "htt", "config.yaml")
+	if err := os.WriteFile(p, []byte(content), 0644); err != nil {
+		e.t.Fatal(err)
+	}
+}
+
 func (e *env) dataExists(rel string) bool {
 	_, err := os.Stat(filepath.Join(e.dataDir, rel))
 	return err == nil

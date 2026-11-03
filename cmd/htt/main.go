@@ -34,6 +34,7 @@ func main() {
 	viper.SetDefault(vars.ConfigKeyAuthorName, vars.DefaultCommitterName)
 	viper.SetDefault(vars.ConfigKeyAuthorEmail, vars.DefaultCommitterEmail)
 	viper.SetDefault(vars.ConfigKeySSHKeyFile, filepath.Join(homeDir, ".ssh", "id_rsa.pub"))
+	viper.SetDefault(vars.ConfigKeyTUITheme, vars.DefaultTUITheme)
 
 	// viper.WriteConfigAs("dump.yaml")
 

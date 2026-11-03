@@ -1,7 +1,25 @@
 # TUI themes: configurable colours and named palettes
 
 **Date:** 2026-11-03
-**Status:** In progress
+**Status:** Complete (2026-11-03)
+
+## Outcome
+
+Shipped as planned. Notes from implementing:
+
+- **lipgloss rounds colours**: `#f92672` is emitted as blue 113, not
+  114. The view tests accept each channel within ±1.
+- **Checked on a real terminal.** With no theme configured, the new
+  build draws exactly the same eight colours as the build before
+  themes; with `monokai` and an `accent` override it draws Monokai's
+  palette with the override. A preview of all nine themes rendered
+  from the real TUI looked right; Solarized's selection highlight is
+  faint (about 1.15:1 against its background), which is the palette's
+  own base02/base2 and is left as is.
+- **One gap**: `cli` passing the resolved theme into `tui.Model` is
+  covered only by that real-terminal check, since the TUI needs a
+  terminal to start. Every other piece has a test, and each test was
+  shown to fail when its piece is broken.
 
 ## Motivation
 

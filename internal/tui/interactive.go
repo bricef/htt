@@ -14,61 +14,12 @@ import (
 	lipgloss "github.com/charmbracelet/lipgloss"
 )
 
-// {
-// 	'gunmetal': {
-// 		DEFAULT: '#1f363d',
-// 		100: '#060b0c',
-// 		200: '#0c1618', 300: '#122025', 400: '#192b31', 500: '#1f363d', 600: '#3b6775', 700: '#5898ab', 800: '#90bac7', 900: '#c7dde3'
-// 	},
-// 	'cerulean': {
-// 		DEFAULT: '#40798c', 100: '#0d181c', 200: '#1a3038', 300: '#274954', 400: '#336170', 500: '#40798c', 600: '#579bb2', 700: '#81b4c5',
-// 		800: '#abcdd8', 900: '#d5e6ec'
-// 	},
-// 	'verdigris': {
-// 		DEFAULT: '#70a9a1', 100: '#152321', 200: '#2a4642', 300: '#3f6964', 400: '#548c85',
-// 		500: '#70a9a1', 600: '#8cbab4', 700: '#a9cbc7', 800: '#c6ddda', 900: '#e2eeec'
-// 	},
-// 	'cambridge_blue': {
-// 		DEFAULT: '#9ec1a3', 100: '#1b2b1e', 200: '#37563c', 300: '#528159', 400: '#74a67b',
-// 		500: '#9ec1a3', 600: '#b2ceb6', 700: '#c5dac8', 800: '#d8e6db', 900: '#ecf3ed'
-// 	},
-// 	'tea_green': {
-// 		DEFAULT: '#cfe0c3', 100: '#28371c', 200: '#4f6e39', 300: '#77a655', 400: '#a3c38b',
-// 		500: '#cfe0c3', 600: '#d8e6cf', 700: '#e2ecdb', 800: '#ecf3e7', 900: '#f5f9f3'
-// 	}
-// }
-
-const (
-	Gunmetal      = "#1f363d"
-	Cerulean      = "#40798c"
-	Verdigris     = "#70a9a1"
-	CambridgeBlue = "#9ec1a3"
-	TeaGreen      = "#cfe0c3"
-)
-
-var (
-	background_color = lipgloss.Color("#192b31")
-	foreground_color = lipgloss.Color(TeaGreen)
-	selected_color   = lipgloss.Color(Cerulean)
-	cursor_color     = lipgloss.Color(Verdigris)
-)
-
-// var color_subtle = lipgloss.AdaptiveColor{
-// 	Light: "#909090",
-// 	Dark:  "#626262",
-// }
-// var color_subtle_separator = lipgloss.AdaptiveColor{
-// 	Light: "#DDDADA",
-// 	Dark:  "#3C3C3C",
-// }
-// var color_subtle_desc = lipgloss.AdaptiveColor{
-// 	Light: "#B2B2B2",
-// 	Dark:  "#4A4A4A",
-// }
-
-var color_subtle = lipgloss.Color("#626262")
-var color_subtle_separator = lipgloss.Color("#3C3C3C")
-var color_subtle_desc = lipgloss.Color("#4A4A4A")
+// Options configures a TUI model. The zero value discards diagnostics
+// and uses the default theme.
+type Options struct {
+	Logger *slog.Logger // diagnostics; nil discards them
+	Theme  Theme        // the zero Theme means the default theme
+}
 
 type model struct {
 	repo          domain.Repository
@@ -84,6 +35,7 @@ type model struct {
 	textInput     textinput.Model
 	logger        *slog.Logger // diagnostics; never the terminal
 	status        string       // one-line message for the user; cleared on the next key
+	styles        styles       // colours from the theme
 }
 
 var controller = NewKeyBindingController().
@@ -144,10 +96,16 @@ var controller = NewKeyBindingController().
 // mutating actions and context lookups. Diagnostics go to logger; a
 // nil logger discards them. The TUI owns the terminal, so it never
 // logs to stdout or stderr.
-func Model(repo domain.Repository, ctx *domain.Context, logger *slog.Logger) model {
+func Model(repo domain.Repository, ctx *domain.Context, opts Options) model {
+	logger := opts.Logger
 	if logger == nil {
 		logger = slog.New(slog.DiscardHandler)
 	}
+	theme := opts.Theme
+	if theme == (Theme{}) {
+		theme = themes[DefaultThemeName]
+	}
+	st := newStyles(theme)
 
 	// Names-only view of the contexts; the tab strip only renders Name.
 	// Tasks for each tab are loaded on demand when the user switches to it.
@@ -175,9 +133,9 @@ func Model(repo domain.Repository, ctx *domain.Context, logger *slog.Logger) mod
 	ti.Placeholder = "(A) Do a thing for +project in @context"
 
 	ti.Prompt = "New Task > "
-	ti.PromptStyle = lipgloss.NewStyle().Foreground(cursor_color).Bold(true)
-	ti.TextStyle = lipgloss.NewStyle().Foreground(background_color).Background(foreground_color)
-	ti.PlaceholderStyle = ti.TextStyle.Foreground(color_subtle)
+	ti.PromptStyle = lipgloss.NewStyle().Foreground(theme.Accent).Bold(true)
+	ti.TextStyle = lipgloss.NewStyle().Foreground(theme.Background).Background(theme.Foreground)
+	ti.PlaceholderStyle = ti.TextStyle.Foreground(theme.Muted)
 	ti.Width = 100
 
 	return model{
@@ -190,6 +148,7 @@ func Model(repo domain.Repository, ctx *domain.Context, logger *slog.Logger) mod
 		newTask:       false,
 		textInput:     ti,
 		logger:        logger,
+		styles:        st,
 	}
 }
 
@@ -233,19 +192,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func selected(l lipgloss.Style) lipgloss.Style {
-	return l.
-		Foreground(foreground_color).
-		Background(selected_color).
-		Bold(true)
-}
-
-var statusStyle = lipgloss.NewStyle().Foreground(cursor_color).Bold(true).Padding(0, 1)
-var keyStyle = lipgloss.NewStyle().Foreground(color_subtle).Bold(true)
-var descStyle = lipgloss.NewStyle().Foreground(color_subtle_desc)
-var sepStyle = lipgloss.NewStyle().Foreground(color_subtle_separator)
-
 func (m model) View() string {
+	theme := m.styles.theme
 	baseStyle := lipgloss.NewStyle()
 
 	menuitem := baseStyle.Padding(0, 2).Align(lipgloss.Center)
@@ -253,8 +201,8 @@ func (m model) View() string {
 	done := baseStyle.
 		Inherit(menuitem).
 		Padding(0, 2).
-		Background(foreground_color).
-		Foreground(background_color)
+		Background(theme.Foreground).
+		Foreground(theme.Background)
 
 	menustr := ""
 	for i, context := range m.contexts {
@@ -263,7 +211,7 @@ func (m model) View() string {
 			itemStyle = done
 		}
 		if i == m.contextCursor {
-			itemStyle = selected(itemStyle)
+			itemStyle = m.styles.selected(itemStyle)
 		}
 
 		menustr += itemStyle.Render(context.Name)
@@ -272,7 +220,7 @@ func (m model) View() string {
 
 	title := baseStyle.
 		Align(lipgloss.Left).
-		Foreground(foreground_color).
+		Foreground(theme.Foreground).
 		Width(m.width / 2).
 		Render("htt")
 
@@ -284,27 +232,27 @@ func (m model) View() string {
 	header := baseStyle.
 		Align(lipgloss.Right).
 		Border(lipgloss.NormalBorder(), false, false, true, false).
-		BorderForeground(color_subtle).
+		BorderForeground(theme.Muted).
 		Width(m.width).
 		Render(title + menu)
 
 	helpMenu := help.New()
 	helpMenu.ShowAll = m.showHelp
 	helpMenu.Styles = help.Styles{
-		ShortKey:       keyStyle,
-		ShortDesc:      descStyle,
-		ShortSeparator: sepStyle,
-		Ellipsis:       sepStyle,
-		FullKey:        keyStyle,
-		FullDesc:       descStyle,
-		FullSeparator:  sepStyle,
+		ShortKey:       m.styles.helpKey,
+		ShortDesc:      m.styles.helpDesc,
+		ShortSeparator: m.styles.helpSep,
+		Ellipsis:       m.styles.helpSep,
+		FullKey:        m.styles.helpKey,
+		FullDesc:       m.styles.helpDesc,
+		FullSeparator:  m.styles.helpSep,
 	}
 
 	footer := lipgloss.NewStyle().
 		Align(lipgloss.Center).
 		Width(m.width).
 		Border(lipgloss.NormalBorder(), true, false, false, false).
-		BorderForeground(color_subtle).
+		BorderForeground(theme.Muted).
 		Render(helpMenu.View(m.keys))
 
 	addWidget := ""
@@ -314,7 +262,7 @@ func (m model) View() string {
 
 	statusWidget := ""
 	if m.status != "" {
-		statusWidget = statusStyle.Width(m.width).Render(m.status)
+		statusWidget = m.styles.status.Width(m.width).Render(m.status)
 	}
 
 	content := baseStyle.
@@ -325,9 +273,9 @@ func (m model) View() string {
 	s := ""
 
 	if m.context.Name == "done" {
-		s += RenderDoneList(m.context.Tasks, m.cursor)
+		s += RenderDoneList(m.context.Tasks, m.cursor, m.styles.task)
 	} else {
-		s += RenderTaskList(m.context.Tasks, m.cursor)
+		s += RenderTaskList(m.context.Tasks, m.cursor, m.styles.task)
 	}
 
 	app := lipgloss.JoinVertical(

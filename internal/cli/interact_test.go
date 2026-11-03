@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/bricef/htt/internal/tui"
+	"github.com/bricef/htt/internal/vars"
 )
 
 // readLog closes the logger's file and returns what it wrote.
@@ -18,6 +21,15 @@ func readLog(t *testing.T, path string, closeLog func() error) string {
 		t.Fatalf("read log: %v", err)
 	}
 	return string(b)
+}
+
+func TestDefaultTUITheme_MatchesTheTUIDefault(t *testing.T) {
+	// vars can't import tui (tui stays config-free), so the default
+	// theme name written to a fresh config is duplicated; keep them
+	// in step.
+	if vars.DefaultTUITheme != tui.DefaultThemeName {
+		t.Errorf("vars.DefaultTUITheme = %q, tui.DefaultThemeName = %q", vars.DefaultTUITheme, tui.DefaultThemeName)
+	}
 }
 
 func TestTUILogger_NoFileDiscards(t *testing.T) {

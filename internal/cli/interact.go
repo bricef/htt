@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/bricef/htt/internal/tui"
+	"github.com/bricef/htt/internal/vars"
 	"github.com/spf13/cobra"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -22,8 +23,22 @@ var Interactive = &cobra.Command{
 	Use:     "interactive",
 	Short:   "Enter interactive mode",
 	Aliases: []string{"i"},
-	Long: `Enter interactive mode: a full-screen view over the same data files
+	Long: fmt.Sprintf(`Enter interactive mode: a full-screen view over the same data files
 as the CLI.
+
+Colours come from the tui section of the config file: pick a built-in
+theme, then override any of its colours.
+
+  tui:
+    theme: monokai
+    colors:
+      accent: "#f92672"
+
+Themes: %s.
+Colours: %s. Each takes a hex value (#rrggbb or #rgb; quote it, or
+YAML reads the # as a comment) or an ANSI colour number (0-255). The
+TUI doesn't paint the screen background, so pick a theme that suits
+your terminal.
 
 The TUI writes nothing outside its own screen. To see what it is doing,
 pass --log-file: diagnostics are appended to that file at debug level,
@@ -40,10 +55,15 @@ Each level also includes the levels below it in this list.
 Examples:
   htt interactive --log-file ~/htt-tui.log
   htt interactive --log-file ~/htt-tui.log --log-level warn`,
+		strings.Join(tui.ThemeNames(), ", "), strings.Join(tui.RoleNames(), ", ")),
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if cmd.Flags().Changed("log-level") && tuiLogFile == "" {
 			return errors.New("--log-level needs --log-file")
+		}
+		theme, err := tui.ResolveTheme(vars.Get(vars.ConfigKeyTUITheme), vars.GetStringMapString(vars.ConfigKeyTUIColors))
+		if err != nil {
+			return fmt.Errorf("config: %w", err)
 		}
 		logger, closeLog, err := tuiLogger(tuiLogFile, tuiLogLevel)
 		if err != nil {
@@ -57,7 +77,7 @@ Examples:
 			return fmt.Errorf("load current context: %w", err)
 		}
 		p := tea.NewProgram(
-			tui.Model(r, ctx, logger),
+			tui.Model(r, ctx, tui.Options{Logger: logger, Theme: theme}),
 			tea.WithAltScreen(),
 			tea.WithMouseCellMotion(),
 		)

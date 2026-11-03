@@ -13,6 +13,7 @@ require (
 	github.com/fatih/color v1.13.0
 	github.com/go-git/go-git/v5 v5.19.3
 	github.com/mitchellh/go-homedir v1.1.0
+	github.com/muesli/termenv v0.16.0
 	github.com/olebedev/when v1.1.0
 	github.com/prataprc/goparsec v0.0.0-20211219142520-daac0e635e7e
 	github.com/spf13/cobra v1.3.0
@@ -67,7 +68,6 @@ require (
 	github.com/mitchellh/mapstructure v1.4.3 // indirect
 	github.com/muesli/ansi v0.0.0-20230316100256-276c6243b2f6 // indirect
 	github.com/muesli/cancelreader v0.2.2 // indirect
-	github.com/muesli/termenv v0.16.0 // indirect
 	github.com/pelletier/go-toml v1.9.4 // indirect
 	github.com/pjbgf/sha1cd v0.7.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect

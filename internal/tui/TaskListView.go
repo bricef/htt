@@ -9,18 +9,16 @@ import (
 
 const CURSOR = ">"
 
-var currentTask = lipgloss.NewStyle().
-	Foreground(foreground_color).
-	Background(selected_color)
-
-func RenderTask(task *domain.Task, selected bool) string {
-	if selected {
-		return currentTask.Render(task.RawString())
+// RenderTask renders one task, highlighted with the selected style when
+// the cursor is on it.
+func RenderTask(task *domain.Task, isSelected bool, selected lipgloss.Style) string {
+	if isSelected {
+		return selected.Render(task.RawString())
 	}
 	return task.RawString()
 }
 
-func RenderTaskList(tasks []*domain.Task, cursor int) string {
+func RenderTaskList(tasks []*domain.Task, cursor int, selected lipgloss.Style) string {
 	s := ""
 	// Iterate over our choices
 	for i, choice := range tasks {
@@ -32,12 +30,12 @@ func RenderTaskList(tasks []*domain.Task, cursor int) string {
 		}
 
 		// Render the row
-		s += fmt.Sprintf("%s %4d %s\n", cursorChar, i, RenderTask(choice, cursor == i))
+		s += fmt.Sprintf("%s %4d %s\n", cursorChar, i, RenderTask(choice, cursor == i, selected))
 	}
 	return s
 }
 
-func RenderDoneList(tasks []*domain.Task, cursor int) string {
+func RenderDoneList(tasks []*domain.Task, cursor int, selected lipgloss.Style) string {
 	s := ""
 	// Iterate over our choices
 	for i, choice := range tasks {
@@ -49,7 +47,7 @@ func RenderDoneList(tasks []*domain.Task, cursor int) string {
 		}
 
 		// Render the row
-		s += fmt.Sprintf("%s %s\n", cursorChar, RenderTask(choice, cursor == i))
+		s += fmt.Sprintf("%s %s\n", cursorChar, RenderTask(choice, cursor == i, selected))
 	}
 	return s
 }

@@ -440,6 +440,8 @@ a throwaway task list, surprising if you didn't expect it.
 | `author_name`         | `HTT`                           | sync: the commit author                               |
 | `author_email`        | `htt@fractallambda.com`         | sync: the commit author's email                       |
 | `file_match_patterns` | `*.txt`, `.context`, `timelogs`, `.gitignore` | sync: which files get committed     |
+| `tui.theme`           | `default`                       | the TUI's colour theme (see [Colours and themes](#colours-and-themes)) |
+| `tui.colors`          | unset                           | per-colour overrides on top of the theme              |
 
 The `config` subcommands print single values: `htt config where-data`
 (the data directory), `htt config dir` (the tracker directory — despite
@@ -474,6 +476,51 @@ was saved.
 
 The TUI works on the same data files as the CLI — you can switch
 between them in the same session without anything getting out of sync.
+
+### Colours and themes
+
+The TUI's colours come from a theme, set in the `tui` section of the
+config file. The built-in themes are `default` (htt's own palette),
+`monokai`, `vscode` (VS Code's Dark+), `vscode-light` (Light+),
+`dracula`, `nord`, `solarized-dark`, `solarized-light` and `gruvbox`;
+`htt interactive --help` lists them too.
+
+```yaml
+tui:
+  theme: monokai
+```
+
+Override any of the theme's colours under `colors`, by role:
+
+```yaml
+tui:
+  theme: nord
+  colors:
+    accent: "#ebcb8b"
+    selection: "#5e81ac"
+```
+
+| Role         | Colours                                                              |
+| ------------ | -------------------------------------------------------------------- |
+| `foreground` | the `htt` title, text on the selected tab and task, and the fill of the done tab and the new-task input |
+| `background` | text drawn on that fill                                              |
+| `selection`  | the selected tab and task                                            |
+| `accent`     | the new-task prompt and the status line                              |
+| `muted`      | borders, keys in the help bar, the new-task placeholder              |
+| `help`       | descriptions in the help bar                                         |
+| `separator`  | separators in the help bar                                           |
+
+A colour is a hex value (`"#rrggbb"` or `"#rgb"`) or an ANSI colour
+number (`0`–`255`). **Quote hex values**: unquoted, YAML reads
+everything from the `#` on as a comment. A misspelt theme or role, or
+a colour htt can't read, stops `htt interactive` with an error naming
+the valid choices.
+
+The TUI doesn't paint the whole screen: tasks and tabs that aren't
+selected keep your terminal's own colours, and so does the
+background. Pick a theme that suits your terminal; a light theme on a
+dark terminal leaves the title hard to read. Colours are adapted to
+what your terminal supports (true colour, 256 or 16 colours).
 
 The TUI writes nothing outside its own screen. If something goes
 wrong (say it closes unexpectedly), run it with `--log-file` and it

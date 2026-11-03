@@ -48,7 +48,7 @@ func seedModel(t *testing.T, contextName string, tasks ...string) (model, *stora
 	if err != nil {
 		t.Fatalf("Context(%q): %v", contextName, err)
 	}
-	return Model(repo, loaded, nil), repo
+	return Model(repo, loaded, Options{}), repo
 }
 
 // asModel asserts the tea.Model returned by an action is back to model.
@@ -73,7 +73,7 @@ func TestModel_FreshInstall_ContextCursorIsNonNegative(t *testing.T) {
 		t.Fatalf("CurrentContext: %v", err)
 	}
 
-	m := Model(repo, ctx, nil)
+	m := Model(repo, ctx, Options{})
 	if m.contextCursor < 0 {
 		t.Errorf("contextCursor = %d on fresh install, want >= 0", m.contextCursor)
 	}
@@ -273,7 +273,7 @@ func TestAction_NextContext_SwitchesAndRefreshes(t *testing.T) {
 	// Rebuild model so contexts list includes both. seedModel only knew
 	// about "todo" at construction time.
 	todoCtx, _ := repo.Context("todo")
-	m = Model(repo, todoCtx, nil)
+	m = Model(repo, todoCtx, Options{})
 
 	// Find the position of "todo" and step past it.
 	for i, c := range m.contexts {
@@ -408,7 +408,7 @@ func seedFileModel(t *testing.T, contextName string, tasks ...string) (model, st
 	if err != nil {
 		t.Fatalf("Context(%q): %v", contextName, err)
 	}
-	return Model(repo, ctx, nil), repo.ContextPath(contextName)
+	return Model(repo, ctx, Options{}), repo.ContextPath(contextName)
 }
 
 // editorErr runs a real command to get the error type exec produces.

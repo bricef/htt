@@ -172,10 +172,12 @@ call `repo()` / `timelogRepo()` at the top of each `RunE`.
 
 ## TUI
 
-`internal/tui` is a Bubble Tea program. `tui.Model(repo, ctx, logger)`
-builds the model; `htt interactive` (`internal/cli/interact.go`)
-builds the logger from `--log-file` / `--log-level` (a discard handler
-when there's no file) and runs the program.
+`internal/tui` is a Bubble Tea program. `tui.Model(repo, ctx, opts)`
+builds the model from `Options` (a logger and a theme; the zero value
+means a discard logger and the default theme). `htt interactive`
+(`internal/cli/interact.go`) builds both, the logger from
+`--log-file` / `--log-level` and the theme from the config, then runs
+the program.
 
 - **Actions.** Each key binding maps to an `Action`: a description
   plus a `func(model) (tea.Model, tea.Cmd, error)`. The action decides
@@ -190,6 +192,11 @@ when there's no file) and runs the program.
   to the model's `*slog.Logger`, and anything the user should see goes
   on the status line (`model.status`, cleared on the next keypress).
   The architecture test keeps `log` and `utils` out of the package.
+- **Themes.** `Theme` holds one colour per role; the built-in palettes
+  live in `theme.go`. `cli` reads the config's `tui.theme` and
+  `tui.colors` and calls `tui.ResolveTheme`, so the tui package never
+  reads config, and passes the result in `Options`. The model builds
+  its `styles` from it once; `View` takes every colour from there.
 - **Other programs.** The edit action runs `$EDITOR` through
   `tea.ExecProcess`, which releases the terminal while the editor runs
   and sends `editorFinishedMsg` back to `Update` when it exits.

@@ -24,6 +24,8 @@ var (
 	ConfigKeyAuthorEmail  = "author_email"
 	ConfigKeySSHKeyFile   = "ssh_key_file"
 	ConfigKeyDisableColor = NoColorFlag
+	ConfigKeyTUITheme     = "tui.theme"  // a built-in theme name
+	ConfigKeyTUIColors    = "tui.colors" // per-role colour overrides
 
 	// Default values
 	DefaultContext         = "todo"
@@ -37,6 +39,7 @@ var (
 	DefaultContextFileName = "current-context"
 	DefaultCommitterName   = "HTT"
 	DefaultCommitterEmail  = "htt@fractallambda.com"
+	DefaultTUITheme        = "default" // matches tui.DefaultThemeName
 	DefaultFilePatterns    = []string{"*" + DefaultFileExtension, ".context", DefaultTimelogDirName, ".gitignore"}
 )
 
@@ -52,4 +55,8 @@ func GetBool(name string) bool {
 
 func GetStringSlice(name string) []string {
 	return viper.GetStringSlice(name)
+}
+
+func GetStringMapString(name string) map[string]string {
+	return viper.GetStringMapString(name)
 }

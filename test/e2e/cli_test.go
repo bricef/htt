@@ -363,3 +363,45 @@ func TestInteractive_HelpStatesTheDebugDefault(t *testing.T) {
 		t.Errorf("--debug was replaced by --log-file and should be gone:\n%s", r.stdout)
 	}
 }
+
+func TestInteractive_BadThemeConfigFailsBeforeTheTUIStarts(t *testing.T) {
+	cases := []struct {
+		name   string
+		config string
+		want   []string
+	}{
+		{"unknown theme", "tui:\n  theme: solarised\n", []string{`unknown theme "solarised"`, "solarized-dark"}},
+		{"unknown colour role", "tui:\n  colors:\n    cursor: \"#ffffff\"\n", []string{`unknown colour "cursor"`}},
+		// Unquoted, YAML reads "#f92672" as a comment and the value is empty.
+		{"unquoted hex", "tui:\n  colors:\n    accent: #f92672\n", []string{"tui.colors.accent", "quote hex colours"}},
+		{"colour name", "tui:\n  colors:\n    accent: red\n", []string{`invalid colour "red"`}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newEnv(t)
+			e.writeConfig(tc.config)
+			r := e.run("interactive")
+			if r.exitCode == 0 {
+				t.Errorf("expected a non-zero exit")
+			}
+			for _, want := range tc.want {
+				assertContains(t, "stderr", r.stderr, want)
+			}
+		})
+	}
+}
+
+func TestInteractive_ThemeConfigLeavesOtherCommandsAlone(t *testing.T) {
+	e := newEnv(t)
+	e.writeConfig("tui:\n  theme: monokai\n  colors:\n    accent: \"#abcdef\"\n")
+	e.mustRun("todo", "add", "still works")
+	r := e.mustRun("config", "yaml")
+	assertContains(t, "config yaml", r.stdout, "theme: monokai")
+}
+
+func TestInteractive_HelpListsThemesAndColours(t *testing.T) {
+	e := newEnv(t)
+	r := e.mustRun("interactive", "--help")
+	assertContains(t, "help", r.stdout, "Themes: default, dracula, gruvbox, monokai, nord")
+	assertContains(t, "help", r.stdout, "Colours: foreground, background, selection, accent, muted, help, separator")
+}

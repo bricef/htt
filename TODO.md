@@ -74,6 +74,8 @@ Each confirmed against `main` on 2026-11-03.
   - [ ] Command mode (`:`)
   - [ ] Sort and filter, as `htt todo show` does
   - [ ] Say why the TUI closed, after it exits
+  - [ ] Themes: paint the whole screen background, a `--theme` flag or
+        preview for trying themes, light/dark adaptive colours
 - Editors
   - [ ] Parse `$EDITOR` like git does (`EDITOR="code --wait"` fails to
         start today) and honour `$VISUAL`
@@ -99,6 +101,9 @@ Each confirmed against `main` on 2026-11-03.
 
 ## Done
 
+- [x] Interactive: colour themes (`tui.theme`: monokai, vscode,
+      dracula, nord, solarized, gruvbox, …) and per-colour overrides
+      (`tui.colors`)
 - [x] Interactive: edit the context file in `$EDITOR` (`f`), without
       the TUI fighting the editor for the terminal
 - [x] Interactive: diagnostics to `--log-file`, never the terminal

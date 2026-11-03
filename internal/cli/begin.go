@@ -9,7 +9,7 @@ import (
 
 var Begin = &cobra.Command{
 	Use:     "workon [item number]",
-	Short:   "Log that work has began on numbered item in the current context.",
+	Short:   "Log that work has begun on numbered item in the current context.",
 	Args:    cobra.MinimumNArgs(1),
 	Aliases: []string{"wo"},
 	RunE: func(cmd *cobra.Command, args []string) error {

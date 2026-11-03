@@ -1,65 +1,121 @@
 # TODO
 
-Holding pen for the wishlist that used to live at the bottom of `README.md`.
-Items here have not been triaged; some will graduate to GitHub Issues, some
-will be deleted as obsolete, some will become plan documents under
-`docs/plans/active/` when their time comes. Add new wishlist items here
-freely; the README itself stays a marketing/getting-started doc.
+Holding pen for known issues and the wishlist. Wishlist items haven't
+been triaged; some will graduate to GitHub Issues, some will be deleted
+as obsolete, some will become plan documents under
+`docs/plans/active/` when their time comes. Add new items here freely;
+the README itself stays a getting-started doc.
 
-## Todo
+Scoped work lives in [GitHub Issues](https://github.com/bricef/htt/issues):
+sync's problems and future are
+[#12](https://github.com/bricef/htt/issues/12).
 
-- [ ] Dedup - Find duplicate and similar tasks. See dedup example
-- Interactive Mode
-  - [ ] Interact: implement pager for lists
-  - [ ] Interactive: Enable task edit
-  - [ ] Interact: Move cursor with current task when changing priority
-  - [ ] Interact: Enable task highlighting by priority (Maybe just priority?)
-  - [ ] Interact: Highlight tags KV and dates in task render
-  - [ ] Interact: Add `created-on` tag for new tasks
-  - [ ] Interact: fix help menu column balance issue
-  - [ ] Enable command mode
-- QA
-  - [ ] Write intergation tests for htt. Make sure that mutating actions work as intended
-- Repos
-  - [ ] Check if repo exists. If it doesn't clone it first
-  - [ ] Handle case when local repo is behind remote. (Rebase? Merge? How?)
-  - [ ] Add 'status' action which shows sync status
-  - [ ] Commit on all modifications.
-- UX
-  - [ ] Enable managing contexts (archive, delete, merge)
-  - [ ] Add deduplicate command (smart with edit distance?)
-  - [ ] Add "log@" command to log at a particular time
-  - [ ] Review jrnl command to see if we can take inspiration from this
-  - [ ] Add "Where is <>?" command
-  - [ ] archive context
-  - [ ] archive todo
-  - [ ] Query language
-  - [ ] interval output
-  - [ ] set up "htt do context/line" command to complete tasks across contexts
-- [ ] Fork goparsec to fix messed up API choices
-  - AST/Node distinction?
-  - Simple querying
+## Known issues
+
+Each confirmed against `main` on 2026-11-03.
+
+- **Sync** has two serious bugs and several limits, all in
+  [#12](https://github.com/bricef/htt/issues/12): with no
+  `backing_repo_url` it pushes into the git repository of the current
+  directory, the default `ssh_key_file` is a public key, it never
+  pulls, and the default `file_match_patterns` entry `.context`
+  matches nothing.
+- **`@end` isn't a sentinel.** After `htt log end`, `htt log status`
+  reports "Currently working on: @end". Fixing it needs an open/closed
+  model for entries (see the wishlist).
+- **`log start`, `log end` and `workon` print nothing.** They stopped
+  confirming their entry in the 2026-05-15 timelog refactor; `log add`
+  still prints `Logging entry: …`.
+- **REPL history isn't saved.** `replHistoryPath` builds the path from
+  `config_path`, which is the config *file*, so creating the directory
+  fails and history is switched off. It works within one session.
+- **REPL output disappears.** Each cycle clears the screen straight
+  after the command runs, so a command's own output (`Added: …`,
+  search results, `/report`) is gone at once.
+- **`htt report` counts deleted tasks as added**, under a context named
+  `archive`: the Added section walks the archive like any other
+  context.
+- **`htt config dir` prints the tracker directory**, not the config
+  directory its name suggests.
+- **CLI edit commands exit through `utils.Fatal`**: `todo edit-done`,
+  `todo edit-archive` and `log edit` end with a log-style message on
+  an unset `$EDITOR` or an editor error, instead of returning an error
+  like `todo edit` does.
+- **Malformed dates load as text.** A line like `2026-13-45 task` is
+  accepted rather than rejected.
+- **`:` in the TUI keymap does nothing yet** (command mode).
+
+## Wishlist
+
+- Tasks
+  - [ ] Dedup: find duplicate and similar tasks (edit distance?)
+  - [ ] Manage contexts: archive, delete, merge
+  - [ ] Complete tasks across contexts (`htt do context/line`)
+  - [ ] "Where is <>?": which context holds a task
+  - [ ] Restore a deleted task from the archive (`htt todo restore`)
+  - [ ] Query language (`htt todo show --filter` covers the common
+        cases)
+  - [ ] More `show` views: multi-key sort, negated filters, created-date
+        ranges, saved views
+- Time log
+  - [ ] Open/closed entries, so `@end` (and a pause) mean something
+  - [ ] `log@`: log an entry at a given time
+  - [ ] Interval output
+  - [ ] Review jrnl for inspiration
+- Reports
+  - [ ] Calendar modes (`--week`, `--month`)
+  - [ ] Time per task
+- Interactive mode
+  - [ ] Pager for long lists
+  - [ ] Edit a single task (`f` edits the whole file)
+  - [ ] Keep the cursor on a task when a priority change moves it
+  - [ ] Highlight priorities, tags, key:value pairs and dates
+  - [ ] Fix help menu column balance
+  - [ ] Command mode (`:`)
+  - [ ] Sort and filter, as `htt todo show` does
+  - [ ] Say why the TUI closed, after it exits
+- Editors
+  - [ ] Parse `$EDITOR` like git does (`EDITOR="code --wait"` fails to
+        start today) and honour `$VISUAL`
+- REPL
+  - [ ] Tab completion
+  - [ ] Fixed-position prompt
+- Code
+  - [ ] Fork goparsec to fix messed up API choices (AST/Node
+        distinction? simple querying)
+  - [ ] Remove `internal/gcal.go`, a dead Google Calendar experiment
+        that alone pulls the Google API client, grpc and OpenTelemetry
+        into `go.mod`
+- Sync: see [#12](https://github.com/bricef/htt/issues/12)
 
 ## Production grade
 
-- [ ] Set up packaging for release. (see https://github.com/goreleaser/goreleaser)
+- [ ] Set up packaging for release (see https://github.com/goreleaser/goreleaser)
 - [ ] Set up CI
 
 ## Future
 
-- [ ] Set up interactive cli (see https://github.com/c-bata/go-prompt)
-- UI. Either:
-  - [ ] Set up a CLI GUI like todotxt-machine (using https://github.com/jroimartin/gocui or https://github.com/gizak/termui)
-  - [ ] Delegate full editing to other program (https://github.com/AnthonyDiGirolamo/todotxt-machine)
-- [ ] Create a GUI app layer (https://github.com/avelino/awesome-go#gui, https://github.com/murlokswarm/app, )
+- [ ] Create a GUI app layer (https://github.com/avelino/awesome-go#gui, https://github.com/murlokswarm/app)
 
 ## Done
 
+- [x] Interactive: edit the context file in `$EDITOR` (`f`), without
+      the TUI fighting the editor for the terminal
+- [x] Interactive: diagnostics to `--log-file`, never the terminal
+- [x] Show tasks in priority order (`htt todo show --sort priority`)
+- [x] Interactive shell (`htt repl`); was "set up interactive cli
+      with go-prompt"
+- [x] Full-screen UI (`htt interactive`); was "set up a CLI GUI like
+      todotxt-machine"
+- [x] Interactive: new tasks get a created-on date (`Context.AddTask`
+      stamps it)
+- [x] Integration tests for mutating commands (`test/e2e`)
+- [x] Archive deleted tasks (`archive.txt`, shown in `htt report`)
 - [x] Interactive: Add new task
 - [x] Interactive: Manage priorities
 - [x] Interactive: autosort task list
 - [x] Set up interactive mode with Bubbletea, bubbles and lipgloss
-- [x] Add "summary" command to show tasks and prioritoes across contexts
+- [x] Add "summary" command to show tasks and priorities across contexts
 - [x] Action: increase priority
 - [x] Action: decrease priority
 - [x] Add 'do' action

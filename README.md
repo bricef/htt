@@ -1,13 +1,26 @@
 # Hypothetical Tasks & Time Tracker (htt)
 
 `htt` is a [todo.txt](http://todotxt.org/)-compatible command-line todo
-list manager and time tracker. Tasks live in plain-text files; an
-optional git-backed sync mode is included for cross-machine use.
+list manager and time tracker. Tasks live in plain-text files you can
+also edit by hand.
+
+- **Todo lists** in todo.txt format, split into contexts (`work`,
+  `home`, …), with priorities, natural-language due dates
+  (`--due "next Friday"`), search, and sorted or filtered views.
+- **A time log**: a timestamped record of what you worked on each day.
+- **Reports**: what you completed, added and deleted, and how long you
+  worked, over any period.
+- **Three ways in**: one-shot commands, a todo-mode shell (`htt repl`)
+  and a full-screen TUI (`htt interactive`).
+- **Git sync** (`htt sync`): manual and push-only for now. Read
+  [its setup and limits](GETTING-STARTED.md#optional-git-sync) before
+  using it; [#12](https://github.com/bricef/htt/issues/12) tracks
+  its problems.
 
 New to `htt`? [`GETTING-STARTED.md`](GETTING-STARTED.md) is a
 fifteen-minute walkthrough of the realistic workflow — add a task,
 prioritise it, complete it, organise with contexts, log time against
-it.
+it — and the reference for every command.
 
 ## Installation
 
@@ -34,11 +47,14 @@ Available Commands:
   completion  Generate the autocompletion script for the specified shell
   config      Manage configuration.
   help        Help about any command
+  interactive Enter interactive mode
   log         Manage the activity log.
+  repl        Interactive todo-mode shell.
+  report      Summarise activity in a time period.
   status      Show the status of the tasklist and time log.
-  sync        Sync the data to the backend manually.
+  sync        Commit the data directory and push it to the backing git repo.
   todo        Manage todo lists.
-  workon      Log that work has began on numbered item in the current context.
+  workon      Log that work has begun on numbered item in the current context.
 
 Flags:
   -h, --help       help for htt
@@ -47,7 +63,7 @@ Flags:
 Use "htt [command] --help" for more information about a command.
 ```
 
-### Tip
+### Tips
 
 Aliases keep the most-used subcommands close at hand:
 
@@ -55,6 +71,9 @@ Aliases keep the most-used subcommands close at hand:
 alias t="htt t"      # htt todo
 alias jnl="htt l"    # htt log
 ```
+
+`htt completion --help` explains how to install tab completion for
+bash, zsh, fish or PowerShell.
 
 ## Architecture
 
@@ -106,10 +125,12 @@ $ go run cmd/htt/main.go interactive --log-file debug.log
 $ tail -f debug.log
 ```
 
-## Wishlist
+## Wishlist and known issues
 
-Rough lists of unscoped ideas (some will graduate to GitHub Issues)
-live in [`TODO.md`](TODO.md).
+[`TODO.md`](TODO.md) holds the wishlist of unscoped ideas and a list of
+known issues. Work that's been scoped lives in
+[GitHub Issues](https://github.com/bricef/htt/issues), starting with
+[#12](https://github.com/bricef/htt/issues/12) for sync.
 
 ## Prior art
 

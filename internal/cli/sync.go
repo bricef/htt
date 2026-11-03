@@ -27,9 +27,9 @@ into whatever git repository the current directory belongs to.
 
 To use a second machine, clone the backing repo into its data
 directory before its first sync. If another machine has pushed since
-your last sync, the push is rejected: run git pull in the data
-directory, resolve any conflicts, then sync again. HTTPS remotes and
-passphrase-protected keys aren't supported.
+your last sync, the push is rejected: in the data directory run
+git pull --no-rebase origin master, resolve any conflicts, then sync
+again. HTTPS remotes and passphrase-protected keys aren't supported.
 
 Known problems and limits: https://github.com/bricef/htt/issues/12`,
 		Args: cobra.NoArgs,

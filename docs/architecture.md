@@ -14,15 +14,16 @@ internal/
   tui/                     bubble tea interactive mode
   domain/                  Context, Task, Timelog + Repository / TimelogRepository interfaces
   storage/                 MemoryRepository / FileRepository (and timelog impls) — satisfy the domain interfaces
-  repo/                    thin wrapper over go-git for `htt sync`
-  timelogs/                (deleted; lives in domain + storage now)
+  repo/                    thin wrapper over go-git for `htt sync` (push-only; see #12)
   parseutils/              parsing helpers for the todo.txt format
-  utils/                   small odds and ends (StringToFilename, EditFilePath, …)
+  utils/                   small odds and ends (StringToFilename, EditFilePath, Fatal, …)
   vars/                    viper config keys + defaults
+  gcal.go                  standalone Google Calendar experiment (package main);
+                           not part of htt, nothing imports it
 test/
   e2e/                     black-box tests that drive the compiled binary
-  tui/                     bubble tea snapshot tests
-  architecture/            asserts the import-direction invariant
+  tui/                     TUI tests that drive the model through Update/View
+  architecture/            asserts the import rules below
 docs/
   architecture.md          you are here
   plans/active/            in-flight design docs
@@ -41,15 +42,27 @@ cli ─────────────► tui
 storage ─────────► domain
 ```
 
-- `domain` imports nothing from the rest of `internal/`.
-- `storage` may import `domain` only.
-- `tui` may import `domain` and `storage`; never `cli`.
+`parseutils`, `vars` and `utils` are leaf helpers: they import nothing
+else from `internal/`, and the layers below may use them, with the
+exceptions noted.
+
+- `domain` imports only `parseutils` and `vars`; never `storage`,
+  `cli`, `tui` or `utils`.
+- `storage` imports `domain` (plus `utils` and `vars`); never `cli` or
+  `tui`.
+- `tui` imports `domain` (it may also use `storage`); never `cli`,
+  never `utils` (whose editor and `Fatal` helpers exit the process and
+  write to the terminal the TUI owns), and never the standard `log`
+  package (see [TUI](#tui)).
 - `cli` sits at the top and may import anything below (including `tui`,
   to register the interactive subcommand).
+- `repo` (sync) sits outside the layering: it wraps go-git, uses
+  `utils` and `vars`, and only `cli` calls it.
 
-`test/architecture/architecture_test.go` enforces this by scanning
-imports in each package. If a future change violates the direction the
-test fails and forces the discussion before the dependency lands.
+`test/architecture/architecture_test.go` enforces the `domain`,
+`storage` and `tui` rules by scanning imports in each package. If a
+future change breaks one, the test fails and forces the discussion
+before the dependency lands.
 
 ## Domain types
 
@@ -90,7 +103,9 @@ step.
 
 A day's worth of activity entries. Each entry is a `Task` annotated
 with a `ts:<RFC3339>` timestamp by `Timelog.Append`. Persistent method
-is `Append`; pure methods are `Latest`, `Duration`, `IsEmpty`.
+is `Append`; pure methods are `Latest`, `Duration`, `IsEmpty`, and
+`Spans` (the closed intervals between consecutive entries, which
+`htt report` sums).
 
 "Latest" returns whatever was last appended, including `@end` — so
 `htt log status` after `htt log end` reports "Currently working on
@@ -139,7 +154,7 @@ files and `pointerDir` for the `current-context` pointer. Default
 config maps both to the same directory, but users who set
 `tracker_path` independently of `data_path` keep their split.
 
-## CLI / TUI wiring
+## CLI wiring
 
 `internal/cli/app.go` is the injection seam:
 
@@ -155,9 +170,39 @@ Each is lazily initialized from viper config. Tests inject memory
 impls via `SetRepository` / `SetTimelogRepository`. Cobra commands
 call `repo()` / `timelogRepo()` at the top of each `RunE`.
 
-The TUI's `model` carries a `repo domain.Repository`. Actions like
-`Delete`, `Do`, `IncreasePriority` call `m.context.X(...)` directly;
-context-switching actions call `m.repo.SetCurrent`.
+## TUI
+
+`internal/tui` is a Bubble Tea program. `tui.Model(repo, ctx, logger)`
+builds the model; `htt interactive` (`internal/cli/interact.go`)
+builds the logger from `--log-file` / `--log-level` (a discard handler
+when there's no file) and runs the program.
+
+- **Actions.** Each key binding maps to an `Action`: a description
+  plus a `func(model) (tea.Model, tea.Cmd, error)`. The action decides
+  what happens next (carry on, `tea.Quit`, `tea.ClearScreen`, run a
+  program); `Action.Act` is the one place that logs it: every action
+  at debug, an error wrapping `errUnavailable` (the action can't run
+  right now) at warn, any other error at error. Mutating actions call
+  `m.context.X(...)`, which persists through the repo, then `refresh`;
+  context-switching actions call `m.repo.SetCurrent`.
+- **The terminal.** The TUI owns the terminal while it runs, so
+  nothing in `internal/tui` writes to stdout or stderr: diagnostics go
+  to the model's `*slog.Logger`, and anything the user should see goes
+  on the status line (`model.status`, cleared on the next keypress).
+  The architecture test keeps `log` and `utils` out of the package.
+- **Other programs.** The edit action runs `$EDITOR` through
+  `tea.ExecProcess`, which releases the terminal while the editor runs
+  and sends `editorFinishedMsg` back to `Update` when it exits.
+
+## Sync
+
+`htt sync` calls `repo.Sync()` in `internal/repo`, a thin layer over
+go-git: init the data directory as a repository if needed, set the
+remote, commit, push over SSH. It sits outside the domain/storage
+layering, ends the process through `utils.Fatal` on any error, and has
+no tests. What it does and doesn't do is in GETTING-STARTED's sync
+section; its problems and the open questions about its future are in
+[#12](https://github.com/bricef/htt/issues/12).
 
 ## Adding a feature
 
@@ -177,8 +222,11 @@ Most features touch one or two layers. The usual path:
    Return errors via `RunE`; `main.go` owns error formatting.
 4. **e2e or in-process Cobra test.** For CLI features, the lightest
    harness is `internal/cli/todo_test.go`'s in-process cobra tests
-   (`withMemoryRepo` / `withMemoryTimelogRepo`). For TUI features, the
-   snapshot suite under `test/tui/`.
+   (`withMemoryRepo` / `withMemoryTimelogRepo`); output belongs in the
+   e2e suite, since in-process tests can't see stdout. For TUI
+   features, `internal/tui/actions_test.go` (actions and their
+   logging, against a memory or file repo) and `test/tui/` (drives the
+   model through `Update` / `View`).
 
 Always run `just test` before each commit. `just check` runs
 golangci-lint for style/vet warnings.
@@ -196,3 +244,7 @@ Worth reading if you're touching the relevant area:
 - `2026-05-15-timelogs-refactor.md` — why `TimelogRepository` is a
   separate interface from `Repository`, and why "last entry wins"
   semantics survived the refactor.
+- `2026-11-02-tui-log-file.md` — why the TUI has its own logger and
+  how actions report errors.
+- `2026-11-02-tui-editor-exec.md` — how the editor gets the terminal,
+  and why editor failures never close the TUI.

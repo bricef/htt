@@ -49,9 +49,10 @@ func TestMain(m *testing.M) {
 }
 
 type env struct {
-	t       *testing.T
-	home    string
-	dataDir string
+	t        *testing.T
+	home     string
+	dataDir  string
+	extraEnv []string // added to the binary's environment, e.g. HTTPS_PROXY
 }
 
 func newEnv(t *testing.T) *env {
@@ -83,10 +84,10 @@ func (e *env) run(args ...string) runResult {
 	e.t.Helper()
 	args = append([]string{"--no-color"}, args...)
 	cmd := exec.Command(binaryPath, args...)
-	cmd.Env = []string{
+	cmd.Env = append([]string{
 		"HOME=" + e.home,
 		"PATH=" + os.Getenv("PATH"),
-	}
+	}, e.extraEnv...)
 	var outBuf, errBuf bytes.Buffer
 	cmd.Stdout = &outBuf
 	cmd.Stderr = &errBuf

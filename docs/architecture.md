@@ -15,6 +15,7 @@ internal/
   domain/                  Context, Task, Timelog + Repository / TimelogRepository interfaces
   storage/                 MemoryRepository / FileRepository (and timelog impls) — satisfy the domain interfaces
   repo/                    thin wrapper over go-git for `htt sync` (push-only; see #12)
+  update/                  the once-a-day check for a newer GitHub release
   parseutils/              parsing helpers for the todo.txt format
   utils/                   small odds and ends (StringToFilename, EditFilePath, Fatal, …)
   vars/                    viper config keys + defaults
@@ -56,11 +57,15 @@ exceptions noted.
   package (see [TUI](#tui)).
 - `cli` sits at the top and may import anything below (including `tui`,
   to register the interactive subcommand).
+- `update` imports nothing else from `internal/`: it knows GitHub's
+  release endpoint and its cache file, nothing about tasks or config.
+  `cli` decides when it may run and passes the TUI a notice source.
 - `repo` (sync) sits outside the layering: it wraps go-git, uses
   `utils` and `vars`, and only `cli` calls it.
 
 `test/architecture/architecture_test.go` enforces the `domain`,
-`storage` and `tui` rules by scanning imports in each package. If a
+`storage`, `tui` and `update` rules by scanning imports in each
+package. If a
 future change breaks one, the test fails and forces the discussion
 before the dependency lands.
 
@@ -200,6 +205,22 @@ the program.
 - **Other programs.** The edit action runs `$EDITOR` through
   `tea.ExecProcess`, which releases the terminal while the editor runs
   and sends `editorFinishedMsg` back to `Update` when it exits.
+
+## Update check
+
+`internal/update` asks GitHub for the latest release
+(`releasesURL`, fixed at build time) and compares its tag with the
+binary's version from Go's build info. `Start` records the attempt in
+the user cache directory before the request and runs the request in
+the background; `Check.Newer` reports a newer release only on the run
+that asked, and every failure is kept in `Check.Err` rather than
+returned. The root command's `PersistentPreRun` starts at most one
+check per process when `updateCheckAllowed` permits (config on,
+someone at a terminal, not completion or help); `main.go` prints the
+notice after `Execute`, and `htt interactive` hands the TUI
+`Options.UpdateNotice` for its status line. What it may contact and
+send is promised in the README's Online activity section, and the
+tests pin it.
 
 ## Sync
 

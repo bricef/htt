@@ -1,7 +1,37 @@
 # Update check: tell users when a new version is out
 
 **Date:** 2026-11-04
-**Status:** In progress
+**Status:** Complete (2026-11-04)
+
+## Outcome
+
+Shipped as planned. Beyond the plan:
+
+- **Redirects stay on the host.** GitHub redirects renamed
+  repositories; the check follows a redirect only within
+  `api.github.com`, so nothing can take it elsewhere.
+- **No cache file, no check.** If the attempt can't be recorded, the
+  check doesn't run, rather than retrying on every command.
+- **The config key is pinned** by a unit test and by an e2e check that
+  `check_for_updates: true` is the documented default.
+
+Checked on a real terminal, with HTTPS routed through a local proxy
+that logs each connection's target and then drops it:
+
+| Run                                         | Result                                                |
+| ------------------------------------------- | ----------------------------------------------------- |
+| a CLI command at a terminal                 | one connection, to `api.github.com:443`; normal output, exit 0, nothing printed; attempt recorded |
+| the same again                              | no connection                                         |
+| `check_for_updates: false`                  | no connection, no cache file                          |
+| the TUI                                     | one connection, to `api.github.com:443`; the failure in its log at warn |
+| a stand-in API announcing v99.0.0 (CLI)     | the notice after the command's output                 |
+| the same, in the TUI                        | the notice on the status line, the full one after exit |
+| the stand-in API, check turned off          | no request                                            |
+| real GitHub                                 | 404 (no release yet): silent, exit 0                  |
+
+Every new test was shown to fail when the part it guards is broken.
+The repository still has no published release, so the check stays
+silent until the first one.
 
 ## Motivation
 

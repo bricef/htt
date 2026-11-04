@@ -75,7 +75,53 @@ alias jnl="htt l"    # htt log
 ```
 
 `htt completion --help` explains how to install tab completion for
-bash, zsh, fish or PowerShell.
+bash, zsh, fish or PowerShell. `htt --version` prints the version you
+have.
+
+## Online activity
+
+htt works offline. It reaches the network in two cases only, and
+never sends your tasks or time logs anywhere you haven't configured.
+
+### Update check
+
+htt checks whether a newer release exists, so you hear about fixes.
+
+- **What it contacts:** one URL,
+  `https://api.github.com/repos/bricef/htt/releases/latest`, which
+  answers with the newest published htt release. Nothing else is
+  contacted, and a redirect to another host is refused.
+- **What it sends:** a plain `GET` with a `User-Agent: htt/<your
+  version>` header. No account, token, task data or settings. Like any
+  request, it shows GitHub your IP address (see
+  [GitHub's privacy statement](https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement)).
+- **When:** at most once a day, and only when you're there to see the
+  answer: a command run at a terminal, or the TUI. Scripts, pipes, cron
+  jobs, shell tab completion and `help` never check, and neither do
+  builds without a version (`htt --version` says "unknown").
+- **What you see:** if the release is newer than yours, a notice after
+  the command (on stderr) or on the TUI's status line, at most once a
+  day. htt never downloads or installs anything itself.
+- **If it fails** (offline, a timeout, a rate limit, any error):
+  nothing. The command runs exactly as it would have, and nothing is
+  printed; the TUI's `--log-file` records why. The request runs in the
+  background, and a command waits at most a second for it, only on the
+  day's checking run.
+- **What it stores:** `update-check.json` in your user cache directory
+  (`~/.cache/htt/` on Linux): when it last checked, and the latest
+  release it saw.
+- **Turning it off:** set `check_for_updates: false` in your config
+  file (`~/.config/htt/config.yaml`).
+
+### Sync
+
+`htt sync` pushes your data directory to the git remote you configure
+(`backing_repo_url`), over SSH, and only when you run it. See
+[its section in GETTING-STARTED](GETTING-STARTED.md#optional-git-sync).
+
+There is nothing else: no telemetry, no analytics, no other servers.
+(Installing with `go install` downloads htt through the Go module
+proxy; that's the Go toolchain, before htt ever runs.)
 
 ## Architecture
 

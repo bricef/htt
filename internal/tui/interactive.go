@@ -19,7 +19,16 @@ import (
 type Options struct {
 	Logger *slog.Logger // diagnostics; nil discards them
 	Theme  Theme        // the zero Theme means the default theme
+
+	// UpdateNotice, if set, blocks until the update check has finished
+	// and returns a one-line notice, or "" when there's nothing to say.
+	// The TUI calls it in the background and shows the notice on the
+	// status line.
+	UpdateNotice func() string
 }
+
+// updateNoticeMsg carries a newer-version notice to Update.
+type updateNoticeMsg string
 
 type model struct {
 	repo          domain.Repository
@@ -36,6 +45,7 @@ type model struct {
 	logger        *slog.Logger // diagnostics; never the terminal
 	status        string       // one-line message for the user; cleared on the next key
 	styles        styles       // colours from the theme
+	updateNotice  func() string
 }
 
 var controller = NewKeyBindingController().
@@ -149,12 +159,22 @@ func Model(repo domain.Repository, ctx *domain.Context, opts Options) model {
 		textInput:     ti,
 		logger:        logger,
 		styles:        st,
+		updateNotice:  opts.UpdateNotice,
 	}
 }
 
+// Init waits for the update check in the background, if there is one.
 func (m model) Init() tea.Cmd {
-	// Just return `nil`, which means "no I/O right now, please."
-	return nil
+	notice := m.updateNotice
+	if notice == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		if s := notice(); s != "" {
+			return updateNoticeMsg(s)
+		}
+		return nil
+	}
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -168,6 +188,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case editorFinishedMsg:
 		return editorFinished(m, msg)
+
+	case updateNoticeMsg:
+		m.status = string(msg)
+		m.logger.Info("update available", "notice", string(msg))
 
 	// Is it a key press?
 	case tea.KeyMsg:

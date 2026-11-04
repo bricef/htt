@@ -1,10 +1,13 @@
 package e2e
 
 import (
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestTodoAdd_WritesTaskToCurrentContextFile(t *testing.T) {
@@ -397,6 +400,55 @@ func TestInteractive_ThemeConfigLeavesOtherCommandsAlone(t *testing.T) {
 	e.mustRun("todo", "add", "still works")
 	r := e.mustRun("config", "yaml")
 	assertContains(t, "config yaml", r.stdout, "theme: monokai")
+}
+
+func TestVersion_PrintsTheBuildVersion(t *testing.T) {
+	e := newEnv(t)
+	r := e.mustRun("--version")
+	// The test binary is built from the checkout, so Go stamps a
+	// pseudo-version from git.
+	assertContains(t, "stdout", r.stdout, "htt version v")
+}
+
+func TestUpdateCheck_NoNetworkWithoutATerminal(t *testing.T) {
+	// The e2e harness runs htt without a terminal, as a script would.
+	// Route any HTTPS through a local "proxy" that only counts
+	// connection attempts: there must be none, even with the check on
+	// (the default) and no record of a previous check.
+	proxy, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var attempts atomic.Int32
+	go func() {
+		for {
+			conn, err := proxy.Accept()
+			if err != nil {
+				return
+			}
+			attempts.Add(1)
+			_ = conn.Close()
+		}
+	}()
+	t.Cleanup(func() { _ = proxy.Close() })
+
+	e := newEnv(t)
+	e.extraEnv = []string{"HTTPS_PROXY=http://" + proxy.Addr().String(), "HTTP_PROXY=http://" + proxy.Addr().String()}
+	e.mustRun("todo", "add", "offline task")
+	e.mustRun("todo", "show")
+	e.mustRun("status")
+	e.mustRun("report")
+
+	// The check is on by default, under the name the README documents.
+	assertContains(t, "config yaml", e.mustRun("config", "yaml").stdout, "check_for_updates: true")
+
+	time.Sleep(200 * time.Millisecond) // let any stray connection land
+	if n := attempts.Load(); n != 0 {
+		t.Errorf("htt opened %d connection(s) without a terminal; want none", n)
+	}
+	if _, err := os.Stat(filepath.Join(e.home, ".cache", "htt", "update-check.json")); !os.IsNotExist(err) {
+		t.Errorf("no check should have been recorded (stat err = %v)", err)
+	}
 }
 
 func TestInteractive_HelpListsThemesAndColours(t *testing.T) {

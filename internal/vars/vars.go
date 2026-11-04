@@ -14,18 +14,19 @@ var (
 	// we get the compiler and IDE to help with completion
 	// and checking. The strings will match the expected
 	// key names in the config yaml file.
-	ConfigKeyTrackerDir   = "tracker_path"
-	ConfigKeyConfigPath   = "config_path"
-	ConfigKeyDataDir      = "data_path"
-	ConfigKeyRemoteName   = "remote_name"
-	ConfigKeyRepoURL      = "backing_repo_url"
-	ConfigKeyFilePatterns = "file_match_patterns"
-	ConfigKeyAuthorName   = "author_name"
-	ConfigKeyAuthorEmail  = "author_email"
-	ConfigKeySSHKeyFile   = "ssh_key_file"
-	ConfigKeyDisableColor = NoColorFlag
-	ConfigKeyTUITheme     = "tui.theme"  // a built-in theme name
-	ConfigKeyTUIColors    = "tui.colors" // per-role colour overrides
+	ConfigKeyTrackerDir      = "tracker_path"
+	ConfigKeyConfigPath      = "config_path"
+	ConfigKeyDataDir         = "data_path"
+	ConfigKeyRemoteName      = "remote_name"
+	ConfigKeyRepoURL         = "backing_repo_url"
+	ConfigKeyFilePatterns    = "file_match_patterns"
+	ConfigKeyAuthorName      = "author_name"
+	ConfigKeyAuthorEmail     = "author_email"
+	ConfigKeySSHKeyFile      = "ssh_key_file"
+	ConfigKeyDisableColor    = NoColorFlag
+	ConfigKeyTUITheme        = "tui.theme"  // a built-in theme name
+	ConfigKeyTUIColors       = "tui.colors" // per-role colour overrides
+	ConfigKeyCheckForUpdates = "check_for_updates"
 
 	// Default values
 	DefaultContext         = "todo"

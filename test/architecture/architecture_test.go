@@ -38,6 +38,16 @@ func TestArchitecture_DependencyDirections(t *testing.T) {
 			"internal/cli",
 			"internal/tui",
 		},
+		// The update check is self-contained: it knows GitHub and the
+		// cache file, nothing about tasks or config.
+		"internal/update": {
+			"internal/cli",
+			"internal/tui",
+			"internal/domain",
+			"internal/storage",
+			"internal/utils",
+			"internal/vars",
+		},
 		"internal/tui": {
 			"internal/cli",
 			// utils' editor and Fatal helpers exit the process and

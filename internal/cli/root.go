@@ -14,9 +14,17 @@ var RootCmd = &cobra.Command{
 	// SilenceErrors lets main.go own the error format (❌ prefix).
 	SilenceUsage:  true,
 	SilenceErrors: true,
+	// Runs before every subcommand; see update.go.
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		startUpdateCheck(cmd)
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Println(cmd.Short)
 		fmt.Println()
 		return cmd.Usage()
 	},
+}
+
+func init() {
+	RootCmd.Version = version()
 }

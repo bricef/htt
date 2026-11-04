@@ -30,7 +30,14 @@ htt is a command line todo list manager and time tracker
 
 Two global odds and ends: `--no-color` turns off coloured output for
 any command, and `htt completion --help` explains how to install tab
-completion for bash, zsh, fish or PowerShell.
+completion for bash, zsh, fish or PowerShell. `htt --version` prints
+the version you have.
+
+When you use htt at a terminal it checks GitHub, at most once a day,
+for a newer release, and tells you if there is one. It never gets in
+the way: offline or on any error it stays silent. The README's
+[Online activity](README.md#online-activity) section says exactly what
+it sends and how to turn it off (`check_for_updates: false`).
 
 ## Your first task
 
@@ -410,6 +417,7 @@ Current Context: work
     2026-05-14.log
     …
   .git/                            ← only after you first run htt sync
+~/.cache/htt/update-check.json     ← when htt last checked for a new release
 ```
 
 Each context file is plain todo.txt format — one task per line, no
@@ -442,6 +450,7 @@ a throwaway task list, surprising if you didn't expect it.
 | `file_match_patterns` | `*.txt`, `.context`, `timelogs`, `.gitignore` | sync: which files get committed     |
 | `tui.theme`           | `default`                       | the TUI's colour theme (see [Colours and themes](#colours-and-themes)) |
 | `tui.colors`          | unset                           | per-colour overrides on top of the theme              |
+| `check_for_updates`   | `true`                          | check GitHub for a newer release, at most once a day (see [Online activity](README.md#online-activity)) |
 
 The `config` subcommands print single values: `htt config where-data`
 (the data directory), `htt config dir` (the tracker directory — despite

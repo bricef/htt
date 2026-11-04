@@ -77,7 +77,7 @@ Examples:
 			return fmt.Errorf("load current context: %w", err)
 		}
 		p := tea.NewProgram(
-			tui.Model(r, ctx, tui.Options{Logger: logger, Theme: theme}),
+			tui.Model(r, ctx, tui.Options{Logger: logger, Theme: theme, UpdateNotice: tuiUpdateNotice(logger)}),
 			tea.WithAltScreen(),
 			tea.WithMouseCellMotion(),
 		)

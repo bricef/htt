@@ -92,6 +92,8 @@ Each confirmed against `main` on 2026-11-03.
 
 ## Production grade
 
+- [ ] Publish releases (semver tags plus GitHub Releases): the update
+      check only announces published releases, and there are none yet
 - [ ] Set up packaging for release (see https://github.com/goreleaser/goreleaser)
 - [ ] Set up CI
 
@@ -100,6 +102,9 @@ Each confirmed against `main` on 2026-11-03.
 - [ ] Create a GUI app layer (https://github.com/avelino/awesome-go#gui, https://github.com/murlokswarm/app)
 
 ## Done
+
+- [x] Update check: at most once a day, GitHub only, silent on failure,
+      `check_for_updates: false` to turn off; `htt --version`
 
 - [x] Interactive: colour themes (`tui.theme`: monokai, vscode,
       dracula, nord, solarized, gruvbox, …) and per-colour overrides

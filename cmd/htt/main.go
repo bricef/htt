@@ -35,6 +35,7 @@ func main() {
 	viper.SetDefault(vars.ConfigKeyAuthorEmail, vars.DefaultCommitterEmail)
 	viper.SetDefault(vars.ConfigKeySSHKeyFile, filepath.Join(homeDir, ".ssh", "id_rsa.pub"))
 	viper.SetDefault(vars.ConfigKeyTUITheme, vars.DefaultTUITheme)
+	viper.SetDefault(vars.ConfigKeyCheckForUpdates, true)
 
 	// viper.WriteConfigAs("dump.yaml")
 
@@ -62,8 +63,12 @@ func main() {
 		}
 	}
 
-	if err = cli.RootCmd.Execute(); err != nil {
+	err = cli.RootCmd.Execute()
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "❌", err)
+	}
+	cli.PrintUpdateNotice(os.Stderr)
+	if err != nil {
 		os.Exit(1)
 	}
 }

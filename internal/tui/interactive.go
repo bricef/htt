@@ -3,11 +3,13 @@ package tui
 import (
 	"log/slog"
 	"slices"
+	"time"
 
 	"github.com/bricef/htt/internal/domain"
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -33,7 +35,7 @@ type updateNoticeMsg string
 type model struct {
 	repo          domain.Repository
 	context       *domain.Context
-	cursor        int // which to-do list item our cursor is pointing at
+	list          list.Model // the current context's tasks; owns the cursor and the search
 	contexts      []*domain.Context
 	contextCursor int
 	width         int
@@ -46,6 +48,7 @@ type model struct {
 	status        string       // one-line message for the user; cleared on the next key
 	styles        styles       // colours from the theme
 	updateNotice  func() string
+	now           func() time.Time // the clock searches use for due-date filters
 }
 
 var controller = NewKeyBindingController().
@@ -61,6 +64,13 @@ var controller = NewKeyBindingController().
 		key.WithKeys(":"),
 		key.WithHelp(":", "command mode"),
 	)).
+	// Moving, paging and searching belong to the list (see listOwns);
+	// these entries only list them in the help.
+	AddShortBinding(Noop, listKeys().Filter).
+	AddBinding(Noop, listKeys().CursorUp).
+	AddBinding(Noop, listKeys().CursorDown).
+	AddBinding(Noop, listKeys().PrevPage).
+	AddBinding(Noop, listKeys().NextPage).
 	AddBinding(Do, key.NewBinding(
 		key.WithKeys("x"),
 		key.WithHelp("x", "do"),
@@ -68,14 +78,6 @@ var controller = NewKeyBindingController().
 	AddBinding(Delete, key.NewBinding(
 		key.WithKeys("d"),
 		key.WithHelp("d", "delete"),
-	)).
-	AddBinding(Up, key.NewBinding(
-		key.WithKeys("up", "k"),
-		key.WithHelp("↑/k", "move up"),
-	)).
-	AddBinding(Down, key.NewBinding(
-		key.WithKeys("down", "j"),
-		key.WithHelp("↓/j", "move down"),
 	)).
 	AddBinding(NextContext, key.NewBinding(
 		key.WithKeys("right", "l"),
@@ -148,10 +150,10 @@ func Model(repo domain.Repository, ctx *domain.Context, opts Options) model {
 	ti.PlaceholderStyle = ti.TextStyle.Foreground(theme.Muted)
 	ti.Width = 100
 
-	return model{
+	m := model{
 		repo:          repo,
 		context:       ctx,
-		cursor:        0,
+		list:          newTaskList(st),
 		contexts:      contexts,
 		contextCursor: selected,
 		keys:          controller,
@@ -160,7 +162,10 @@ func Model(repo domain.Repository, ctx *domain.Context, opts Options) model {
 		logger:        logger,
 		styles:        st,
 		updateNotice:  opts.UpdateNotice,
+		now:           time.Now,
 	}
+	m.showTasks(-1)
+	return m
 }
 
 // Init waits for the update check in the background, if there is one.
@@ -177,14 +182,22 @@ func (m model) Init() tea.Cmd {
 	}
 }
 
+// Update handles a message, then sizes the list to the space left
+// between the header and the widgets below it.
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
+	next, cmd := m.update(msg)
+	if nm, ok := next.(model); ok {
+		nm.layout()
+		return nm, cmd
+	}
+	return next, cmd
+}
 
+func (m model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
+		m.width, m.height = msg.Width, msg.Height
+		return m, nil
 
 	case editorFinishedMsg:
 		return editorFinished(m, msg)
@@ -192,12 +205,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case updateNoticeMsg:
 		m.status = string(msg)
 		m.logger.Info("update available", "notice", string(msg))
+		return m, nil
 
-	// Is it a key press?
 	case tea.KeyMsg:
 		// A status message lasts until the user does something else.
 		m.status = ""
-		if m.textInput.Focused() {
+		switch {
+		case m.textInput.Focused():
 			switch msg.Type {
 			case tea.KeyEnter:
 				return AddTask.Act(m)
@@ -206,17 +220,75 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case tea.KeyCtrlC:
 				return m, tea.Quit
 			}
+			var cmd tea.Cmd
 			m.textInput, cmd = m.textInput.Update(msg)
 			return m, cmd
-		} else {
-			return m.keys.GetAction(msg).Act(m)
+		case m.list.SettingFilter():
+			// Typing a search: every key goes to the search box.
+			if msg.Type == tea.KeyCtrlC {
+				return m, tea.Quit
+			}
+			return m.updateList(msg)
+		case listOwns(msg, m.list.KeyMap), msg.Type == tea.KeyEsc && m.list.IsFiltered():
+			// Moving, paging, opening a search, and Esc clearing one.
+			return m.updateList(msg)
 		}
+		return m.keys.GetAction(msg).Act(m)
 	}
 
+	// Everything else (search results, the search box's cursor blink,
+	// ...) belongs to the list.
+	return m.updateList(msg)
+}
+
+// updateList passes a message to the list and keeps the search title
+// line current.
+func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	m.list, cmd = m.list.Update(msg)
+	m.syncSearchTitle()
 	return m, cmd
 }
 
+// layout gives the list the height the other parts leave. Update and
+// View both call it, so the list pages by what is on screen.
+func (m *model) layout() {
+	used := 0
+	for _, part := range m.chrome() {
+		used += lipgloss.Height(part)
+	}
+	m.list.SetSize(m.width, max(1, m.height-used))
+}
+
+// chrome is everything on screen except the task list, in no
+// particular order: the header, the footer, and the new-task input and
+// status line when they're showing.
+func (m model) chrome() []string {
+	parts := []string{m.headerView(), m.footerView()}
+	for _, w := range []string{m.addWidgetView(), m.statusView()} {
+		if w != "" {
+			parts = append(parts, w)
+		}
+	}
+	return parts
+}
+
 func (m model) View() string {
+	m.layout()
+	parts := []string{
+		m.headerView(),
+		lipgloss.NewStyle().Width(m.width).Height(m.list.Height()).Render(m.list.View()),
+	}
+	for _, w := range []string{m.addWidgetView(), m.statusView()} {
+		if w != "" {
+			parts = append(parts, w)
+		}
+	}
+	parts = append(parts, m.footerView())
+	return lipgloss.JoinVertical(lipgloss.Top, parts...)
+}
+
+func (m model) headerView() string {
 	theme := m.styles.theme
 	baseStyle := lipgloss.NewStyle()
 
@@ -253,13 +325,15 @@ func (m model) View() string {
 		Width(m.width / 2).
 		Render(menustr)
 
-	header := baseStyle.
+	return baseStyle.
 		Align(lipgloss.Right).
 		Border(lipgloss.NormalBorder(), false, false, true, false).
 		BorderForeground(theme.Muted).
 		Width(m.width).
 		Render(title + menu)
+}
 
+func (m model) footerView() string {
 	helpMenu := help.New()
 	helpMenu.ShowAll = m.showHelp
 	helpMenu.Styles = help.Styles{
@@ -272,44 +346,24 @@ func (m model) View() string {
 		FullSeparator:  m.styles.helpSep,
 	}
 
-	footer := lipgloss.NewStyle().
+	return lipgloss.NewStyle().
 		Align(lipgloss.Center).
 		Width(m.width).
 		Border(lipgloss.NormalBorder(), true, false, false, false).
-		BorderForeground(theme.Muted).
+		BorderForeground(m.styles.theme.Muted).
 		Render(helpMenu.View(m.keys))
+}
 
-	addWidget := ""
-	if m.newTask {
-		addWidget = m.textInput.View()
+func (m model) addWidgetView() string {
+	if !m.newTask {
+		return ""
 	}
+	return m.textInput.View()
+}
 
-	statusWidget := ""
-	if m.status != "" {
-		statusWidget = m.styles.status.Width(m.width).Render(m.status)
+func (m model) statusView() string {
+	if m.status == "" {
+		return ""
 	}
-
-	content := baseStyle.
-		Width(m.width).
-		Height(m.height - lipgloss.Height(header) - lipgloss.Height(addWidget) - lipgloss.Height(statusWidget) - lipgloss.Height(footer)).
-		Align(lipgloss.Left)
-
-	s := ""
-
-	if m.context.Name == "done" {
-		s += RenderDoneList(m.context.Tasks, m.cursor, m.styles.task)
-	} else {
-		s += RenderTaskList(m.context.Tasks, m.cursor, m.styles.task)
-	}
-
-	app := lipgloss.JoinVertical(
-		lipgloss.Top,
-		header,
-		content.Render(s),
-		addWidget,
-		statusWidget,
-		footer,
-	)
-
-	return app
+	return m.styles.status.Width(m.width).Render(m.status)
 }

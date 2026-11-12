@@ -465,17 +465,37 @@ files. The keys:
 | Key                  | Does                                            |
 | -------------------- | ----------------------------------------------- |
 | `↑`/`k`, `↓`/`j`     | move between tasks                              |
+| `PgUp` / `PgDn`      | previous / next page of a long list             |
+| `g` / `G` (`Home`/`End`) | first / last task                           |
 | `←`/`h`, `→`/`l`     | switch context tab                              |
+| `/`                  | search (see below); `Enter` applies it, `Esc` clears it |
 | `x`                  | complete the task                               |
 | `d`                  | delete the task (it moves to the archive)       |
 | `+` / `-`            | raise / lower its priority                      |
 | `n` or `a`           | add a task: type it, `Enter` to add, `Esc` to cancel |
 | `f`                  | edit the current tab's file in `$EDITOR`        |
 | `?`                  | show or hide the full keymap                    |
-| `q`, `Esc`, `Ctrl-C` | quit                                            |
+| `q`, `Esc`, `Ctrl-C` | quit (`Esc` clears a search first, if there is one) |
 
 The keymap also shows `:`, reserved for a command mode that doesn't
 do anything yet.
+
+**Searching.** `/` opens a search box above the list, which narrows as
+you type. Each word is either one of the filters `htt todo show
+--filter` takes (`overdue`, `due-soon`, `no-due`, `has-tag:NAME`,
+`priority:A`) or text, matched loosely against the whole task line
+(`mlk` finds "milk"; case doesn't matter). A task has to match every
+word: `priority:A home` finds priority-A tasks mentioning "home".
+`Enter` applies the search, and the line above the list then shows it
+(`search: priority:A home · 2 of 12 (esc clears)`). Tasks keep their
+numbers in a search, and everything you do acts on the task under the
+cursor, so `x` completes exactly the task you see. A search stays in
+place when you complete, delete or reprioritise a task, and when you
+switch tabs; `Esc` clears it. `Enter` on a search that matches nothing
+clears it.
+
+Changing a task's priority re-sorts the file; the cursor follows the
+task to its new place.
 
 `f` hands the terminal to `$EDITOR` and reloads the file when the
 editor exits. If `$EDITOR` isn't set, or the editor won't start or

@@ -51,6 +51,17 @@ func seedModel(t *testing.T, contextName string, tasks ...string) (model, *stora
 	return Model(repo, loaded, Options{}), repo
 }
 
+// press sends each key of keys through Update, the way a terminal
+// would, and returns the resulting model.
+func press(t *testing.T, m model, keys string) model {
+	t.Helper()
+	for _, r := range keys {
+		next, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		m = asModel(t, next)
+	}
+	return m
+}
+
 // asModel asserts the tea.Model returned by an action is back to model.
 func asModel(t *testing.T, m tea.Model) model {
 	t.Helper()
@@ -133,7 +144,7 @@ func TestAction_AddTask_InDoneViewDoesNotPersist(t *testing.T) {
 
 func TestAction_Delete_RemovesFromCurrentContext(t *testing.T) {
 	m, repo := seedModel(t, "todo", "keep", "delete this")
-	m.cursor = 1
+	m.list.Select(1)
 
 	result, _ := Delete.Act(m)
 	m = asModel(t, result)
@@ -203,28 +214,24 @@ func TestAction_DecreasePriority_UpdatesRepo(t *testing.T) {
 	}
 }
 
-func TestAction_Down_MovesCursorWithinBounds(t *testing.T) {
+func TestList_DownMovesWithinBounds(t *testing.T) {
 	m, _ := seedModel(t, "todo", "a", "b")
-	result, _ := Down.Act(m)
-	m = asModel(t, result)
-	if m.cursor != 1 {
-		t.Errorf("cursor = %d, want 1", m.cursor)
+	m = press(t, m, "j")
+	if m.list.Index() != 1 {
+		t.Errorf("index = %d, want 1", m.list.Index())
 	}
-
-	result, _ = Down.Act(m)
-	m = asModel(t, result)
-	if m.cursor != 1 {
-		t.Errorf("cursor should clamp at last index; got %d", m.cursor)
+	m = press(t, m, "j")
+	if m.list.Index() != 1 {
+		t.Errorf("index should stay on the last task; got %d", m.list.Index())
 	}
 }
 
 func TestAction_Delete_ClampsCursorAfterLastTaskGoes(t *testing.T) {
-	// bug_013: With cursor on the last task, Delete leaves m.cursor
-	// pointing one past the new end of m.context.Tasks. The next
-	// mutating keypress then hits an out-of-range error and quits the
-	// TUI. clampCursor runs after refresh so the cursor stays valid.
+	// bug_013: With the cursor on the last task, Delete used to leave it
+	// one past the new end of the list. The next mutating keypress then
+	// hit an out-of-range error and quit the TUI.
 	m, _ := seedModel(t, "todo", "first", "second")
-	m.cursor = 1
+	m.list.Select(1)
 
 	result, _ := Delete.Act(m)
 	m = asModel(t, result)
@@ -232,15 +239,15 @@ func TestAction_Delete_ClampsCursorAfterLastTaskGoes(t *testing.T) {
 	if len(m.context.Tasks) != 1 {
 		t.Fatalf("len(Tasks) = %d after delete, want 1", len(m.context.Tasks))
 	}
-	if m.cursor != 0 {
-		t.Errorf("cursor = %d after deleting last task, want 0 (clamped)", m.cursor)
+	if m.list.Index() != 0 {
+		t.Errorf("index = %d after deleting last task, want 0 (clamped)", m.list.Index())
 	}
 }
 
 func TestAction_Do_ClampsCursorAfterLastTaskGoes(t *testing.T) {
 	// Same bug shape via Do.
 	m, _ := seedModel(t, "todo", "first", "second")
-	m.cursor = 1
+	m.list.Select(1)
 
 	result, _ := Do.Act(m)
 	m = asModel(t, result)
@@ -248,17 +255,16 @@ func TestAction_Do_ClampsCursorAfterLastTaskGoes(t *testing.T) {
 	if len(m.context.Tasks) != 1 {
 		t.Fatalf("len(Tasks) = %d after do, want 1", len(m.context.Tasks))
 	}
-	if m.cursor != 0 {
-		t.Errorf("cursor = %d after completing last task, want 0 (clamped)", m.cursor)
+	if m.list.Index() != 0 {
+		t.Errorf("index = %d after completing last task, want 0 (clamped)", m.list.Index())
 	}
 }
 
-func TestAction_Up_ClampsAtZero(t *testing.T) {
+func TestList_UpStaysAtTheTop(t *testing.T) {
 	m, _ := seedModel(t, "todo", "a")
-	result, _ := Up.Act(m)
-	m = asModel(t, result)
-	if m.cursor != 0 {
-		t.Errorf("cursor should stay at 0, got %d", m.cursor)
+	m = press(t, m, "k")
+	if m.list.Index() != 0 {
+		t.Errorf("index should stay at 0, got %d", m.list.Index())
 	}
 }
 
@@ -347,10 +353,10 @@ func TestAct_KeypressLogsActionAtDebug(t *testing.T) {
 	m, buf := withLogBuffer(m)
 
 	// Through Update, the way a real keypress arrives.
-	if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}}); isQuit(cmd) {
-		t.Fatalf("moving down should not quit")
+	if _, cmd := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}); isQuit(cmd) {
+		t.Fatalf("toggling help should not quit")
 	}
-	assertLogged(t, buf.String(), "level=DEBUG", "msg=action", `action="move down"`)
+	assertLogged(t, buf.String(), "level=DEBUG", "msg=action", `action="toggle help"`)
 	if strings.Contains(buf.String(), "level=WARN") || strings.Contains(buf.String(), "level=ERROR") {
 		t.Errorf("a successful action should log nothing above debug, got:\n%s", buf.String())
 	}
@@ -376,15 +382,34 @@ func TestAct_UnavailableActionLogsWarnAndKeepsBehaviour(t *testing.T) {
 }
 
 func TestAct_FailedActionLogsErrorAndQuits(t *testing.T) {
-	// An empty context has no task 0 to complete.
-	m, _ := seedModel(t, "todo")
+	// The list still shows task 1, but the context no longer has it (as
+	// if the file changed underneath), so completing it fails.
+	m, _ := seedModel(t, "todo", "first", "second")
+	m.list.Select(1)
+	m.context.Tasks = m.context.Tasks[:1]
 	m, buf := withLogBuffer(m)
 
 	_, cmd := Do.Act(m)
 	if !isQuit(cmd) {
 		t.Errorf("a failed do should still quit the TUI")
 	}
-	assertLogged(t, buf.String(), "level=ERROR", `msg="action failed"`, "action=do", "complete task 0")
+	assertLogged(t, buf.String(), "level=ERROR", `msg="action failed"`, "action=do", "complete task 1")
+}
+
+func TestAct_NothingSelectedIsUnavailable(t *testing.T) {
+	// An empty list has no task to act on: say so and stay open.
+	m, _ := seedModel(t, "todo")
+	m, buf := withLogBuffer(m)
+
+	for _, action := range []*Action{Do, Delete, IncreasePriority, DecreasePriority} {
+		if _, cmd := action.Act(m); isQuit(cmd) {
+			t.Errorf("%s with nothing selected should not quit", action.description)
+		}
+	}
+	assertLogged(t, buf.String(), "level=WARN", "no task selected")
+	if strings.Contains(buf.String(), "level=ERROR") {
+		t.Errorf("nothing selected is not an error:\n%s", buf.String())
+	}
 }
 
 // seedFileModel is seedModel backed by a FileRepository in a temp dir,
@@ -470,7 +495,7 @@ func TestEditFile_HandsTheTerminalToTheEditor(t *testing.T) {
 
 func TestEditorFinished_ReloadsWhatTheEditorSaved(t *testing.T) {
 	m, path := seedFileModel(t, "todo", "first", "second", "third")
-	m.cursor = 2
+	m.list.Select(2)
 	if err := os.WriteFile(path, []byte("only one left\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
@@ -483,8 +508,8 @@ func TestEditorFinished_ReloadsWhatTheEditorSaved(t *testing.T) {
 	if len(got.context.Tasks) != 1 || got.context.Tasks[0].Entry() != "only one left" {
 		t.Errorf("context after editing = %v, want the file's one task", got.context.Tasks)
 	}
-	if got.cursor != 0 {
-		t.Errorf("cursor = %d, want it clamped to the shorter list", got.cursor)
+	if got.list.Index() != 0 {
+		t.Errorf("index = %d, want it clamped to the shorter list", got.list.Index())
 	}
 	if got.status != "" {
 		t.Errorf("status = %q, want none after a clean exit", got.status)

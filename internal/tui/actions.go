@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"slices"
 
 	"github.com/bricef/htt/internal/domain"
 	tea "github.com/charmbracelet/bubbletea"
@@ -14,6 +15,17 @@ import (
 // view, such as completing a task in the done tab. Act logs these as
 // warnings rather than errors.
 var errUnavailable = errors.New("not available here")
+
+// errNoTaskSelected is what task actions report when the list (or the
+// search) shows no task to act on.
+var errNoTaskSelected = fmt.Errorf("%w: no task selected", errUnavailable)
+
+// indexOf finds a task in the context by its text, for following a task
+// that a change has moved (a priority change re-sorts the context); -1
+// when it isn't there.
+func indexOf(ctx *domain.Context, task *domain.Task) int {
+	return slices.IndexFunc(ctx.Tasks, func(t *domain.Task) bool { return t.Raw == task.Raw })
+}
 
 type Action struct {
 	act         func(m model) (tea.Model, tea.Cmd, error)
@@ -41,8 +53,8 @@ func mkAction(description string, f func(m model) (tea.Model, tea.Cmd, error)) *
 	return &Action{act: f, description: description}
 }
 
-// strID converts the integer cursor position into the form the Context
-// methods expect (string IDs, since the CLI passes os.Args).
+// strID converts a task index into the form the Context methods expect
+// (string IDs, since the CLI passes os.Args).
 func strID(i int) string {
 	return fmt.Sprintf("%d", i)
 }
@@ -59,37 +71,7 @@ func refresh(m *model) error {
 	return nil
 }
 
-// clampCursor keeps m.cursor inside the bounds of m.context.Tasks after
-// an action shortens the list (bug_013). Without this, deleting or
-// completing the last task leaves the cursor one past the end, and the
-// next mutating keypress (d/x/+/-) routes to GetTaskById with an
-// out-of-range index, errors, and tea.Quits the TUI unexpectedly.
-func clampCursor(m *model) {
-	n := len(m.context.Tasks)
-	if n == 0 {
-		m.cursor = 0
-		return
-	}
-	if m.cursor >= n {
-		m.cursor = n - 1
-	}
-}
-
 var Noop = mkAction("noop", func(m model) (tea.Model, tea.Cmd, error) { return m, nil, nil })
-
-var Up = mkAction("move up", func(m model) (tea.Model, tea.Cmd, error) {
-	if m.cursor > 0 {
-		m.cursor--
-	}
-	return m, nil, nil
-})
-
-var Down = mkAction("move down", func(m model) (tea.Model, tea.Cmd, error) {
-	if m.cursor < len(m.context.Tasks)-1 {
-		m.cursor++
-	}
-	return m, nil, nil
-})
 
 var NextContext = mkAction("move right", func(m model) (tea.Model, tea.Cmd, error) {
 	if m.contextCursor < len(m.contexts)-1 {
@@ -102,7 +84,8 @@ var NextContext = mkAction("move right", func(m model) (tea.Model, tea.Cmd, erro
 	if err := refresh(&m); err != nil {
 		return m, tea.Quit, err
 	}
-	m.cursor = 0
+	m.showTasks(-1)
+	m.list.Select(0)
 	return m, nil, nil
 })
 
@@ -117,7 +100,8 @@ var PreviousContext = mkAction("move left", func(m model) (tea.Model, tea.Cmd, e
 	if err := refresh(&m); err != nil {
 		return m, tea.Quit, err
 	}
-	m.cursor = 0
+	m.showTasks(-1)
+	m.list.Select(0)
 	return m, nil, nil
 })
 
@@ -126,13 +110,17 @@ var Do = mkAction("do", func(m model) (tea.Model, tea.Cmd, error) {
 	if m.context.Name == domain.DoneContextName {
 		return m, tea.Quit, fmt.Errorf("%w: tasks in the done tab are already complete", errUnavailable)
 	}
-	if _, err := m.context.Complete(strID(m.cursor)); err != nil {
-		return m, tea.Quit, fmt.Errorf("complete task %d: %w", m.cursor, err)
+	it, ok := m.selectedTask()
+	if !ok {
+		return m, nil, errNoTaskSelected
+	}
+	if _, err := m.context.Complete(strID(it.index)); err != nil {
+		return m, tea.Quit, fmt.Errorf("complete task %d: %w", it.index, err)
 	}
 	if err := refresh(&m); err != nil {
 		return m, tea.Quit, err
 	}
-	clampCursor(&m)
+	m.showTasks(-1)
 	return m, nil, nil
 })
 
@@ -195,7 +183,7 @@ func editorFinished(m model, msg editorFinishedMsg) (tea.Model, tea.Cmd) {
 		m.logger.Error("reload after editing failed", "err", err)
 		return m, tea.Quit
 	}
-	clampCursor(&m)
+	m.showTasks(-1)
 	return m, tea.ClearScreen
 }
 
@@ -251,38 +239,56 @@ var AddTask = mkAction("add task", func(m model) (tea.Model, tea.Cmd, error) {
 	if err := refresh(&m); err != nil {
 		return m, tea.ClearScreen, err
 	}
+	// AddTask appends, so the new task is the last one.
+	m.showTasks(len(m.context.Tasks) - 1)
 	return m, tea.ClearScreen, nil
 })
 
 var Delete = mkAction("delete", func(m model) (tea.Model, tea.Cmd, error) {
-	if _, err := m.context.Delete(strID(m.cursor)); err != nil {
-		return m, tea.Quit, fmt.Errorf("delete task %d: %w", m.cursor, err)
+	it, ok := m.selectedTask()
+	if !ok {
+		return m, nil, errNoTaskSelected
+	}
+	if _, err := m.context.Delete(strID(it.index)); err != nil {
+		return m, tea.Quit, fmt.Errorf("delete task %d: %w", it.index, err)
 	}
 	if err := refresh(&m); err != nil {
 		return m, tea.Quit, err
 	}
-	clampCursor(&m)
+	m.showTasks(-1)
 	return m, tea.ClearScreen, nil
 })
 
 var IncreasePriority = mkAction("increase priority", func(m model) (tea.Model, tea.Cmd, error) {
-	if _, _, err := m.context.IncreasePriority(strID(m.cursor)); err != nil {
-		return m, tea.Quit, fmt.Errorf("raise priority of task %d: %w", m.cursor, err)
+	it, ok := m.selectedTask()
+	if !ok {
+		return m, nil, errNoTaskSelected
+	}
+	_, changed, err := m.context.IncreasePriority(strID(it.index))
+	if err != nil {
+		return m, tea.Quit, fmt.Errorf("raise priority of task %d: %w", it.index, err)
 	}
 	if err := refresh(&m); err != nil {
 		return m, tea.Quit, err
 	}
 	m.context.Sort()
+	m.showTasks(indexOf(m.context, changed))
 	return m, tea.ClearScreen, nil
 })
 
 var DecreasePriority = mkAction("decrease priority", func(m model) (tea.Model, tea.Cmd, error) {
-	if _, _, err := m.context.DecreasePriority(strID(m.cursor)); err != nil {
-		return m, tea.Quit, fmt.Errorf("lower priority of task %d: %w", m.cursor, err)
+	it, ok := m.selectedTask()
+	if !ok {
+		return m, nil, errNoTaskSelected
+	}
+	_, changed, err := m.context.DecreasePriority(strID(it.index))
+	if err != nil {
+		return m, tea.Quit, fmt.Errorf("lower priority of task %d: %w", it.index, err)
 	}
 	if err := refresh(&m); err != nil {
 		return m, tea.Quit, err
 	}
 	m.context.Sort()
+	m.showTasks(indexOf(m.context, changed))
 	return m, tea.ClearScreen, nil
 })

@@ -66,13 +66,11 @@ Each confirmed against `main` on 2026-11-03.
   - [ ] Calendar modes (`--week`, `--month`)
   - [ ] Time per task
 - Interactive mode
-  - [ ] Pager for long lists
   - [ ] Edit a single task (`f` edits the whole file)
-  - [ ] Keep the cursor on a task when a priority change moves it
   - [ ] Highlight priorities, tags, key:value pairs and dates
   - [ ] Fix help menu column balance
   - [ ] Command mode (`:`)
-  - [ ] Sort and filter, as `htt todo show` does
+  - [ ] Sort, as `htt todo show --sort` does
   - [ ] Say why the TUI closed, after it exits
   - [ ] Themes: paint the whole screen background, a `--theme` flag or
         preview for trying themes, light/dark adaptive colours
@@ -108,6 +106,9 @@ Each confirmed against `main` on 2026-11-03.
 - [x] Update check: at most once a day, GitHub only, silent on failure,
       `check_for_updates: false` to turn off; `htt --version`
 
+- [x] Interactive: the task list pages, and `/` searches with text and
+      the `--filter` words; the cursor follows a task whose priority
+      change re-sorts it
 - [x] Interactive: colour themes (`tui.theme`: monokai, vscode,
       dracula, nord, solarized, gruvbox, …) and per-colour overrides
       (`tui.colors`)

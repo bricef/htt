@@ -16,6 +16,7 @@ internal/
   storage/                 MemoryRepository / FileRepository (and timelog impls) — satisfy the domain interfaces
   repo/                    thin wrapper over go-git for `htt sync` (push-only; see #12)
   update/                  the once-a-day check for a newer GitHub release
+  dates/                   date phrases ("next Friday") for --due and the TUI
   parseutils/              parsing helpers for the todo.txt format
   utils/                   small odds and ends (StringToFilename, EditFilePath, Fatal, …)
   vars/                    viper config keys + defaults
@@ -43,7 +44,7 @@ cli ─────────────► tui
 storage ─────────► domain
 ```
 
-`parseutils`, `vars` and `utils` are leaf helpers: they import nothing
+`parseutils`, `dates`, `vars` and `utils` are leaf helpers: they import nothing
 else from `internal/`, and the layers below may use them, with the
 exceptions noted.
 
@@ -64,7 +65,7 @@ exceptions noted.
   `utils` and `vars`, and only `cli` calls it.
 
 `test/architecture/architecture_test.go` enforces the `domain`,
-`storage`, `tui` and `update` rules by scanning imports in each
+`storage`, `tui`, `dates` and `update` rules by scanning imports in each
 package. If a
 future change breaks one, the test fails and forces the discussion
 before the dependency lands.
@@ -103,6 +104,12 @@ A single todo.txt entry. Constructors and presentation methods
 unexported — the `Context` orchestrators are the only sanctioned
 mutation path, since reaching for `Task` directly skips the persist
 step.
+
+`ParseFilter` turns a filter expression (`overdue`, `due-soon`,
+`no-due`, `has-tag:NAME`, `priority:X`) into a `Filter`, a predicate
+over tasks, built on `Task.Due` and `Task.HasTag`. `htt todo show
+--filter` and the TUI's search share them, so the two accept the same
+words.
 
 ### `Timelog`
 

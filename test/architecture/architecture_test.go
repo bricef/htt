@@ -38,6 +38,16 @@ func TestArchitecture_DependencyDirections(t *testing.T) {
 			"internal/cli",
 			"internal/tui",
 		},
+		// Date phrases are a leaf the CLI and TUI share.
+		"internal/dates": {
+			"internal/cli",
+			"internal/tui",
+			"internal/domain",
+			"internal/storage",
+			"internal/utils",
+			"internal/vars",
+			"internal/update",
+		},
 		// The update check is self-contained: it knows GitHub and the
 		// cache file, nothing about tasks or config.
 		"internal/update": {

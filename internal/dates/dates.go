@@ -1,4 +1,7 @@
-package cli
+// Package dates turns what people type for a date (YYYY-MM-DD or a
+// phrase like "next Friday") into a calendar date. The CLI's --due flag
+// and the TUI's task input share it.
+package dates
 
 import (
 	"fmt"
@@ -8,14 +11,14 @@ import (
 	"github.com/olebedev/when"
 )
 
-// parseDue accepts an absolute YYYY-MM-DD date or a natural-language
+// ParsePhrase accepts an absolute YYYY-MM-DD date or a natural-language
 // phrase ("Friday", "tomorrow", "in two weeks", "next Monday") and
 // returns the resolved local date with the time-of-day stripped.
 // `now` anchors relative phrases; tests inject a fixed clock.
 //
 // The natural-language path delegates to olebedev/when's English
 // parser, which carries enough coverage for daily-use phrasing.
-// A no-match from when becomes an error so the CLI can surface
+// A no-match from when becomes an error so callers can surface
 // "didn't understand <input>" rather than silently store the wrong
 // date.
 //
@@ -24,7 +27,7 @@ import (
 // time-of-day, and the rest of htt's date plumbing (CreatedOn,
 // CompletedOn, deleted-on) treats midnight-local as the canonical
 // form.
-func parseDue(input string, now time.Time) (time.Time, error) {
+func ParsePhrase(input string, now time.Time) (time.Time, error) {
 	input = strings.TrimSpace(input)
 	if input == "" {
 		return time.Time{}, fmt.Errorf("empty due value")

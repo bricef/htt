@@ -257,7 +257,7 @@ func reportDeleted(since, until time.Time) error {
 	byCtx := map[string][]archivedTask{}
 	count := 0
 	for _, task := range archive.Tasks {
-		deletedOn, ok := parseAnnotationDate(task.Annotations["deleted-on"])
+		deletedOn, ok := domain.ParseLocalDate(task.Annotations["deleted-on"])
 		if !ok {
 			continue
 		}
@@ -309,20 +309,6 @@ func reportDeleted(since, until time.Time) error {
 type archivedTask struct {
 	task      *domain.Task
 	deletedOn time.Time
-}
-
-// parseAnnotationDate parses a YYYY-MM-DD annotation value in local
-// time. Returns (zero, false) for empty or malformed input — callers
-// should treat that as "skip this entry" rather than erroring.
-func parseAnnotationDate(raw string) (time.Time, bool) {
-	if raw == "" {
-		return time.Time{}, false
-	}
-	t, err := time.ParseInLocation("2006-01-02", raw, time.Local)
-	if err != nil {
-		return time.Time{}, false
-	}
-	return t, true
 }
 
 // reportTimeLogged walks every calendar day in [since, until], loads

@@ -33,15 +33,16 @@ func TestResolveTheme_DefaultIsTheOriginalPalette(t *testing.T) {
 
 func TestResolveTheme_NamedThemeThenOverrides(t *testing.T) {
 	theme, err := ResolveTheme("MonoKai", map[string]string{
-		"accent": "#abc",
-		"Muted":  "205", // ANSI number; role names are case-insensitive
+		"accent":   "#abc",
+		"Muted":    "205", // ANSI number; role names are case-insensitive
+		"PLUS_TAG": "#123456",
 	})
 	if err != nil {
 		t.Fatalf("ResolveTheme: %v", err)
 	}
 	monokai := themes["monokai"]
-	if theme.Accent != "#abc" || theme.Muted != "205" {
-		t.Errorf("overrides not applied: accent=%s muted=%s", theme.Accent, theme.Muted)
+	if theme.Accent != "#abc" || theme.Muted != "205" || theme.PlusTag != "#123456" {
+		t.Errorf("overrides not applied: accent=%s muted=%s plus_tag=%s", theme.Accent, theme.Muted, theme.PlusTag)
 	}
 	if theme.Foreground != monokai.Foreground || theme.Selection != monokai.Selection {
 		t.Errorf("roles without an override should keep monokai's colours, got %+v", theme)
@@ -143,6 +144,15 @@ func TestBuiltinThemes_CompleteAndReadable(t *testing.T) {
 				{"foreground on selection", theme.Foreground, theme.Selection},
 				{"background on foreground", theme.Background, theme.Foreground},
 				{"accent on background", theme.Accent, theme.Background},
+				// The parts of a task line, on unselected rows.
+				{"priority_a on background", theme.PriorityA, theme.Background},
+				{"priority_b on background", theme.PriorityB, theme.Background},
+				{"priority_c on background", theme.PriorityC, theme.Background},
+				{"plus_tag on background", theme.PlusTag, theme.Background},
+				{"at_tag on background", theme.AtTag, theme.Background},
+				{"hash_tag on background", theme.HashTag, theme.Background},
+				{"annotation on background", theme.Annotation, theme.Background},
+				{"date on background", theme.Date, theme.Background},
 			}
 			for _, p := range pairs {
 				if c := contrast(t, p.a, p.b); c < minContrast {

@@ -9,8 +9,11 @@ import (
 	parsec "github.com/prataprc/goparsec"
 )
 
+// customPriority keeps the priority's letter. Like datePromote, it keeps
+// the token's own position (s is the scanner after it), which Tokens
+// reports.
 func customPriority(name string, s parsec.Scanner, node parsec.Queryable) parsec.Queryable {
-	t := parsec.NewTerminal(name, string(node.GetValue()[1]), s.GetCursor())
+	t := parsec.NewTerminal(name, string(node.GetValue()[1]), node.GetPosition())
 	t.SetAttribute("class", "term")
 	return t
 }
@@ -34,7 +37,7 @@ func datePromote(name string, s parsec.Scanner, node parsec.Queryable) parsec.Qu
 	if _, err := time.ParseInLocation("2006-01-02", value, time.Local); err != nil {
 		return nil
 	}
-	t := parsec.NewTerminal(name, value, s.GetCursor())
+	t := parsec.NewTerminal(name, value, node.GetPosition())
 	t.SetAttribute("class", "term")
 	return t
 }

@@ -34,11 +34,12 @@ theme, then override any of its colours.
     colors:
       accent: "#f92672"
 
-Themes: %s.
-Colours: %s. Each takes a hex value (#rrggbb or #rgb; quote it, or
-YAML reads the # as a comment) or an ANSI colour number (0-255). The
-TUI doesn't paint the screen background, so pick a theme that suits
-your terminal.
+%s
+%s
+Each colour takes a hex value (#rrggbb or #rgb; quote it, or YAML
+reads the # as a comment) or an ANSI colour number (0-255). The TUI
+doesn't paint the screen background, so pick a theme that suits your
+terminal.
 
 The TUI writes nothing outside its own screen. To see what it is doing,
 pass --log-file: diagnostics are appended to that file at debug level,
@@ -55,7 +56,7 @@ Each level also includes the levels below it in this list.
 Examples:
   htt interactive --log-file ~/htt-tui.log
   htt interactive --log-file ~/htt-tui.log --log-level warn`,
-		strings.Join(tui.ThemeNames(), ", "), strings.Join(tui.RoleNames(), ", ")),
+		wrapList("Themes:", tui.ThemeNames(), helpWidth), wrapList("Colours:", tui.RoleNames(), helpWidth)),
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if cmd.Flags().Changed("log-level") && tuiLogFile == "" {
@@ -90,6 +91,30 @@ Examples:
 		logger.Info("tui exited")
 		return nil
 	},
+}
+
+// helpWidth is the width help text is wrapped to.
+const helpWidth = 72
+
+// wrapList writes "label a, b, c." across as many lines as it needs to
+// stay within width, with later lines lined up under the first item.
+func wrapList(label string, items []string, width int) string {
+	indent := strings.Repeat(" ", len(label))
+	var lines []string
+	line, words := label, 0
+	for i, item := range items {
+		word := item + ","
+		if i == len(items)-1 {
+			word = item + "."
+		}
+		if words > 0 && len(line)+1+len(word) > width {
+			lines = append(lines, line)
+			line, words = indent, 0
+		}
+		line += " " + word
+		words++
+	}
+	return strings.Join(append(lines, line), "\n")
 }
 
 // logLevels maps --log-level values onto slog levels.

@@ -487,7 +487,8 @@ you type. Each word is either one of the filters `htt todo show
 (`mlk` finds "milk"; case doesn't matter). A task has to match every
 word: `priority:A home` finds priority-A tasks mentioning "home".
 `Enter` applies the search, and the line above the list then shows it
-(`search: priority:A home · 2 of 12 (esc clears)`). Tasks keep their
+(`search: priority:A home · 2 of 12 (esc clears)`); the characters the
+text words matched are underlined. Tasks keep their
 numbers in a search, and everything you do acts on the task under the
 cursor, so `x` completes exactly the task you see. A search stays in
 place when you complete, delete or reprioritise a task, and when you
@@ -538,6 +539,16 @@ tui:
 | `muted`      | borders, keys in the help bar, the new-task placeholder              |
 | `help`       | descriptions in the help bar                                         |
 | `separator`  | separators in the help bar                                           |
+| `priority_a`, `priority_b`, `priority_c` | a task's priority: `(A)`, `(B)`, `(C)`   |
+| `plus_tag`, `at_tag`, `hash_tag` | tags: `+garden`, `@phone`, `#idea`               |
+| `annotation` | `key:value` annotations, such as `due:2026-05-20`                    |
+| `date`       | the created-on and completed-on dates at the start of a task         |
+
+The task-line colours (the last four rows) paint every task row but
+the selected one, which keeps `foreground` on `selection`. A word
+gets its colour only where todo.txt gives it that meaning: `(A)` is a
+priority at the start of a line, but just text after it. While you
+search, the characters the search matched are underlined.
 
 A colour is a hex value (`"#rrggbb"` or `"#rgb"`) or an ANSI colour
 number (`0`–`255`). **Quote hex values**: unquoted, YAML reads
@@ -545,9 +556,9 @@ everything from the `#` on as a comment. A misspelt theme or role, or
 a colour htt can't read, stops `htt interactive` with an error naming
 the valid choices.
 
-The TUI doesn't paint the whole screen: tasks and tabs that aren't
-selected keep your terminal's own colours, and so does the
-background. Pick a theme that suits your terminal; a light theme on a
+The TUI doesn't paint the whole screen: the background, tabs that
+aren't selected, and the plain words of tasks keep your terminal's
+own colours. Pick a theme that suits your terminal; a light theme on a
 dark terminal leaves the title hard to read. Colours are adapted to
 what your terminal supports (true colour, 256 or 16 colours).
 

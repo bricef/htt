@@ -239,11 +239,12 @@ an absolute date or a natural-language phrase. The phrase is resolved
 to a date and stored as a `due:` annotation on the task — the file
 always carries a structured date, regardless of how you typed it.
 
-An annotation is any `key:value` word, and htt keeps annotations at
-the end of the line when it rewrites a task (on a priority change or
-completion). Times (`10:30`, `12:30pm`) and links (`https://…`,
-`mailto:…`, `tel:…`) look similar but are text: they stay where you
-wrote them.
+An annotation is any `key:value` word, wherever it sits in the line;
+when htt rewrites a task (on a priority change or completion), every
+word stays where you wrote it, annotations included, and new ones,
+such as `context:` on completion, go at the end. Times (`10:30`,
+`12:30pm`) and links (`https://…`, `mailto:…`, `tel:…`) look similar
+but are text, not annotations.
 
 ```
 $ htt todo add --due "next Friday" ship the auth refactor
@@ -509,8 +510,8 @@ task to its new place.
 task under the cursor in it, to change any part of the line. As you
 type, the line below shows the task exactly as it will be saved, in
 the list's colours: a new task gets today's date after any priority,
-as `htt todo add` gives it, and its annotations move to the end. An edit is saved where the task was, so the
-file keeps its order.
+as `htt todo add` gives it. An edit is saved where the task was, so
+the file keeps its order.
 
 - **Due dates in words.** `due:friday`, `due:tomorrow` or, quoted,
   `due:"in two weeks"` are saved as `due:YYYY-MM-DD`, read the same

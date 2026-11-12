@@ -82,8 +82,8 @@ var allDigits = regexp.MustCompile(`^[0-9]+$`)
 // isAnnotation reports whether key:value is an annotation rather than
 // a word that happens to contain a colon. Times and ratios (10:30,
 // 12:30pm, 3:16: the key is all digits) and links (https://…,
-// mailto:…) are part of what the task says, so they stay words; read
-// as annotations, a rewrite would move them to the end of the line.
+// mailto:…) are part of what the task says, so they stay words, out of
+// Task.Annotations.
 func isAnnotation(key, value string) bool {
 	isTime := allDigits.MatchString(key)
 	isLink := strings.HasPrefix(value, "//") || slices.Contains(linkSchemes, strings.ToLower(key))

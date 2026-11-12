@@ -43,14 +43,11 @@ Each confirmed against `main` on 2026-11-03.
   like `todo edit` does.
 - **Malformed dates load as text.** A line like `2026-13-45 task` is
   accepted rather than rejected.
-- **Rewriting a task moves its annotations to the end of the line**,
-  in random order. A priority change or completion rebuilds the line
-  from its parsed parts, so two annotations with the same key keep only
-  the last (`a:1 a:2` becomes `a:2`), a date that followed an
-  annotation (`due:x 2026-05-20 buy`) becomes the created date, and
-  lowering `(C) x foo` to no priority leaves `x foo`, which reads as
-  done. Fixing it needs a rebuild that keeps the line's word order.
-  (Found 2026-11-12.)
+- **Removing a priority can change what a task means.** Lowering
+  `(C) x foo` to no priority writes `x foo`, which reads as done: with
+  nothing before it, a leading `x` is read as the completion mark (and
+  `(C) (B) foo` lowered the same way becomes priority B). todo.txt has no way to escape it; the fix is probably
+  to refuse the change and say why. (Found 2026-11-12.)
 - **`:` in the TUI keymap does nothing yet** (command mode).
 
 ## Wishlist
@@ -106,6 +103,10 @@ Each confirmed against `main` on 2026-11-03.
 - [ ] Create a GUI app layer (https://github.com/avelino/awesome-go#gui, https://github.com/murlokswarm/app)
 
 ## Done
+
+- [x] Rewriting a task keeps every word where it was written:
+      annotations stay in place and in order, and a repeated key keeps
+      every occurrence (2026-11-12)
 
 - [x] First release: v0.1.0 (2026-11-12); the process is in
       `docs/releasing.md`

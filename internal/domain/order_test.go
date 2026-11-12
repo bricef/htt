@@ -145,6 +145,18 @@ func TestDelete_AnnotationsGoAtTheEndInOrder(t *testing.T) {
 	}
 }
 
+func TestRewrite_KeysAddedToTheMapGoAtTheEndInKeyOrder(t *testing.T) {
+	// Annotations is exported, so a caller can add several keys before
+	// a rewrite; they land at the end in a fixed order, not map order.
+	task := mustTask(t, "pay rent")
+	for _, k := range []string{"f", "c", "a", "e", "b", "d"} {
+		task.Annotations[k] = "1"
+	}
+	if got, want := task.setPriority("A").Raw, "(A) pay rent a:1 b:1 c:1 d:1 e:1 f:1"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
 func mustAnnotateT(t *Task, key, value string) *Task {
 	out, err := t.Annotate(key, value)
 	if err != nil {

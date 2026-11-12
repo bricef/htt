@@ -147,6 +147,20 @@ func TestTodoPriority_KeepsTimesAndLinksInPlace(t *testing.T) {
 	assertEqual(t, "todo.txt", e.readData("todo.txt"), "(A) call Bob at 10:30 about https://example.com/report today\n")
 }
 
+func TestTodoPriorityAndDo_KeepAnnotationsWhereTheyAre(t *testing.T) {
+	// Rewriting a task used to move its annotations to the end of the
+	// line, in random order, keeping only the last of a repeated key.
+	e := newEnv(t)
+	e.writeData("todo.txt", "pay due:2026-06-01 rent ref:42 a:1 then a:2 via:bank\n")
+
+	e.mustRun("todo", "priority", "0", "A")
+	assertEqual(t, "todo.txt", e.readData("todo.txt"), "(A) pay due:2026-06-01 rent ref:42 a:1 then a:2 via:bank\n")
+
+	e.mustRun("todo", "do", "0")
+	assertEqual(t, "done.txt", e.readData("done.txt"),
+		"x (A) "+today()+" pay due:2026-06-01 rent ref:42 a:1 then a:2 via:bank context:todo\n")
+}
+
 func TestTodoPriority_BeforeAfterReflectsTransition(t *testing.T) {
 	// Locks the "Before:" / "After:" stdout contract: Before should show
 	// the pre-mutation state, After the post-mutation state. The naïve

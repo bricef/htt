@@ -38,7 +38,7 @@ func TestStuff(t *testing.T) {
 	for i, todo := range examples {
 		fmt.Println()
 		fmt.Printf("[%v]: %s\n", i, todo)
-		node := parser.Parse(todo)
+		node, _ := parser.Parse(todo)
 		parser.Prettyprint(node)
 	}
 }

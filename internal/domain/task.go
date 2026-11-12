@@ -51,7 +51,11 @@ func NewTask(raw string) (*Task, error) {
 
 	parser := NewTodoParser()
 	t.parser = parser
-	parser.Parse(raw)
+	// The grammar reads any line, so an incomplete parse is a grammar
+	// bug. Refuse it: rewriting the task would drop the unread text.
+	if _, complete := parser.Parse(raw); !complete {
+		return nil, fmt.Errorf("%w: could not read all of %q", ErrMalformedTask, raw)
+	}
 
 	if parser.QueryOne("COMPLETED") != nil {
 		t.Completed = true
@@ -77,7 +81,11 @@ func NewTask(raw string) (*Task, error) {
 		t.CreatedOn = date
 	}
 
-	words := pu.Select(parser.QueryOne("WORDS").GetChildren(), func(n parsec.Queryable) bool {
+	var body []parsec.Queryable
+	if node := parser.QueryOne("WORDS"); node != nil { // nil: a preamble-only line
+		body = node.GetChildren()
+	}
+	words := pu.Select(body, func(n parsec.Queryable) bool {
 		return n.GetName() != "KVPAIR"
 	})
 	t.entry = strings.Join(pu.MapNodes(words, pu.NodeToValue), " ")
@@ -133,7 +141,9 @@ func (t *Task) rebuild() *Task {
 		fmt.Fprintf(&b, "%s:%s ", k, v)
 	}
 
-	t.Raw = strings.TrimSpace(b.String())
+	// Each part above ends in one space. TrimSpace would also eat
+	// trailing Unicode spaces (U+00A0) that belong to the last word.
+	t.Raw = strings.TrimSuffix(b.String(), " ")
 	return t
 }
 

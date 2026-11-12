@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/bricef/htt/internal/parseutils"
@@ -25,8 +26,11 @@ func customPriority(name string, s parsec.Scanner, node parsec.Queryable) parsec
 // Returning nil on a non-date signals no-match so the parser can try
 // the alternative production — that's the right behavior for an
 // ambiguous grammar, so no logging is needed here.
+//
+// The date token carries the whitespace that ends it (see dateToken);
+// the value doesn't.
 func datePromote(name string, s parsec.Scanner, node parsec.Queryable) parsec.Queryable {
-	value := node.GetValue()
+	value := strings.TrimRight(node.GetValue(), wordSpace)
 	if _, err := time.ParseInLocation("2006-01-02", value, time.Local); err != nil {
 		return nil
 	}
@@ -44,43 +48,58 @@ func KVPAIR2String(node parsec.Queryable) (string, string, error) {
 	return key, value, nil
 }
 
-var kvpairKeyRegexp = `[^#@+:][A-Za-z0-9!"#$%&'()*+,\-./;<=>?@[\\\]^_{|}~]*`
+// A line is a sequence of words separated by whitespace: the characters
+// the scanner skips between tokens. Every other character, non-ASCII
+// letters included, belongs to a word, and every token below is a whole
+// word: none stops part-way through one, and every word matches one of
+// them. Rewriting a task rebuilds its line from the parsed parts, so a
+// token that split or skipped a word would lose text from the file.
+const wordSpace = " \t\r\n"
+
+// nonSpace matches one character of a word.
+const nonSpace = `[^ \t\r\n]`
+
+// kvpairKeyRegexp is the key of a key:value annotation: no colon, and
+// not starting with a tag sigil.
+var kvpairKeyRegexp = `[^#@+: \t\r\n][^: \t\r\n]*`
 
 // Note that unlike the standard, we allow ':' in the value.
 // This is so that ISO timestamps can be used
-var kvpairValueRegexp = `[A-Za-z0-9!"#$%&'()*+,\-./;<=>?@[\\\]^_{|}~:]+`
+var kvpairValueRegexp = nonSpace + `+`
+
+// dateToken matches a YYYY-MM-DD word. It takes the whitespace after
+// the date, since a regexp can't look ahead; datePromote trims it.
+const dateToken = `[0-9]{4}-[0-9]{2}-[0-9]{2}(?:[ \t\r\n]|$)`
 
 //NewTodoParser creates a new Parser
 func NewTodoParser() *parseutils.Parser {
 	g := parsec.NewAST("TODO", 1000)
 
 	tag := g.OrdChoice("TAG", nil,
-		parsec.Token(`[+][[:graph:]]+`, "PLUSTAG"),
-		parsec.Token(`[@][[:graph:]]+`, "ATTAG"),
-		parsec.Token(`[#][[:graph:]]+`, "HASHTAG"),
+		parsec.Token(`[+]`+nonSpace+`+`, "PLUSTAG"),
+		parsec.Token(`[@]`+nonSpace+`+`, "ATTAG"),
+		parsec.Token(`[#]`+nonSpace+`+`, "HASHTAG"),
 	)
 
 	kvPair := g.And("KVPAIR", nil,
-		// we use this long regexp instead of :graph: to omit ':' There's probably a regexpy
-		// way of doing this better
 		parsec.Token(kvpairKeyRegexp, "KEY"),
 		parsec.TokenExact(":", "COLON"),
 		parsec.TokenExact(kvpairValueRegexp, "VALUE"),
 	)
 
-	word := g.OrdChoice("WORD", nil,
-		parsec.Token(`[^@#+][[:graph:]]*`, "WORD"),
-		parsec.Token(`[@#+]$`, "WORD"),
-	)
+	word := parsec.Token(`[^@#+ \t\r\n]`+nonSpace+`*`, "WORD")
+	// A sigil on its own ("buy + milk") is a word, not a tag. Tried
+	// after tag, so it only matches a sigil followed by whitespace.
+	loneSigil := parsec.Token(`[@#+]`, "WORD")
 
-	token := g.OrdChoice("TOKEN", nil, kvPair, word, tag)
+	token := g.OrdChoice("TOKEN", nil, kvPair, word, tag, loneSigil)
 
-	createdDate := parsec.Token(`[0-9]{4}-[0-9]{2}-[0-9]{2}`, "CREATIONDATE")
-	completeDate := parsec.Token(`[0-9]{4}-[0-9]{2}-[0-9]{2}`, "COMPLETIONDATE")
+	createdDate := parsec.Token(dateToken, "CREATIONDATE")
+	completeDate := parsec.Token(dateToken, "COMPLETIONDATE")
 
-	priority := parsec.Token(`\([A-Z]\)[[:space:]]+`, "PRIORITY")
+	priority := parsec.Token(`\([A-Z]\)[ \t\r\n]+`, "PRIORITY")
 
-	completeMark := parsec.Token(`x[[:space:]]+`, "COMPLETED")
+	completeMark := parsec.Token(`x[ \t\r\n]+`, "COMPLETED")
 
 	// The first branch is the "completed task" shape: `x` mark
 	// required, then optional priority, completed-on, created-on.
@@ -107,7 +126,9 @@ func NewTodoParser() *parseutils.Parser {
 				g.Maybe("CREATEDAT", datePromote, createdDate),
 			),
 		),
-		g.Many("WORDS", nil, token),
+		// Many fails on zero words, and a line can be all preamble
+		// ("x 2026-05-20").
+		g.Maybe("BODY", nil, g.Many("WORDS", nil, token)),
 	)
 	return parseutils.NewParser(g, TODO)
 }

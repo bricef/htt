@@ -238,6 +238,20 @@ the program.
   style, and rows are cut to the list's width with `ansi.Truncate`.
   Rows are tokenised as they're drawn (about 50µs a line), so there's
   no cache to keep in step with the tasks.
+- **The task input** (`input.go`) serves adding (`n`) and editing
+  (`e`); `model.input` says which, and an edit remembers the task's
+  index and line. `readDraft` turns what's typed into the line a save
+  writes: `due:` phrases resolved through `dates.ParsePhrase`, and for
+  a new task `Task.StampCreated`, the same stamp `Context.AddTask`
+  applies, so the preview can't differ from the file. Its problems
+  block the save and keep the input open; its warnings
+  (`wordWarnings`, from `domain.Tokens`) don't. `AddTask` and
+  `ReplaceTask` save; `ReplaceTask` refuses if the task at the index
+  is no longer the one being edited. Tab completion uses the text
+  input's own suggestions, which complete the whole value by prefix:
+  `tagSuggestions` offers the value with its last word replaced by
+  each tag `knownTags` gathered from every context but the archive
+  when the input opened.
 - **The terminal.** The TUI owns the terminal while it runs, so
   nothing in `internal/tui` writes to stdout or stderr: diagnostics go
   to the model's `*slog.Logger`, and anything the user should see goes

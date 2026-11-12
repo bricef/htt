@@ -11,9 +11,10 @@ also edit by hand.
 - **Reports**: what you completed, added and deleted, and how long you
   worked, over any period.
 - **Three ways in**: one-shot commands, a todo-mode shell (`htt repl`)
-  and a full-screen TUI (`htt interactive`) with search, task lines
-  coloured by priority, tag and date, colour themes (Monokai, VS Code,
-  Dracula, Nord, Solarized, Gruvbox) and per-colour config.
+  and a full-screen TUI (`htt interactive`) with search, in-place
+  editing with a live preview and tag completion, task lines coloured
+  by priority, tag and date, colour themes (Monokai, VS Code, Dracula,
+  Nord, Solarized, Gruvbox) and per-colour config.
 - **Git sync** (`htt sync`): manual and push-only for now. Read
   [its setup and limits](GETTING-STARTED.md#optional-git-sync) before
   using it; [#12](https://github.com/bricef/htt/issues/12) tracks

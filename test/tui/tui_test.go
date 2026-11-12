@@ -84,6 +84,22 @@ func TestTUI_AddTask_WritesToContextFile(t *testing.T) {
 	assertViewContains(t, e.view(), "buy bread")
 }
 
+func TestTUI_EditTask_RewritesItsLineInTheFile(t *testing.T) {
+	e := newTUIEnv(t)
+	e.seedContext("todo", "alpha", "beta", "gamma")
+	e.start("todo")
+
+	e.press('j')
+	e.press('e')
+	e.type_(" +garden due:2026-06-01")
+	e.pressKey(tea.KeyEnter)
+
+	if got := e.readData("todo.txt"); got != "alpha\nbeta +garden due:2026-06-01\ngamma\n" {
+		t.Errorf("todo.txt = %q, want beta edited in place", got)
+	}
+	assertViewContains(t, e.view(), "beta +garden due:2026-06-01")
+}
+
 func TestTUI_AddEmptyTask_DoesNotWrite(t *testing.T) {
 	e := newTUIEnv(t)
 	e.seedContext("todo", "existing")

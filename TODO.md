@@ -74,7 +74,6 @@ Each confirmed against `main` on 2026-11-03.
   - [ ] Calendar modes (`--week`, `--month`)
   - [ ] Time per task
 - Interactive mode
-  - [ ] Edit a single task (`f` edits the whole file)
   - [ ] Fix help menu column balance
   - [ ] Command mode (`:`)
   - [ ] Sort, as `htt todo show --sort` does
@@ -113,6 +112,8 @@ Each confirmed against `main` on 2026-11-03.
 - [x] Update check: at most once a day, GitHub only, silent on failure,
       `check_for_updates: false` to turn off; `htt --version`
 
+- [x] Interactive: edit a task in place (`e`), with a live preview of
+      the saved line, `due:friday` phrases and Tab-completed tags
 - [x] Interactive: task lines coloured by part (priorities, the three
       kinds of tag, annotations, dates) in every theme, with search
       matches underlined and long rows cut to the screen

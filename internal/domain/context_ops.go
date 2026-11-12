@@ -22,10 +22,7 @@ import (
 // current local date so a later `htt report` can list "what was
 // added this week". An explicit date from the parser is preserved.
 func (c *Context) AddTask(task *Task) error {
-	if task.CreatedOn.IsZero() {
-		task.CreatedOn = time.Now()
-		task.rebuild()
-	}
+	task.StampCreated(time.Now())
 	c.add(task)
 	return c.repo.Save(c)
 }

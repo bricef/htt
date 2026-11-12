@@ -473,6 +473,7 @@ files. The keys:
 | `d`                  | delete the task (it moves to the archive)       |
 | `+` / `-`            | raise / lower its priority                      |
 | `n` or `a`           | add a task: type it, `Enter` to add, `Esc` to cancel |
+| `e`                  | edit the task: change it, `Enter` to save, `Esc` to cancel |
 | `f`                  | edit the current tab's file in `$EDITOR`        |
 | `?`                  | show or hide the full keymap                    |
 | `q`, `Esc`, `Ctrl-C` | quit (`Esc` clears a search first, if there is one) |
@@ -497,6 +498,30 @@ clears it.
 
 Changing a task's priority re-sorts the file; the cursor follows the
 task to its new place.
+
+**Adding and editing.** `n` opens an empty task input; `e` opens the
+task under the cursor in it, to change any part of the line. As you
+type, the line below shows the task exactly as it will be saved, in
+the list's colours: a new task gets today's date after any priority,
+as `htt todo add` gives it, and its annotations move to the end. An edit is saved where the task was, so the
+file keeps its order.
+
+- **Due dates in words.** `due:friday`, `due:tomorrow` or, quoted,
+  `due:"in two weeks"` are saved as `due:YYYY-MM-DD`, read the same
+  way as `htt todo add --due` (a hyphen also works:
+  `due:next-friday`). A due date htt can't read stops the save, and
+  the line below says why; nothing you typed is lost.
+- **Tags.** Start a tag (`+`, `@` or `#`) and press `Tab` to complete
+  it from the tags you've used in any tab, most used first;
+  `Ctrl-N` / `Ctrl-P` step through the others.
+- **Notes.** The input also points out words that won't mean what
+  they look like: `(a)` (priorities are capitals), `(B)` after the
+  start of the task (it's text there), a priority other than A, B or
+  C, an impossible date like `2026-13-45`, or an `x` at the start of a
+  new task (it marks the task done). These save as typed.
+
+Tasks in the done tab can't be added or edited here; `f` opens
+`done.txt` if you need to.
 
 `f` hands the terminal to `$EDITOR` and reloads the file when the
 editor exits. If `$EDITOR` isn't set, or the editor won't start or

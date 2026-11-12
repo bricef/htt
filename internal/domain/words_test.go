@@ -68,6 +68,53 @@ func TestNewTask_KeepsEveryWord(t *testing.T) {
 	}
 }
 
+func TestNewTask_TimesAndLinksAreText(t *testing.T) {
+	// A key:value annotation is extra information about the task, and
+	// rewriting a task moves annotations to the end of the line. Times
+	// and links have the same word:word shape but are part of what the
+	// task says, so they're words and stay where they were written.
+	text := []string{
+		"10:30", "9:05", "10:30:15", "12:30pm", "3:16", "16:9",
+		"https://example.com/a?b=c", "http://x.io", "HTTPS://Example.com", "ftp://files.example.com",
+		"ssh://git@host:22/repo", "file:///home/me/notes.txt", "git+ssh://host/repo",
+		"mailto:bob@example.com", "MAILTO:Bob@Example.com", "tel:+441234567890", "sms:+441234567890", "magnet:?xt=urn:btih:abc",
+	}
+	for _, word := range text {
+		raw := "call Bob at " + word + " about the report"
+		task := mustTask(t, raw)
+		if len(task.Annotations) != 0 || task.Entry() != raw {
+			t.Errorf("%q: annotations %v, entry %q; want %q read as text", raw, task.Annotations, task.Entry(), word)
+		}
+		if got := task.setPriority("A").Raw; got != "(A) "+raw {
+			t.Errorf("setting a priority rewrote %q as %q; the %s should stay in place", raw, got, word)
+		}
+	}
+
+	annotations := map[string]string{
+		"due:2026-05-20": "due", "context:todo": "context", "timestamp:2026-05-15T10:30:00+01:00": "timestamp",
+		"url:https://example.com": "url", "v1:2": "v1", "2fa:on": "2fa", "data:x": "data",
+	}
+	for word, key := range annotations {
+		task := mustTask(t, "task "+word)
+		if _, ok := task.Annotations[key]; !ok || task.Entry() != "task" {
+			t.Errorf("%q should stay an annotation (key %q): annotations %v, entry %q", word, key, task.Annotations, task.Entry())
+		}
+	}
+}
+
+func TestAnnotate_RefusesWhatWouldReadBackAsText(t *testing.T) {
+	// Annotate must not write an annotation the parser reads back as a
+	// word: it would vanish from Annotations on the next load.
+	for _, kv := range [][2]string{{"10", "30"}, {"https", "//example.com"}, {"mailto", "bob@example.com"}} {
+		if _, err := mustTask(t, "hello").Annotate(kv[0], kv[1]); !errors.Is(err, ErrInvalidAnnotationKey) {
+			t.Errorf("Annotate(%q, %q) err = %v, want ErrInvalidAnnotationKey", kv[0], kv[1], err)
+		}
+	}
+	if _, err := mustTask(t, "hello").Annotate("url", "https://example.com"); err != nil {
+		t.Errorf("a link as an annotation's value is fine: %v", err)
+	}
+}
+
 func TestNewTask_ManyTagsAndAnnotations(t *testing.T) {
 	// More than 100 of one kind used to hang NewTask (parseutils.Query).
 	var b strings.Builder
@@ -110,6 +157,7 @@ var wordShapes = []string{
 	"+", "@", "#", "+proj", "@home", "#tag", "+projé", "@a@b", "#ü", "+a+b",
 	"due:2026-05-20", "http://x.com/a?b=c", "note:été", "a:b:c", "k:", ":v",
 	"foo:bar`baz", "t:10:30", "clé:valeur",
+	"10:30", "12:30pm", "https://example.com/x", "mailto:bob@example.com", "url:https://x.io",
 	"2026-05-20", "2026-13-45", "2026-05-20x",
 }
 

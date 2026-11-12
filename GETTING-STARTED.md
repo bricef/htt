@@ -239,6 +239,12 @@ an absolute date or a natural-language phrase. The phrase is resolved
 to a date and stored as a `due:` annotation on the task — the file
 always carries a structured date, regardless of how you typed it.
 
+An annotation is any `key:value` word, and htt keeps annotations at
+the end of the line when it rewrites a task (on a priority change or
+completion). Times (`10:30`, `12:30pm`) and links (`https://…`,
+`mailto:…`, `tel:…`) look similar but are text: they stay where you
+wrote them.
+
 ```
 $ htt todo add --due "next Friday" ship the auth refactor
 Added: 2026-05-15 ship the auth refactor due:2026-05-22
@@ -566,7 +572,7 @@ tui:
 | `separator`  | separators in the help bar                                           |
 | `priority_a`, `priority_b`, `priority_c` | a task's priority: `(A)`, `(B)`, `(C)`   |
 | `plus_tag`, `at_tag`, `hash_tag` | tags: `+garden`, `@phone`, `#idea`               |
-| `annotation` | `key:value` annotations, such as `due:2026-05-20`                    |
+| `annotation` | `key:value` annotations, such as `due:2026-05-20` (a time like `10:30` or a link like `https://…` is text) |
 | `date`       | the created-on and completed-on dates at the start of a task         |
 
 The task-line colours (the last four rows) paint every task row but

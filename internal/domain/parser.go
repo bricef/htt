@@ -2,6 +2,8 @@ package domain
 
 import (
 	"errors"
+	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -70,6 +72,34 @@ var kvpairKeyRegexp = `[^#@+: \t\r\n][^: \t\r\n]*`
 // This is so that ISO timestamps can be used
 var kvpairValueRegexp = nonSpace + `+`
 
+// linkSchemes are the common URI schemes whose links have no "//"
+// after the colon. Links with one (https://, ssh://, file:///) are
+// recognised by it, whatever the scheme.
+var linkSchemes = []string{"mailto", "tel", "sms", "magnet"}
+
+var allDigits = regexp.MustCompile(`^[0-9]+$`)
+
+// isAnnotation reports whether key:value is an annotation rather than
+// a word that happens to contain a colon. Times and ratios (10:30,
+// 12:30pm, 3:16: the key is all digits) and links (https://…,
+// mailto:…) are part of what the task says, so they stay words; read
+// as annotations, a rewrite would move them to the end of the line.
+func isAnnotation(key, value string) bool {
+	isTime := allDigits.MatchString(key)
+	isLink := strings.HasPrefix(value, "//") || slices.Contains(linkSchemes, strings.ToLower(key))
+	return !isTime && !isLink
+}
+
+// annotationOnly keeps a parsed key:value that isAnnotation accepts.
+// Returning nil rejects the match, and the parser reads the word as a
+// plain one instead.
+func annotationOnly(name string, s parsec.Scanner, node parsec.Queryable) parsec.Queryable {
+	if kv := node.GetChildren(); len(kv) == 3 && !isAnnotation(kv[0].GetValue(), kv[2].GetValue()) {
+		return nil
+	}
+	return node
+}
+
 // dateToken matches a YYYY-MM-DD word. It takes the whitespace after
 // the date, since a regexp can't look ahead; datePromote trims it.
 const dateToken = `[0-9]{4}-[0-9]{2}-[0-9]{2}(?:[ \t\r\n]|$)`
@@ -84,7 +114,7 @@ func NewTodoParser() *parseutils.Parser {
 		parsec.Token(`[#]`+nonSpace+`+`, "HASHTAG"),
 	)
 
-	kvPair := g.And("KVPAIR", nil,
+	kvPair := g.And("KVPAIR", annotationOnly,
 		parsec.Token(kvpairKeyRegexp, "KEY"),
 		parsec.TokenExact(":", "COLON"),
 		parsec.TokenExact(kvpairValueRegexp, "VALUE"),

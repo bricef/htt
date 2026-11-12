@@ -256,13 +256,18 @@ var (
 
 // Annotate adds a key:value annotation to the task. Returns
 // ErrInvalidAnnotationKey or ErrInvalidAnnotationValue if either fails
-// the todo.txt key/value syntax check.
+// the todo.txt key/value syntax check, and ErrInvalidAnnotationKey for
+// a pair the parser reads as a word (a time or a link; see
+// isAnnotation), which would not read back as an annotation.
 func (t *Task) Annotate(key, value string) (*Task, error) {
 	if !annotateKeyRE.MatchString(key) {
 		return nil, fmt.Errorf("%w: %q", ErrInvalidAnnotationKey, key)
 	}
 	if !annotateValueRE.MatchString(value) {
 		return nil, fmt.Errorf("%w: %q", ErrInvalidAnnotationValue, value)
+	}
+	if !isAnnotation(key, value) {
+		return nil, fmt.Errorf("%w: %s:%s reads as text (a time or a link), not an annotation", ErrInvalidAnnotationKey, key, value)
 	}
 	t.Annotations[key] = value
 	t.rebuild()

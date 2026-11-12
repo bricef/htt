@@ -114,7 +114,11 @@ because rewriting a task (a priority change, completion) rebuilds its
 line from the parsed parts: a word the parser skipped or split would
 be lost from the file. A parse that leaves text unread is an
 `ErrMalformedTask`, never a partial task. `rebuild` itself still moves
-annotations to the end of the line (see `TODO.md`).
+annotations to the end of the line (see `TODO.md`), which is why
+`isAnnotation` keeps times (`10:30`: an all-digit key) and links
+(`https://…`, `mailto:…`) as plain words: they're part of what the
+task says. `Annotate` refuses the same pairs, so htt never writes an
+annotation it wouldn't read back.
 
 `Tokens` (`tokens.go`) returns a line's words with what the parser
 read each as (plain word, completion mark, priority, date, each kind

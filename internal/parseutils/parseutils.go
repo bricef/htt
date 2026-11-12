@@ -33,12 +33,17 @@ func NewParser(ast *parsec.AST, root parsec.Parser) *Parser {
 	}
 }
 
-// Parse a string
-// FUTURE: Will return a parsed todo.Tasks
-func (p *Parser) Parse(text string) parsec.Queryable {
+// Parse parses text. complete reports whether the parse read all of
+// it, trailing whitespace aside; when it's false, the tree (which may
+// be nil) is missing part of the text.
+func (p *Parser) Parse(text string) (root parsec.Queryable, complete bool) {
 	scanner := parsec.NewScanner([]byte(text))
-	rootQueriable, _ := p.ast.Parsewith(p.rootParser, scanner)
-	return rootQueriable
+	root, rest := p.ast.Parsewith(p.rootParser, scanner)
+	if root == nil {
+		return nil, false
+	}
+	_, rest = rest.SkipWS()
+	return root, rest.Endof()
 }
 
 // Reset will reset the parser.

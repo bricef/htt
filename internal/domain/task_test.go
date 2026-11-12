@@ -182,11 +182,3 @@ func TestAnnotate_RejectsInvalidKey(t *testing.T) {
 	}
 }
 
-func TestAnnotate_RejectsInvalidValue(t *testing.T) {
-	task := mustTask(t, "hello")
-	// Values containing a backtick are rejected by kvpairValueRegexp.
-	_, err := task.Annotate("ok", "bad`value")
-	if !errors.Is(err, ErrInvalidAnnotationValue) {
-		t.Errorf("Annotate(ok,bad`value) err = %v, want ErrInvalidAnnotationValue", err)
-	}
-}

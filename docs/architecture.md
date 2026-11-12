@@ -105,6 +105,17 @@ unexported — the `Context` orchestrators are the only sanctioned
 mutation path, since reaching for `Task` directly skips the persist
 step.
 
+`NewTask` parses with the grammar in `parser.go`, which reads a line
+as words separated by whitespace (space, tab, CR, LF). Each token is a
+whole word, and every word is one of them: the preamble (`x`,
+priority, dates), a tag (`+`, `@`, `#`), a `key:value` annotation or a
+plain word, non-ASCII text and a lone sigil included. That matters
+because rewriting a task (a priority change, completion) rebuilds its
+line from the parsed parts: a word the parser skipped or split would
+be lost from the file. A parse that leaves text unread is an
+`ErrMalformedTask`, never a partial task. `rebuild` itself still moves
+annotations to the end of the line (see `TODO.md`).
+
 `ParseFilter` turns a filter expression (`overdue`, `due-soon`,
 `no-due`, `has-tag:NAME`, `priority:X`) into a `Filter`, a predicate
 over tasks, built on `Task.Due` and `Task.HasTag`. `htt todo show

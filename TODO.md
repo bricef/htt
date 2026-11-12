@@ -43,6 +43,14 @@ Each confirmed against `main` on 2026-11-03.
   like `todo edit` does.
 - **Malformed dates load as text.** A line like `2026-13-45 task` is
   accepted rather than rejected.
+- **Rewriting a task moves its annotations to the end of the line**,
+  in random order. A priority change or completion rebuilds the line
+  from its parsed parts, so two annotations with the same key keep only
+  the last (`a:1 a:2` becomes `a:2`), a date that followed an
+  annotation (`due:x 2026-05-20 buy`) becomes the created date, and
+  lowering `(C) x foo` to no priority leaves `x foo`, which reads as
+  done. Fixing it needs a rebuild that keeps the line's word order.
+  (Found 2026-11-12.)
 - **`:` in the TUI keymap does nothing yet** (command mode).
 
 ## Wishlist

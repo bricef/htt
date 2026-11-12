@@ -121,6 +121,22 @@ func TestTodoPriority_SetsExplicitPriority(t *testing.T) {
 	assertEqual(t, "todo.txt", e.readData("todo.txt"), "(A) "+today()+" urgent thing\n")
 }
 
+func TestTodoPriority_KeepsEveryWordOfTheTask(t *testing.T) {
+	// A lone "+" used to end the parse and non-ASCII letters to end a
+	// word, so rewriting the line for its new priority dropped "B" and
+	// split "café".
+	e := newEnv(t)
+	e.writeData("todo.txt", "fix A + B café @maison note:été\n")
+
+	e.mustRun("todo", "priority", "0", "A")
+	assertEqual(t, "todo.txt", e.readData("todo.txt"), "(A) fix A + B café @maison note:été\n")
+
+	e.mustRun("todo", "do", "0")
+	done := e.readData("done.txt")
+	assertContains(t, "done.txt", done, " fix A + B café @maison ")
+	assertContains(t, "done.txt", done, " note:été")
+}
+
 func TestTodoPriority_BeforeAfterReflectsTransition(t *testing.T) {
 	// Locks the "Before:" / "After:" stdout contract: Before should show
 	// the pre-mutation state, After the post-mutation state. The naïve

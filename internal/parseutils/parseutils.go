@@ -58,9 +58,14 @@ func (p *Parser) Prettyprint(node parsec.Queryable) {
 
 // Query the AST using goparsec's query language
 // See https://prataprc.github.io/astquery.io/ for language spec.
+//
+// goparsec's Query sends each match on the channel before walking on,
+// and closes it at the end, so it runs in its own goroutine: called
+// inline, it blocked forever once the matches outnumbered the channel's
+// buffer (a task with 101 @tags hung).
 func (p *Parser) Query(q string) []parsec.Queryable {
-	ch := make(chan parsec.Queryable, 100)
-	p.ast.Query(q, ch)
+	ch := make(chan parsec.Queryable)
+	go p.ast.Query(q, ch)
 	nodes := []parsec.Queryable{}
 	for node := range ch {
 		nodes = append(nodes, node)
@@ -72,11 +77,8 @@ func (p *Parser) Query(q string) []parsec.Queryable {
 // QueryOne will only return the first matching item, even if there are more.
 // See https://prataprc.github.io/astquery.io/ for language spec.
 func (p *Parser) QueryOne(q string) parsec.Queryable {
-	ch := make(chan parsec.Queryable, 100)
-	p.ast.Query(q, ch)
-
-	for node := range ch {
-		return node
+	if nodes := p.Query(q); len(nodes) > 0 {
+		return nodes[0]
 	}
 	return nil
 }

@@ -35,6 +35,15 @@ go install github.com/bricef/htt/cmd/htt@latest
 Make sure `$(go env GOBIN)` (or `$(go env GOPATH)/bin` if `GOBIN` is
 unset) is on your `PATH`.
 
+htt needs Go 1.26.11 or newer, because earlier releases have
+standard-library vulnerabilities its network code can reach. With an
+older Go, `go install` downloads 1.26.11 for the build by itself,
+unless you've set `GOTOOLCHAIN=local`.
+
+Releases are listed on the
+[releases page](https://github.com/bricef/htt/releases);
+`htt --version` tells you which one you have.
+
 ## Usage
 
 ```

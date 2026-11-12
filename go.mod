@@ -15,6 +15,7 @@ require (
 	github.com/muesli/termenv v0.16.0
 	github.com/olebedev/when v1.1.0
 	github.com/prataprc/goparsec v0.0.0-20211219142520-daac0e635e7e
+	github.com/sahilm/fuzzy v0.1.3
 	github.com/spf13/cobra v1.3.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.10.1

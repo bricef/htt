@@ -197,8 +197,21 @@ the program.
   program); `Action.Act` is the one place that logs it: every action
   at debug, an error wrapping `errUnavailable` (the action can't run
   right now) at warn, any other error at error. Mutating actions call
-  `m.context.X(...)`, which persists through the repo, then `refresh`;
-  context-switching actions call `m.repo.SetCurrent`.
+  `m.context.X(...)`, which persists through the repo, then `refresh`
+  and `showTasks`; context-switching actions call `m.repo.SetCurrent`.
+- **The task list** is a `bubbles/list` model (`tasklist.go`). Each
+  item is a `taskItem`: a task and its index in the context. Actions
+  take that index from `selectedTask()`, never the row on screen,
+  because a search changes which row a task is on. `showTasks` reloads
+  the items, re-applies an active search synchronously and can select
+  a task by index (how a priority change keeps the cursor on its
+  task). The list owns moving, paging and the search box (`listOwns`);
+  its default keys that clash with htt's (`h`, `l`, `f`, `d`, `q`,
+  `?`) are taken back in `listKeys`. Every message that isn't a key
+  htt handles goes to the list, including the asynchronous search
+  results. Search is `searchFilter`: words that `domain.ParseFilter`
+  accepts are filters, the rest fuzzy text, all ANDed, file order
+  kept.
 - **The terminal.** The TUI owns the terminal while it runs, so
   nothing in `internal/tui` writes to stdout or stderr: diagnostics go
   to the model's `*slog.Logger`, and anything the user should see goes

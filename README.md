@@ -11,7 +11,7 @@ also edit by hand.
 - **Reports**: what you completed, added and deleted, and how long you
   worked, over any period.
 - **Three ways in**: one-shot commands, a todo-mode shell (`htt repl`)
-  and a full-screen TUI (`htt interactive`) with colour themes
+  and a full-screen TUI (`htt interactive`) with search, colour themes
   (Monokai, VS Code, Dracula, Nord, Solarized, Gruvbox) and per-colour
   config.
 - **Git sync** (`htt sync`): manual and push-only for now. Read

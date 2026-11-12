@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -147,12 +148,12 @@ var sortAxes = map[string]sortAxis{
 	},
 	"due": {
 		has: func(t *domain.Task) bool {
-			_, ok := dueDate(t)
+			_, ok := t.Due()
 			return ok
 		},
 		compare: func(a, b *domain.Task) int {
-			ad, _ := dueDate(a)
-			bd, _ := dueDate(b)
+			ad, _ := a.Due()
+			bd, _ := b.Due()
 			return ad.Compare(bd)
 		},
 	},
@@ -187,60 +188,14 @@ func parseSortKey(key string) (func(a, b *domain.Task) int, error) {
 	}, nil
 }
 
-// parseFilter resolves a --filter expression into a predicate. Due
-// dates are compared as calendar days against now's local date. A
-// due: value that isn't a YYYY-MM-DD date counts as no due date, the
-// same as for --sort due, so such tasks surface under no-due.
+// parseFilter resolves a --filter expression into a predicate (see
+// domain.ParseFilter), wording an unknown expression as a flag error.
 func parseFilter(expr string, now time.Time) (func(*domain.Task) bool, error) {
-	today := startOfDay(now)
-	switch expr {
-	case "overdue":
-		return func(t *domain.Task) bool {
-			due, ok := dueDate(t)
-			return ok && due.Before(today)
-		}, nil
-	case "due-soon":
-		horizon := today.AddDate(0, 0, 7)
-		return func(t *domain.Task) bool {
-			due, ok := dueDate(t)
-			return ok && !due.Before(today) && due.Before(horizon)
-		}, nil
-	case "no-due":
-		return func(t *domain.Task) bool {
-			_, ok := dueDate(t)
-			return !ok
-		}, nil
+	f, err := domain.ParseFilter(expr, now)
+	if errors.Is(err, domain.ErrUnknownFilter) {
+		return nil, fmt.Errorf("invalid --filter %q (want overdue, due-soon, no-due, has-tag:NAME or priority:A|B|C)", expr)
 	}
-	if name, ok := strings.CutPrefix(expr, "has-tag:"); ok && name != "" {
-		return func(t *domain.Task) bool { return hasTag(t, name) }, nil
-	}
-	if letter, ok := strings.CutPrefix(expr, "priority:"); ok {
-		p := strings.ToUpper(letter)
-		if p == "A" || p == "B" || p == "C" {
-			return func(t *domain.Task) bool { return t.Priority == p }, nil
-		}
-	}
-	return nil, fmt.Errorf("invalid --filter %q (want overdue, due-soon, no-due, has-tag:NAME or priority:A|B|C)", expr)
-}
-
-// dueDate returns the task's due: annotation as a local date, or
-// false when it is missing or malformed.
-func dueDate(t *domain.Task) (time.Time, bool) {
-	return parseAnnotationDate(t.Annotations["due"])
-}
-
-// hasTag reports whether the task carries the tag name. Tag values
-// keep their sigil ("@home"), so a bare name matches any sigil and a
-// sigiled name ("+home") matches only that kind.
-func hasTag(t *domain.Task, name string) bool {
-	for sigil, values := range t.Tags {
-		for _, v := range values {
-			if v == name || v == sigil+name {
-				return true
-			}
-		}
-	}
-	return false
+	return f, err
 }
 
 func priorityRank(p string) string {

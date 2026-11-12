@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/bricef/htt/internal/dates"
 	"github.com/bricef/htt/internal/domain"
 	"github.com/bricef/htt/internal/utils"
 	"github.com/spf13/cobra"
@@ -95,12 +96,12 @@ var addTo = &cobra.Command{
 // language phrase) and stamps it as a due: annotation on task.
 // Empty flag is a no-op so callers don't pre-filter. Anchored at
 // time.Now() because the flag is a user-facing convenience —
-// deterministic clocks are only needed in the parseDue unit tests.
+// deterministic clocks are only needed in the dates.ParsePhrase tests.
 func applyDueFlag(task *domain.Task, value string) error {
 	if value == "" {
 		return nil
 	}
-	due, err := parseDue(value, time.Now())
+	due, err := dates.ParsePhrase(value, time.Now())
 	if err != nil {
 		return fmt.Errorf("parse --due: %w", err)
 	}

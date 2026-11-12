@@ -188,9 +188,64 @@ func editorFinished(m model, msg editorFinishedMsg) (tea.Model, tea.Cmd) {
 }
 
 var NewTask = mkAction("new task", func(m model) (tea.Model, tea.Cmd, error) {
-	m.newTask = true
-	m.textInput.Focus()
-	m.textInput.Cursor.Blink = true
+	if m.context.Name == domain.DoneContextName {
+		m.status = "New tasks go in a list, not the done tab."
+		return m, nil, fmt.Errorf("%w: new tasks can't go in the done tab", errUnavailable)
+	}
+	m.openInput(inputAdd, "", -1)
+	return m, tea.ClearScreen, nil
+})
+
+// EditTask opens the selected task in the task input; Enter saves it
+// in place (ReplaceTask).
+var EditTask = mkAction("edit task", func(m model) (tea.Model, tea.Cmd, error) {
+	if m.context.Name == domain.DoneContextName {
+		m.status = "Tasks in the done tab can't be edited here; f opens the file."
+		return m, nil, fmt.Errorf("%w: tasks in the done tab can't be edited", errUnavailable)
+	}
+	it, ok := m.selectedTask()
+	if !ok {
+		return m, nil, errNoTaskSelected
+	}
+	m.openInput(inputEdit, it.task.Raw, it.index)
+	return m, tea.ClearScreen, nil
+})
+
+// ReplaceTask saves the edited task over the one EditTask opened, as
+// the preview shows it. Anything that stops the save keeps the input
+// open with the text as typed.
+var ReplaceTask = mkAction("replace task", func(m model) (tea.Model, tea.Cmd, error) {
+	d := readDraft(m.textInput.Value(), m.now(), false)
+	if d.raw == "" {
+		m.status = "A task can't be empty: esc cancels the edit, d deletes the task."
+		return m, nil, fmt.Errorf("%w: empty task", errUnavailable)
+	}
+	if len(d.problems) > 0 {
+		return m, nil, fmt.Errorf("%w: %s", errUnavailable, d.problems[0])
+	}
+	index := m.editIndex
+	if index < 0 || index >= len(m.context.Tasks) || m.context.Tasks[index].Raw != m.editRaw {
+		m.closeInput()
+		m.status = "That task changed while you were editing it; nothing was saved."
+		return m, nil, fmt.Errorf("task %d changed during the edit", index)
+	}
+	if d.raw == m.editRaw {
+		m.closeInput()
+		return m, tea.ClearScreen, nil
+	}
+	task, err := domain.NewTask(d.raw)
+	if err != nil {
+		return m, nil, fmt.Errorf("%w: %v", errUnavailable, err)
+	}
+	if _, err := m.context.Replace(strID(index), task); err != nil {
+		m.status = fmt.Sprintf("Couldn't save the task: %v", err)
+		return m, nil, fmt.Errorf("replace task %d: %w", index, err)
+	}
+	m.closeInput()
+	if err := refresh(&m); err != nil {
+		return m, tea.Quit, err
+	}
+	m.showTasks(index)
 	return m, tea.ClearScreen, nil
 })
 
@@ -198,28 +253,32 @@ var CommandMode = mkAction("command mode", func(m model) (tea.Model, tea.Cmd, er
 	return m, tea.ClearScreen, nil
 })
 
-var CancelNewTask = mkAction("cancel new task", func(m model) (tea.Model, tea.Cmd, error) {
-	m.newTask = false
-	m.textInput.SetValue("")
-	m.textInput.Blur()
+// CancelNewTask closes the task input, new or edit, saving nothing.
+var CancelNewTask = mkAction("cancel task input", func(m model) (tea.Model, tea.Cmd, error) {
+	m.closeInput()
 	return m, tea.ClearScreen, nil
 })
 
+// AddTask saves the new task in the input to the current context, as
+// the preview shows it. Anything that stops the save keeps the input
+// open with the text as typed.
 var AddTask = mkAction("add task", func(m model) (tea.Model, tea.Cmd, error) {
-	m.newTask = false
-	value := m.textInput.Value()
-	m.textInput.SetValue("")
-	m.textInput.Blur()
-	if value == "" {
-		return m, tea.ClearScreen, nil
-	}
 	// bug_008: Adding an uncompleted task to the done context produces
 	// a phantom entry (no `x ` prefix) that renders as completed but
 	// parses as not completed — file/view divergence with no recovery
 	// path from inside the TUI. The Do action has the same guard; this
 	// just mirrors it for AddTask.
 	if m.context.Name == domain.DoneContextName {
+		m.closeInput()
 		return m, tea.ClearScreen, fmt.Errorf("%w: new tasks can't go in the done tab", errUnavailable)
+	}
+	d := readDraft(m.textInput.Value(), m.now(), true)
+	if d.raw == "" {
+		m.closeInput()
+		return m, tea.ClearScreen, nil
+	}
+	if len(d.problems) > 0 {
+		return m, nil, fmt.Errorf("%w: %s", errUnavailable, d.problems[0])
 	}
 	// Add to the visible context regardless of what the repo considers
 	// "current". The TUI's NextContext action syncs the two (calls
@@ -227,15 +286,19 @@ var AddTask = mkAction("add task", func(m model) (tea.Model, tea.Cmd, error) {
 	// explicitly here for clarity.
 	target, err := m.repo.Context(m.context.Name)
 	if err != nil {
-		return m, tea.ClearScreen, fmt.Errorf("load %s: %w", m.context.Name, err)
+		m.status = fmt.Sprintf("Couldn't save the task: %v", err)
+		return m, nil, fmt.Errorf("load %s: %w", m.context.Name, err)
 	}
-	task, err := domain.NewTask(value)
+	// d.raw already carries the created date, so AddTask keeps it as is.
+	task, err := domain.NewTask(d.raw)
 	if err != nil {
-		return m, tea.ClearScreen, fmt.Errorf("parse task %q: %w", value, err)
+		return m, nil, fmt.Errorf("%w: %v", errUnavailable, err)
 	}
 	if err := target.AddTask(task); err != nil {
-		return m, tea.ClearScreen, fmt.Errorf("add task: %w", err)
+		m.status = fmt.Sprintf("Couldn't save the task: %v", err)
+		return m, nil, fmt.Errorf("add task: %w", err)
 	}
+	m.closeInput()
 	if err := refresh(&m); err != nil {
 		return m, tea.ClearScreen, err
 	}

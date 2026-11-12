@@ -269,6 +269,18 @@ func (t *Task) Annotate(key, value string) (*Task, error) {
 	return t, nil
 }
 
+// StampCreated gives a task with no created-on date the given day,
+// rewriting its line, and leaves a dated task alone. Context.AddTask
+// stamps every new task this way; the TUI calls it to preview the line
+// a new task will be saved as.
+func (t *Task) StampCreated(day time.Time) *Task {
+	if t.CreatedOn.IsZero() {
+		t.CreatedOn = day
+		t.rebuild()
+	}
+	return t
+}
+
 func (t *Task) RemoveAnnotation(key string) *Task {
 	delete(t.Annotations, key)
 	t.rebuild()

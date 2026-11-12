@@ -42,7 +42,10 @@ type model struct {
 	height        int
 	keys          KeyBindingController
 	showHelp      bool
-	newTask       bool
+	input         inputMode           // what the task input is open for
+	editIndex     int                 // inputEdit: the index of the task being edited
+	editRaw       string              // inputEdit: its line when editing began
+	tags          map[string][]string // tags to complete, by sigil; gathered when the input opens
 	textInput     textinput.Model
 	logger        *slog.Logger // diagnostics; never the terminal
 	status        string       // one-line message for the user; cleared on the next key
@@ -95,6 +98,10 @@ var controller = NewKeyBindingController().
 		key.WithKeys("n", "a"),
 		key.WithHelp("n/a", "new task"),
 	)).
+	AddBinding(EditTask, key.NewBinding(
+		key.WithKeys("e"),
+		key.WithHelp("e", "edit task"),
+	)).
 	AddBinding(IncreasePriority, key.NewBinding(
 		key.WithKeys("+"),
 		key.WithHelp("+", "increase priority"),
@@ -142,13 +149,10 @@ func Model(repo domain.Repository, ctx *domain.Context, opts Options) model {
 	}
 
 	ti := textinput.New()
-	ti.Placeholder = "(A) Do a thing for +project in @context"
-
-	ti.Prompt = "New Task > "
 	ti.PromptStyle = lipgloss.NewStyle().Foreground(theme.Accent).Bold(true)
 	ti.TextStyle = lipgloss.NewStyle().Foreground(theme.Background).Background(theme.Foreground)
 	ti.PlaceholderStyle = ti.TextStyle.Foreground(theme.Muted)
-	ti.Width = 100
+	ti.ShowSuggestions = true // tag completion; see refreshSuggestions
 
 	m := model{
 		repo:          repo,
@@ -157,7 +161,6 @@ func Model(repo domain.Repository, ctx *domain.Context, opts Options) model {
 		contexts:      contexts,
 		contextCursor: selected,
 		keys:          controller,
-		newTask:       false,
 		textInput:     ti,
 		logger:        logger,
 		styles:        st,
@@ -214,6 +217,9 @@ func (m model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case m.textInput.Focused():
 			switch msg.Type {
 			case tea.KeyEnter:
+				if m.input == inputEdit {
+					return ReplaceTask.Act(m)
+				}
 				return AddTask.Act(m)
 			case tea.KeyEsc:
 				return CancelNewTask.Act(m)
@@ -222,6 +228,7 @@ func (m model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			var cmd tea.Cmd
 			m.textInput, cmd = m.textInput.Update(msg)
+			m.refreshSuggestions()
 			return m, cmd
 		case m.list.SettingFilter():
 			// Typing a search: every key goes to the search box.
@@ -253,6 +260,7 @@ func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
 // layout gives the list the height the other parts leave. Update and
 // View both call it, so the list pages by what is on screen.
 func (m *model) layout() {
+	m.textInput.Width = max(10, m.width-lipgloss.Width(m.textInput.Prompt)-1)
 	used := 0
 	for _, part := range m.chrome() {
 		used += lipgloss.Height(part)
@@ -261,11 +269,11 @@ func (m *model) layout() {
 }
 
 // chrome is everything on screen except the task list, in no
-// particular order: the header, the footer, and the new-task input and
+// particular order: the header, the footer, and the task input and
 // status line when they're showing.
 func (m model) chrome() []string {
 	parts := []string{m.headerView(), m.footerView()}
-	for _, w := range []string{m.addWidgetView(), m.statusView()} {
+	for _, w := range []string{m.inputView(), m.statusView()} {
 		if w != "" {
 			parts = append(parts, w)
 		}
@@ -279,7 +287,7 @@ func (m model) View() string {
 		m.headerView(),
 		lipgloss.NewStyle().Width(m.width).Height(m.list.Height()).Render(m.list.View()),
 	}
-	for _, w := range []string{m.addWidgetView(), m.statusView()} {
+	for _, w := range []string{m.inputView(), m.statusView()} {
 		if w != "" {
 			parts = append(parts, w)
 		}
@@ -346,19 +354,16 @@ func (m model) footerView() string {
 		FullSeparator:  m.styles.helpSep,
 	}
 
+	var keys help.KeyMap = m.keys
+	if m.input != inputClosed {
+		keys = inputKeys{}
+	}
 	return lipgloss.NewStyle().
 		Align(lipgloss.Center).
 		Width(m.width).
 		Border(lipgloss.NormalBorder(), true, false, false, false).
 		BorderForeground(m.styles.theme.Muted).
-		Render(helpMenu.View(m.keys))
-}
-
-func (m model) addWidgetView() string {
-	if !m.newTask {
-		return ""
-	}
-	return m.textInput.View()
+		Render(helpMenu.View(keys))
 }
 
 func (m model) statusView() string {

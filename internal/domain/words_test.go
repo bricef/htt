@@ -220,6 +220,21 @@ func TestComplete_KeepsEveryWord(t *testing.T) {
 	}
 }
 
+func TestStampCreated_DatesOnlyAnUndatedTask(t *testing.T) {
+	day := time.Date(2026, 5, 22, 9, 30, 0, 0, time.Local)
+	cases := []struct{ raw, want string }{
+		{"buy milk", "2026-05-22 buy milk"},
+		{"(A) call due:friday mum", "(A) 2026-05-22 call mum due:friday"}, // rebuilt, as AddTask saves it
+		{"2026-01-01 dated already", "2026-01-01 dated already"},
+		{"(B) 2026-01-01 dated already", "(B) 2026-01-01 dated already"},
+	}
+	for _, tc := range cases {
+		if got := mustTask(t, tc.raw).StampCreated(day).Raw; got != tc.want {
+			t.Errorf("StampCreated(%q) = %q, want %q", tc.raw, got, tc.want)
+		}
+	}
+}
+
 func TestAnnotate_RejectsInvalidValue(t *testing.T) {
 	task := mustTask(t, "hello")
 	// A value with whitespace would read back as two words.

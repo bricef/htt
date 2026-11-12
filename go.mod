@@ -1,8 +1,6 @@
 module github.com/bricef/htt
 
-go 1.26.0
-
-toolchain go1.26.11
+go 1.26.11
 
 require (
 	github.com/buger/goterm v1.0.3

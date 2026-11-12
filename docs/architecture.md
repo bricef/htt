@@ -116,6 +116,12 @@ be lost from the file. A parse that leaves text unread is an
 `ErrMalformedTask`, never a partial task. `rebuild` itself still moves
 annotations to the end of the line (see `TODO.md`).
 
+`Tokens` (`tokens.go`) returns a line's words with what the parser
+read each as (plain word, completion mark, priority, date, each kind
+of tag, annotation), for displays that colour them. It walks the parse
+tree rather than re-implementing the grammar, and a property test
+holds it to `NewTask`'s fields.
+
 `ParseFilter` turns a filter expression (`overdue`, `due-soon`,
 `no-due`, `has-tag:NAME`, `priority:X`) into a `Filter`, a predicate
 over tasks, built on `Task.Due` and `Task.HasTag`. `htt todo show
@@ -223,6 +229,15 @@ the program.
   results. Search is `searchFilter`: words that `domain.ParseFilter`
   accepts are filters, the rest fuzzy text, all ANDed, file order
   kept.
+- **Task rows.** `taskDelegate` draws each row through `styles.line`,
+  which colours the line word by word from `domain.Tokens`: the same
+  parse `NewTask` makes, walked for each word's kind and byte offsets,
+  so a colour always matches what htt understood. The search's match
+  positions (`list.MatchesForItem`) are byte offsets too, from
+  `sahilm/fuzzy`, and are underlined. The selected row keeps one
+  style, and rows are cut to the list's width with `ansi.Truncate`.
+  Rows are tokenised as they're drawn (about 50µs a line), so there's
+  no cache to keep in step with the tasks.
 - **The terminal.** The TUI owns the terminal while it runs, so
   nothing in `internal/tui` writes to stdout or stderr: diagnostics go
   to the model's `*slog.Logger`, and anything the user should see goes

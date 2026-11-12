@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/sahilm/fuzzy"
 )
 
@@ -29,9 +30,10 @@ type taskItem struct {
 func (i taskItem) FilterValue() string { return i.task.Raw }
 
 // taskDelegate draws a row as "> NNNN text": the cursor, the task's
-// index in its context (left out in the done tab) and the task.
+// index in its context (left out in the done tab) and the task's line
+// (see styles.line). A row wider than the list ends in "…".
 type taskDelegate struct {
-	selected  lipgloss.Style
+	styles    styles
 	showIndex bool
 }
 
@@ -44,15 +46,76 @@ func (d taskDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	if !ok {
 		return
 	}
-	cursor, text := " ", it.task.RawString()
-	if index == m.Index() {
-		cursor, text = CURSOR, d.selected.Render(text)
+	selected := index == m.Index()
+	cursor := " "
+	if selected {
+		cursor = CURSOR
 	}
+	text := d.styles.line(it.task.Raw, it.task.Tokens(), m.MatchesForItem(index), selected)
+	row := fmt.Sprintf("%s %s", cursor, text)
 	if d.showIndex {
-		_, _ = fmt.Fprintf(w, "%s %4d %s", cursor, it.index, text)
-		return
+		row = fmt.Sprintf("%s %4d %s", cursor, it.index, text)
 	}
-	_, _ = fmt.Fprintf(w, "%s %s", cursor, text)
+	if m.Width() > 0 {
+		row = ansi.Truncate(row, m.Width(), "…")
+	}
+	_, _ = io.WriteString(w, row)
+}
+
+// line draws a task's line: each word in its kind's colour (see
+// styles.token), or the whole line in the selected row's colours, with
+// the characters a search matched underlined. tokens and matched are
+// byte offsets into raw. Whitespace is drawn as plain spaces, so a tab
+// or a stray carriage return can't break the row.
+func (s styles) line(raw string, tokens []domain.Token, matched []int, selected bool) string {
+	owner := make([]int, len(raw)) // the token each byte belongs to, or -1
+	for i := range owner {
+		owner[i] = -1
+	}
+	for ti, tk := range tokens {
+		for i := tk.Start; i < tk.End && i < len(raw); i++ {
+			owner[i] = ti
+		}
+	}
+	hit := make([]bool, len(raw))
+	for _, i := range matched {
+		if i >= 0 && i < len(raw) {
+			hit[i] = true
+		}
+	}
+
+	var b strings.Builder
+	draw := func(from, to int) {
+		if from == to {
+			return
+		}
+		st := s.plain
+		switch {
+		case selected:
+			st = s.task
+		case owner[from] >= 0:
+			tk := tokens[owner[from]]
+			st = s.token(tk.Kind, raw[tk.Start:tk.End])
+		}
+		if hit[from] {
+			st = st.Underline(true)
+		}
+		text := raw[from:to]
+		if owner[from] < 0 {
+			text = strings.Map(func(rune) rune { return ' ' }, text)
+		}
+		b.WriteString(st.Render(text))
+	}
+	// Draw runs of characters that share a token and a match state.
+	start := 0
+	for i := range raw { // i steps over rune starts
+		if owner[i] != owner[start] || hit[i] != hit[start] {
+			draw(start, i)
+			start = i
+		}
+	}
+	draw(start, len(raw))
+	return b.String()
 }
 
 // listKeys is the list's key map with htt's keys taken back: paging
@@ -77,7 +140,7 @@ func listOwns(msg tea.KeyMsg, km list.KeyMap) bool {
 }
 
 func newTaskList(st styles) list.Model {
-	l := list.New(nil, taskDelegate{selected: st.task, showIndex: true}, 0, 0)
+	l := list.New(nil, taskDelegate{styles: st, showIndex: true}, 0, 0)
 	l.SetShowStatusBar(false)
 	l.SetShowHelp(false)
 	l.SetStatusBarItemName("task", "tasks")
@@ -150,7 +213,7 @@ func (m *model) showTasks(selectIndex int) {
 		items[i] = taskItem{task: t, index: i}
 	}
 	m.list.SetDelegate(taskDelegate{
-		selected:  m.styles.task,
+		styles:    m.styles,
 		showIndex: m.context.Name != domain.DoneContextName,
 	})
 	m.list.Filter = searchFilter(m.context.Tasks, m.now)

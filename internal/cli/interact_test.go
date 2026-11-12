@@ -32,6 +32,31 @@ func TestDefaultTUITheme_MatchesTheTUIDefault(t *testing.T) {
 	}
 }
 
+func TestWrapList_FitsTheWidthAndKeepsEveryItem(t *testing.T) {
+	got := wrapList("Colours:", tui.RoleNames(), 40)
+	lines := strings.Split(got, "\n")
+	if len(lines) < 2 {
+		t.Fatalf("expected the role list to wrap at 40 columns:\n%s", got)
+	}
+	for _, line := range lines {
+		if len(line) > 40 {
+			t.Errorf("line %q is %d wide, want at most 40", line, len(line))
+		}
+	}
+	for _, line := range lines[1:] {
+		if !strings.HasPrefix(line, "         ") || line[9] == ' ' {
+			t.Errorf("continuation %q should line up under the first item", line)
+		}
+	}
+	want := "Colours: " + strings.Join(tui.RoleNames(), ", ") + "."
+	if joined := strings.Join(strings.Fields(got), " "); joined != want {
+		t.Errorf("wrapped list reads %q, want %q", joined, want)
+	}
+	if one := wrapList("Themes:", []string{"a-very-long-theme-name"}, 10); one != "Themes: a-very-long-theme-name." {
+		t.Errorf("an item wider than the line should still be listed once, got %q", one)
+	}
+}
+
 func TestTUILogger_NoFileDiscards(t *testing.T) {
 	logger, closeLog, err := tuiLogger("", "debug")
 	if err != nil {

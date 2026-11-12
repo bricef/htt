@@ -471,5 +471,8 @@ func TestInteractive_HelpListsThemesAndColours(t *testing.T) {
 	e := newEnv(t)
 	r := e.mustRun("interactive", "--help")
 	assertContains(t, "help", r.stdout, "Themes: default, dracula, gruvbox, monokai, nord")
-	assertContains(t, "help", r.stdout, "Colours: foreground, background, selection, accent, muted, help, separator")
+	assertContains(t, "help", r.stdout, "Colours: foreground, background, selection, accent, muted, help,")
+	for _, role := range []string{"separator,", "priority_a,", "plus_tag,", "at_tag,", "hash_tag,", "annotation,", "date."} {
+		assertContains(t, "help", r.stdout, role)
+	}
 }

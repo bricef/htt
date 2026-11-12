@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"fmt"
 	"maps"
 	"math/rand/v2"
 	"slices"
@@ -64,6 +65,39 @@ func TestNewTask_KeepsEveryWord(t *testing.T) {
 				t.Errorf("annotations = %v, want %v", task.Annotations, want)
 			}
 		})
+	}
+}
+
+func TestNewTask_ManyTagsAndAnnotations(t *testing.T) {
+	// More than 100 of one kind used to hang NewTask (parseutils.Query).
+	var b strings.Builder
+	b.WriteString("many")
+	for i := range 150 {
+		fmt.Fprintf(&b, " @c%d +p%d #h%d k%d:v", i, i, i, i)
+	}
+	done := make(chan *Task)
+	go func() {
+		task, err := NewTask(b.String())
+		if err != nil {
+			t.Errorf("NewTask: %v", err)
+		}
+		done <- task
+	}()
+	select {
+	case task := <-done:
+		if task == nil {
+			return
+		}
+		for _, sigil := range []string{"@", "+", "#"} {
+			if n := len(task.Tags[sigil]); n != 150 {
+				t.Errorf("%d %s tags, want 150", n, sigil)
+			}
+		}
+		if n := len(task.Annotations); n != 150 {
+			t.Errorf("%d annotations, want 150", n)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("NewTask did not return within 5s")
 	}
 }
 

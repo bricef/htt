@@ -162,8 +162,7 @@ var wordShapes = []string{
 }
 
 // randomLine builds a line from wordShapes, sometimes behind a
-// preamble. Annotation keys are kept unique: a repeated key is a
-// separate known limit (Annotations is a map).
+// preamble. Words, annotations among them, may repeat.
 func randomLine(r *rand.Rand) string {
 	var words []string
 	if r.IntN(3) == 0 {
@@ -175,16 +174,8 @@ func randomLine(r *rand.Rand) string {
 	for range r.IntN(3) {
 		words = append(words, "2026-01-0"+string(rune('1'+r.IntN(9))))
 	}
-	keys := map[string]bool{}
 	for range 1 + r.IntN(7) {
-		w := wordShapes[r.IntN(len(wordShapes))]
-		if k, v, ok := strings.Cut(w, ":"); ok && k != "" && v != "" && !strings.ContainsAny(k[:1], "+@#") {
-			if keys[k] {
-				continue
-			}
-			keys[k] = true
-		}
-		words = append(words, w)
+		words = append(words, wordShapes[r.IntN(len(wordShapes))])
 	}
 	return strings.Join(words, " ")
 }
@@ -225,14 +216,6 @@ func TestRewrite_KeepsEveryWord(t *testing.T) {
 		if err != nil {
 			t.Fatalf("NewTask(%q): %v", task.Raw, err)
 		}
-		// Known limit (TODO.md): rebuild moves annotations to the end, so
-		// a date word that followed one ("due:x 2026-05-20 buy") ends up
-		// first in the body and reads back as the created date. No word
-		// is lost, which the check above covers.
-		first, _, _ := strings.Cut(before.Entry(), " ")
-		if _, isDate := ParseLocalDate(first); isDate && before.CreatedOn.IsZero() {
-			continue
-		}
 		if again.Priority != "A" || again.Completed != before.Completed ||
 			!again.CompletedOn.Equal(before.CompletedOn) || !again.CreatedOn.Equal(before.CreatedOn) ||
 			again.Entry() != before.Entry() || !maps.Equal(again.Annotations, before.Annotations) ||
@@ -272,7 +255,7 @@ func TestStampCreated_DatesOnlyAnUndatedTask(t *testing.T) {
 	day := time.Date(2026, 5, 22, 9, 30, 0, 0, time.Local)
 	cases := []struct{ raw, want string }{
 		{"buy milk", "2026-05-22 buy milk"},
-		{"(A) call due:friday mum", "(A) 2026-05-22 call mum due:friday"}, // rebuilt, as AddTask saves it
+		{"(A) call due:friday mum", "(A) 2026-05-22 call due:friday mum"},
 		{"2026-01-01 dated already", "2026-01-01 dated already"},
 		{"(B) 2026-01-01 dated already", "(B) 2026-01-01 dated already"},
 	}

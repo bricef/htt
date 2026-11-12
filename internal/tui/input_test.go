@@ -75,9 +75,9 @@ func TestReadDraft_IsTheLineASaveWrites(t *testing.T) {
 		adding bool
 		want   string
 	}{
-		// A new task gets today's created date, and the line is rebuilt
-		// (annotations last) as Context.AddTask saves it.
-		{"call due:friday mum", true, "2026-05-16 call mum due:2026-05-22"},
+		// A new task gets today's created date, as Context.AddTask
+		// stamps it; nothing else moves.
+		{"call due:friday mum", true, "2026-05-16 call due:2026-05-22 mum"},
 		{"(A) call +mum", true, "(A) 2026-05-16 call +mum"},
 		{"2026-01-01 dated already", true, "2026-01-01 dated already"},
 		// An edit saves the line as typed, due phrases resolved.

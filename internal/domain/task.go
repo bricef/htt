@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"maps"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -33,8 +35,16 @@ type Task struct {
 	CreatedOn   time.Time
 	entry       string              // This is the task without priority, annotations, completion mark or created/completed dates
 	Tags        map[string][]string // { "@": ["abc", "def"], "#": ["foo"]}
-	Annotations map[string]string
+	Annotations map[string]string   // by key; for a key the line repeats, its last value
+	body        []bodyWord          // the words after the preamble, in line order; rebuild writes them back
 	parser      *pu.Parser
+}
+
+// bodyWord is one word of a line after its preamble: a word of the
+// entry, or an annotation (key is set) as written.
+type bodyWord struct {
+	text string
+	key  string
 }
 
 var (
@@ -81,14 +91,26 @@ func NewTask(raw string) (*Task, error) {
 		t.CreatedOn = date
 	}
 
-	var body []parsec.Queryable
+	var nodes []parsec.Queryable
 	if node := parser.QueryOne("WORDS"); node != nil { // nil: a preamble-only line
-		body = node.GetChildren()
+		nodes = node.GetChildren()
 	}
-	words := pu.Select(body, func(n parsec.Queryable) bool {
-		return n.GetName() != "KVPAIR"
-	})
-	t.entry = strings.Join(pu.MapNodes(words, pu.NodeToValue), " ")
+	t.Annotations = make(map[string]string)
+	var entry []string
+	for _, n := range nodes {
+		if n.GetName() != "KVPAIR" {
+			t.body = append(t.body, bodyWord{text: n.GetValue()})
+			entry = append(entry, n.GetValue())
+			continue
+		}
+		k, v, err := KVPAIR2String(n)
+		if err != nil {
+			return nil, fmt.Errorf("%w: extracting annotation: %v", ErrMalformedTask, err)
+		}
+		t.body = append(t.body, bodyWord{text: k + ":" + v, key: k})
+		t.Annotations[k] = v
+	}
+	t.entry = strings.Join(entry, " ")
 
 	t.Tags = map[string][]string{
 		"@": pu.MapNodes(parser.Query("ATTAG"), pu.NodeToValue),
@@ -96,22 +118,16 @@ func NewTask(raw string) (*Task, error) {
 		"#": pu.MapNodes(parser.Query("HASHTAG"), pu.NodeToValue),
 	}
 
-	t.Annotations = make(map[string]string)
-	for _, n := range parser.Query("KVPAIR") {
-		k, v, err := KVPAIR2String(n)
-		if err != nil {
-			return nil, fmt.Errorf("%w: extracting annotation: %v", ErrMalformedTask, err)
-		}
-		t.Annotations[k] = v
-	}
-
 	return t, nil
 }
 
-// rebuild serialises the task back into its todo.txt Raw form.
+// rebuild serialises the task back into its todo.txt Raw form: the
+// preamble from the task's fields, then the rest of the line word for
+// word, in the order it was written (see reconcileAnnotations). Words
+// are separated by single spaces.
 //
 // Field order matches what the parser grammar in parser.go accepts:
-//   [x] [(P)] [<completedOn>] [<createdOn>] entry [k:v …]
+//   [x] [(P)] [<completedOn>] [<createdOn>] body
 //
 // Notably priority comes BEFORE the dates, not after — that's the
 // todo.txt convention and what NewTask round-trips. A previous
@@ -134,17 +150,51 @@ func (t *Task) rebuild() *Task {
 	if !t.CreatedOn.Equal(time.Time{}) {
 		b.WriteString(t.CreatedOn.Format("2006-01-02 "))
 	}
-	if t.entry != "" {
-		fmt.Fprintf(&b, "%s ", t.entry)
-	}
-	for k, v := range t.Annotations {
-		fmt.Fprintf(&b, "%s:%s ", k, v)
+	t.body = t.reconcileAnnotations()
+	for _, w := range t.body {
+		b.WriteString(w.text + " ")
 	}
 
 	// Each part above ends in one space. TrimSpace would also eat
 	// trailing Unicode spaces (U+00A0) that belong to the last word.
 	t.Raw = strings.TrimSuffix(b.String(), " ")
 	return t
+}
+
+// reconcileAnnotations brings the body's annotations in line with
+// t.Annotations without moving anything. A key's last occurrence, the
+// one Annotations shows, takes the key's current value where it
+// stands; earlier occurrences of a key still present stay as written;
+// every occurrence of a removed key goes; and keys the line doesn't
+// have yet are added at the end, in key order.
+func (t *Task) reconcileAnnotations() []bodyWord {
+	last := map[string]int{}
+	for i, w := range t.body {
+		if w.key != "" {
+			last[w.key] = i
+		}
+	}
+	out := make([]bodyWord, 0, len(t.body)+len(t.Annotations))
+	for i, w := range t.body {
+		if w.key == "" {
+			out = append(out, w)
+			continue
+		}
+		value, kept := t.Annotations[w.key]
+		switch {
+		case !kept:
+		case last[w.key] == i:
+			out = append(out, bodyWord{text: w.key + ":" + value, key: w.key})
+		default:
+			out = append(out, w)
+		}
+	}
+	for _, k := range slices.Sorted(maps.Keys(t.Annotations)) {
+		if _, inLine := last[k]; !inLine {
+			out = append(out, bodyWord{text: k + ":" + t.Annotations[k], key: k})
+		}
+	}
+	return out
 }
 
 // setPriority assigns p as the task's priority. Unknown letters are

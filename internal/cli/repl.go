@@ -33,6 +33,10 @@ Inputs are dispatched as ` + "`todo <input>`" + ` by default — typing
 line with ` + "`/`" + ` to escape to a full CLI command:
 ` + "`/log start review`" + ` runs ` + "`htt log start review`" + `.
 
+A command's output stays on screen, above the current context, until
+the next command. Up/down arrows walk the commands typed, kept in
+repl-history in the config directory (` + "`htt config dir`" + `).
+
 Exit with Ctrl-D, Ctrl-C, or by typing quit / exit / q.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {

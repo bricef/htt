@@ -15,26 +15,6 @@ Each confirmed against `main` on 2026-11-03.
 - **`@end` isn't a sentinel.** After `htt log end`, `htt log status`
   reports "Currently working on: @end". Fixing it needs an open/closed
   model for entries (see the wishlist).
-- **`log start`, `log end` and `workon` print nothing.** They stopped
-  confirming their entry in the 2026-05-15 timelog refactor; `log add`
-  still prints `Logging entry: …`.
-- **REPL history isn't saved.** `replHistoryPath` builds the path from
-  `config_path`, which is the config *file*, so creating the directory
-  fails and history is switched off. It works within one session.
-- **REPL output disappears.** Each cycle clears the screen straight
-  after the command runs, so a command's own output (`Added: …`,
-  search results, `/report`) is gone at once.
-- **`htt report` counts deleted tasks as added**, under a context named
-  `archive`: the Added section walks the archive like any other
-  context.
-- **`htt config dir` prints the tracker directory**, not the config
-  directory its name suggests.
-- **CLI edit commands exit through `utils.Fatal`**: `todo edit-done`,
-  `todo edit-archive` and `log edit` end with a log-style message on
-  an unset `$EDITOR` or an editor error, instead of returning an error
-  like `todo edit` does.
-- **Malformed dates load as text.** A line like `2026-13-45 task` is
-  accepted rather than rejected.
 - **`:` in the TUI keymap does nothing yet** (command mode).
 
 ## Wishlist
@@ -84,6 +64,23 @@ Each confirmed against `main` on 2026-11-03.
 
 ## Done
 
+- [x] Dates htt can't read warn instead of passing silently
+      (2026-11-17): an impossible or unpadded date (`2026-13-45`,
+      `2026-5-3`) and a `due:` that isn't a date still load as before,
+      and the CLI names the file and line on stderr, once per line per
+      run; the TUI uses its status line
+- [x] `htt config dir` prints the config directory, not the tracker
+      directory (2026-11-17)
+- [x] `todo edit-done`, `todo edit-archive` and `log edit` return an
+      error like `todo edit` on an unset `$EDITOR` or an editor
+      failure, instead of exiting through `utils.Fatal` (2026-11-17)
+- [x] `log start`, `log end` and `workon` print `Logging entry: …`
+      again, like `log add` (2026-11-17)
+- [x] REPL: a command's output stays on screen until the next command
+      (2026-11-17)
+- [x] REPL history is saved, in the config directory (2026-11-17)
+- [x] `htt report` no longer lists deleted tasks under Added
+      (2026-11-17)
 - [x] Releases: `just release-check vX.Y.Z` and `just release vX.Y.Z
       notes.md` run the steps in `docs/releasing.md` (2026-11-17)
 - [x] CI on GitHub Actions: tests, vet, lint, tidy modules and

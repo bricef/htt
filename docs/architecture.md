@@ -50,9 +50,9 @@ exceptions noted.
 - `storage` imports `domain` (plus `utils` and `vars`); never `cli` or
   `tui`.
 - `tui` imports `domain` (it may also use `storage`); never `cli`,
-  never `utils` (whose editor and `Fatal` helpers exit the process and
-  write to the terminal the TUI owns), and never the standard `log`
-  package (see [TUI](#tui)).
+  never `utils` (whose `Fatal` helpers exit the process, and whose
+  editor helper runs `$EDITOR` on the terminal the TUI owns), and
+  never the standard `log` package (see [TUI](#tui)).
 - `cli` sits at the top and may import anything below (including `tui`,
   to register the interactive subcommand).
 - `update` imports nothing else from `internal/`: it knows GitHub's
@@ -148,6 +148,18 @@ over tasks, built on `Task.Due` and `Task.HasTag`. `htt todo show
 --filter` and the TUI's search share them, so the two accept the same
 words.
 
+Every line is a valid task, whatever its dates: a date htt can't read
+is text, and a `due:` value that isn't a date leaves the task without
+one. `Task.DateWarnings` (`date_warnings.go`) says where that happened,
+as messages naming the word: a date-shaped word that is impossible
+(`2026-13-45`) or not zero-padded (`2026-5-3`), and the due: value
+`Task.Due` reads when it isn't a `YYYY-MM-DD` date. It walks the words
+`NewTask` already parsed. The CLI and the TUI both show these (see
+[CLI wiring](#cli-wiring) and [TUI](#tui)); neither refuses the line.
+`Task.Line` is the task's index in its context; `Task.FileLine`, set
+by `FileRepository`, is its line in the file (they differ once the
+file has a blank line), for messages that point into the file.
+
 ### `Timelog`
 
 A day's worth of activity entries. Each entry is a `Task` annotated
@@ -209,6 +221,7 @@ config maps both to the same directory, but users who set
 
 ```go
 func repo() domain.Repository
+func baseRepo() domain.Repository
 func SetRepository(r domain.Repository)
 
 func timelogRepo() domain.TimelogRepository
@@ -218,6 +231,18 @@ func SetTimelogRepository(r domain.TimelogRepository)
 Each is lazily initialized from viper config. Tests inject memory
 impls via `SetRepository` / `SetTimelogRepository`. Cobra commands
 call `repo()` / `timelogRepo()` at the top of each `RunE`.
+
+`repo()` wraps the configured repository (`baseRepo()`) in
+`warningRepository` (`date_warnings.go`), which prints
+`warning: <file>:<line>: <message>` on stderr for each
+`Task.DateWarnings` of a context a command loads, once per run (by
+file, task text and message, so a REPL session that moves a line
+doesn't repeat it). Only stderr: stdout and the exit code are the
+command's. Contexts the domain loads itself, to append to (done.txt
+on completion, the archive on deletion, a move's target), go through
+the wrapped repository and don't warn, and the archive never warns.
+`htt interactive` hands the TUI `baseRepo()`: the TUI owns the
+terminal and shows the warnings on its status line.
 
 ## TUI
 
@@ -265,7 +290,8 @@ the program.
   a new task `Task.StampCreated`, the same stamp `Context.AddTask`
   applies, so the preview can't differ from the file. Its problems
   block the save and keep the input open; its warnings
-  (`wordWarnings`, from `domain.Tokens`) don't. `AddTask` and
+  (`wordWarnings`, from `domain.Tokens`, with the dates judged by
+  `Task.DateWarnings` as on load) don't. `AddTask` and
   `ReplaceTask` save; `ReplaceTask` refuses if the task at the index
   is no longer the one being edited. Tab completion uses the text
   input's own suggestions, which complete the whole value by prefix:
@@ -277,6 +303,13 @@ the program.
   to the model's `*slog.Logger`, and anything the user should see goes
   on the status line (`model.status`, cleared on the next keypress).
   The architecture test keeps `log` and `utils` out of the package.
+  Date warnings go there too: after every update, `noteDateWarnings`
+  checks the list on show if it was (re)loaded since it last looked,
+  and adds the first new `Task.DateWarnings` (by task number, with a
+  count of the rest) to whatever the action said. It remembers what
+  it has shown (by list, task text and message), so each line warns
+  once a session. A test in `test/tui` checks nothing reaches stdout
+  or stderr meanwhile.
 - **Themes.** `Theme` holds one colour per role; the built-in palettes
   live in `theme.go`. `cli` reads the config's `tui.theme` and
   `tui.colors` and calls `tui.ResolveTheme`, so the tui package never

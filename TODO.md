@@ -90,6 +90,9 @@ Each confirmed against `main` on 2026-11-03.
 
 ## Done
 
+- [x] Removed `htt sync` and its go-git backend (2026-11-17): sync
+      will be a separate engine. Old config keys are ignored, and a
+      `.git/` in the data directory is left alone
 - [x] A rewrite never changes what a task means: when removing a
       priority or a leading annotation would leave `x`, `(B)` or a date
       at the front, the task gets today's date there first (2026-11-17)

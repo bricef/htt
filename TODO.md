@@ -16,6 +16,11 @@ Each confirmed against `main` on 2026-11-03.
   reports "Currently working on: @end". Fixing it needs an open/closed
   model for entries (see the wishlist).
 - **`:` in the TUI keymap does nothing yet** (command mode).
+- **htt doesn't build for Windows** (confirmed 2026-11-17), so there's
+  no Windows binary and `go install` fails there too: goterm v1.0.3
+  uses `unix.EOPNOTSUPP` on every platform. goterm v1.0.4 fixes it
+  (htt then builds and vets for windows/amd64 and windows/arm64);
+  after the bump, add both to the platforms in `scripts/dist.sh`.
 
 ## Wishlist
 
@@ -56,7 +61,9 @@ Each confirmed against `main` on 2026-11-03.
 
 ## Production grade
 
-- [ ] Set up packaging for release (see https://github.com/goreleaser/goreleaser)
+- [ ] More packaging: a Homebrew tap, and macOS binaries signed and
+      notarised (a binary downloaded with a browser is quarantined
+      today)
 
 ## Future
 
@@ -64,6 +71,12 @@ Each confirmed against `main` on 2026-11-03.
 
 ## Done
 
+- [x] Release binaries (2026-11-17): every release gets archives for
+      Linux and macOS on amd64 and arm64, a SHA256SUMS file and
+      build-provenance attestations, built by GitHub Actions
+      (`release-binaries.yml`, `scripts/dist.sh`); `just release` waits
+      for them and checks them, and `just dist` builds them locally.
+      Was "set up packaging for release"
 - [x] Dates htt can't read warn instead of passing silently
       (2026-11-17): an impossible or unpadded date (`2026-13-45`,
       `2026-5-3`) and a `due:` that isn't a date still load as before,

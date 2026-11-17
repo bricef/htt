@@ -27,9 +27,10 @@ it — and the reference for every command.
 
 ### Download a binary
 
-Every [release](https://github.com/bricef/htt/releases) has a
-ready-to-run `htt` for Linux and macOS, so you don't need Go. Pick the
-archive for your machine (`uname -sm` tells you which you have):
+Every [release](https://github.com/bricef/htt/releases) from v0.3.0
+on has a ready-to-run `htt` for Linux and macOS, so you don't need Go.
+Pick the archive for your machine (`uname -sm` tells you which you
+have):
 
 | Machine | `uname -sm` | Archive |
 | --- | --- | --- |

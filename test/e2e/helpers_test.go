@@ -53,6 +53,7 @@ type env struct {
 	home     string
 	dataDir  string
 	extraEnv []string // added to the binary's environment, e.g. HTTPS_PROXY
+	workDir  string   // the binary's working directory; "" is the test's
 }
 
 func newEnv(t *testing.T) *env {
@@ -98,6 +99,7 @@ func (e *env) runWithInput(input string, args ...string) runResult {
 	if input != "" {
 		cmd.Stdin = strings.NewReader(input)
 	}
+	cmd.Dir = e.workDir
 	var outBuf, errBuf bytes.Buffer
 	cmd.Stdout = &outBuf
 	cmd.Stderr = &errBuf

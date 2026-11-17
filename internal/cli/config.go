@@ -55,10 +55,10 @@ var Context = &cobra.Command{
 
 var Where = &cobra.Command{
 	Use:   "dir",
-	Short: "Show the tracker directory, where the current-context pointer lives (the data directory by default)",
+	Short: "Output the config directory, which holds the config.yaml in effect.",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Println(vars.Get(vars.ConfigKeyTrackerDir))
+		fmt.Println(vars.ConfigDir())
 		return nil
 	},
 }

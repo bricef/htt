@@ -682,6 +682,27 @@ func TestEditCommands_SaveWhatTheEditorWrites(t *testing.T) {
 	assertEqual(t, "done.txt", e.readData("done.txt"), "edited by the editor\n")
 }
 
+func TestConfigDir_PrintsTheConfigDirectory(t *testing.T) {
+	// `htt config dir` printed the tracker directory (where the
+	// current-context pointer lives), not the directory its name says.
+	e := newEnv(t)
+	configDir := filepath.Join(e.home, ".config", "htt")
+	assertEqual(t, "config dir", e.mustRun("config", "dir").stdout, configDir+"\n")
+
+	// Moving the data and tracker directories doesn't move it.
+	e.writeConfig("data_path: " + filepath.Join(e.home, "tasks") + "\ntracker_path: " + filepath.Join(e.home, "tracker") + "\n")
+	assertEqual(t, "config dir with moved data", e.mustRun("config", "dir").stdout, configDir+"\n")
+
+	// A config.yaml in the working directory is the config in effect.
+	e.workDir = t.TempDir()
+	if err := os.WriteFile(filepath.Join(e.workDir, "config.yaml"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	assertEqual(t, "config dir with a local config.yaml", e.mustRun("config", "dir").stdout, e.workDir+"\n")
+
+	assertContains(t, "config dir --help", e.mustRun("config", "dir", "--help").stdout, "config directory")
+}
+
 func TestRepl_AnEditorProblemDoesNotEndTheSession(t *testing.T) {
 	// utils.Fatal exited the process, taking the REPL with it.
 	e := newEnv(t)

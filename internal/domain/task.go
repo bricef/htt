@@ -135,30 +135,74 @@ func NewTask(raw string) (*Task, error) {
 // produced strings the parser couldn't parse back: a stamped
 // "<today> (A) task" lost its priority on the next reload because
 // the parser saw "(A)" inside WORDS, not at the priority slot.
+//
+// With less in front of it than before (a priority removed, a leading
+// annotation removed), the body's first word could be read as part of
+// the preamble: `(C) x foo` lowered to no priority would write `x foo`,
+// which reads as done. todo.txt has no escape, but a date in front
+// stops it, so rebuild fills the task's empty date slots with today,
+// in order (completed-on, then created-on, for a done task), until the
+// line reads back with the body intact.
 func (t *Task) rebuild() *Task {
-	b := bytes.Buffer{}
+	t.body = t.reconcileAnnotations()
+	t.Raw = t.compose()
+	for !t.bodyReadsBack() {
+		today := startOfDay(time.Now())
+		switch {
+		case t.Completed && t.CompletedOn.IsZero():
+			t.CompletedOn = today
+		case t.CreatedOn.IsZero():
+			t.CreatedOn = today
+		default:
+			return t // every date slot is filled, so nothing is left to read the body as
+		}
+		t.Raw = t.compose()
+	}
+	return t
+}
 
+// compose writes the task's line from its fields and body.
+func (t *Task) compose() string {
+	b := bytes.Buffer{}
 	if t.Completed {
 		b.WriteString("x ")
 	}
 	if t.Priority != "" {
 		fmt.Fprintf(&b, "(%s) ", t.Priority)
 	}
-	if !t.CompletedOn.Equal(time.Time{}) {
+	if !t.CompletedOn.IsZero() {
 		b.WriteString(t.CompletedOn.Format("2006-01-02 "))
 	}
-	if !t.CreatedOn.Equal(time.Time{}) {
+	if !t.CreatedOn.IsZero() {
 		b.WriteString(t.CreatedOn.Format("2006-01-02 "))
 	}
-	t.body = t.reconcileAnnotations()
 	for _, w := range t.body {
 		b.WriteString(w.text + " ")
 	}
-
 	// Each part above ends in one space. TrimSpace would also eat
 	// trailing Unicode spaces (U+00A0) that belong to the last word.
-	t.Raw = strings.TrimSuffix(b.String(), " ")
-	return t
+	return strings.TrimSuffix(b.String(), " ")
+}
+
+// preambleShaped matches the only words the preamble can take (every
+// token is a whole word): the done mark, a priority, a date.
+var preambleShaped = regexp.MustCompile(`^(?:x|\([A-Z]\)|[0-9]{4}-[0-9]{2}-[0-9]{2})$`)
+
+// bodyReadsBack reports whether t.Raw parses with the body t holds:
+// nothing of it read as part of the preamble, and nothing of the
+// preamble read as body. Only two kinds of line can go wrong, so the
+// rest skip the re-parse: a body starting with a preamble-shaped word,
+// and an empty body, since a lone `x` or `(A)` at the end of a line is
+// a word (the done mark and a priority need a word after them).
+func (t *Task) bodyReadsBack() bool {
+	if len(t.body) > 0 && !preambleShaped.MatchString(t.body[0].text) {
+		return true
+	}
+	again, err := NewTask(t.Raw)
+	if err != nil {
+		return true // an empty line: no body to lose
+	}
+	return slices.EqualFunc(again.body, t.body, func(a, b bodyWord) bool { return a.text == b.text })
 }
 
 // reconcileAnnotations brings the body's annotations in line with

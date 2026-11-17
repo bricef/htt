@@ -125,6 +125,17 @@ removed key loses every occurrence, and new keys go at the end in key
 order. So a rewrite changes only what was asked; words are rejoined
 with single spaces.
 
+One rewrite can still change what a task means: with less in front of
+it (a priority or a leading annotation removed), the body's first word
+can be read as preamble (`(C) x foo` lowered would be `x foo`, done).
+todo.txt has no escape, so after composing, `rebuild` re-parses the
+line (`bodyReadsBack`) and, if the body didn't survive, fills the empty
+date slots with today, completed-on before created-on, until it does.
+The parser stays the only judge of what the preamble takes; a regexp
+of the words it can take (`preambleShaped`) only skips the re-parse
+for lines that can't go wrong. The TUI's priority actions report an
+added date on the status line (`datedNote`).
+
 `isAnnotation` keeps times (`10:30`: an all-digit key) and links
 (`https://…`, `mailto:…`) as plain words: they're part of what the
 task says, not data about it. `Annotate` refuses the same pairs, so

@@ -5,57 +5,74 @@ The update check announces releases (it reads
 `/repos/bricef/htt/releases/latest`), and `go install …@latest`
 resolves to the newest tag, so both matter.
 
+Releases are made by hand, when you decide to, with two `just`
+recipes (both run `scripts/release.sh`). You need `gh` signed in to
+GitHub and an up-to-date checkout of `main`.
+
 ## Steps
 
-1. **Check `main`.** From an up-to-date checkout of `main`:
+1. **Pick the version.** Semver. While htt is `v0.x`, a release that
+   adds features or removes one bumps the minor version, and a
+   fixes-only release bumps the patch.
+
+2. **Check `main`:**
 
    ```
-   just test && just vet && just check
-   go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+   just release-check vX.Y.Z
    ```
 
-   Fix anything govulncheck says htt's code reaches before tagging. A
-   standard-library fix means raising the `go` directive in `go.mod`
-   (see [Go versions](#go-versions)).
+   This changes nothing. It stops at the first check that fails:
 
-2. **Pick the version.** Semver. While htt is `v0.x`, a release with
-   new features bumps the minor version and a fixes-only release bumps
-   the patch.
+   - the version is `vX.Y.Z`, not yet tagged, and newer than the last
+     release;
+   - the working tree is clean and `HEAD` is `origin/main`;
+   - CI passed for that commit;
+   - `just test`, `just vet`, `just check`, `go mod tidy -diff` and
+     govulncheck (the version CI runs) pass locally.
 
-3. **Tag the commit** with an annotated tag and push it:
+   It ends by listing what was merged since the last release, to write
+   the notes from. Fix anything govulncheck says htt's code reaches
+   before releasing; a standard-library fix means raising the `go`
+   directive in `go.mod` (see [Go versions](#go-versions)).
 
-   ```
-   git tag -a vX.Y.Z <commit> -m "htt vX.Y.Z"
-   git push origin refs/tags/vX.Y.Z
-   ```
+3. **Write the notes** in a Markdown file outside the repo: what's new,
+   how to install (`go install github.com/bricef/htt/cmd/htt@vX.Y.Z`),
+   and where the known issues are (`TODO.md`). The recipe refuses notes
+   that don't mention the version.
 
-4. **Publish the GitHub Release** from that tag, with notes:
-
-   ```
-   gh release create vX.Y.Z --title "htt vX.Y.Z" --notes-file notes.md --verify-tag --latest
-   ```
-
-   Not a draft and not a pre-release: `/releases/latest` skips both,
-   so the update check wouldn't see it. Notes say what's new, how to
-   install, and point at known issues (`TODO.md`, open issues).
-
-5. **Verify it as a user would**, from a directory outside the repo:
+4. **Release:**
 
    ```
-   GOBIN=$(mktemp -d) go install github.com/bricef/htt/cmd/htt@vX.Y.Z
-   $GOBIN/htt --version                       # htt version vX.Y.Z
-   go version -m $GOBIN/htt | head -1         # built with the Go you expect
-   go list -m github.com/bricef/htt@latest    # vX.Y.Z
+   just release vX.Y.Z /path/to/notes.md
    ```
 
-   An older build run at a terminal should now print the update
-   notice.
+   It runs every check again, then:
+
+   - tags the commit (`git tag -a vX.Y.Z <commit> -m "htt vX.Y.Z"`)
+     and pushes the tag;
+   - publishes the GitHub Release (`gh release create … --verify-tag
+     --latest`): not a draft and not a pre-release, since
+     `/releases/latest` skips both and the update check wouldn't see
+     it;
+   - verifies it as a user would, from a temporary directory outside
+     the repo: `go install …@vX.Y.Z`, `htt --version`, `go list -m
+     …@latest` (retrying for a few minutes while the module proxy
+     catches up), and GitHub's latest release.
+
+   If a step fails after the tag is pushed, the recipe prints the
+   command that finishes the release; don't start again (see below).
+   `RELEASE_DRY_RUN=1 just release …` prints the tag and publish
+   commands instead of running them.
+
+5. **Check the update notice** if you like: an older build run at a
+   terminal should now print it.
 
 ## Tags are permanent
 
 The Go module proxy caches every version it has served, forever. Never
 move, delete or reuse a tag; if a release is wrong, fix forward with a
-new patch release. A GitHub Release's notes can be edited afterwards.
+new patch release. A GitHub Release's notes can be edited afterwards
+(`gh release edit vX.Y.Z --notes-file notes.md`).
 
 ## Go versions
 

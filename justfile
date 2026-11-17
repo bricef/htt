@@ -48,9 +48,19 @@ vet:
 check:
     golangci-lint run
 
-# Populate the module cache. Must be run by the user outside the sandbox
-# the first time after a fresh checkout. The sandbox blocks writes to
-# ~/go/pkg/mod/cache/download/.
+# Check main is ready to release as VERSION (vX.Y.Z); changes nothing.
+release-check version:
+    scripts/release.sh --check-only {{version}}
+
+# Release main as VERSION with NOTES: check, tag, publish, verify.
+release version notes:
+    scripts/release.sh {{version}} {{notes}}
+
+# Must be run by the user outside the sandbox the first time after a
+# fresh checkout: the sandbox blocks writes to ~/go/pkg/mod/cache/download/.
+# (just shows a recipe's last comment line as its description.)
+#
+# Populate the module cache.
 mod-download:
     go mod download
 

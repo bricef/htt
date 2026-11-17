@@ -150,18 +150,24 @@ docs are under [`docs/plans/`](docs/plans/).
 ```shell
 $ just
 Available recipes:
-    build        # Build the htt binary into ./bin/htt.
-    check        # Lint with golangci-lint.
-    clean        # Remove build artifacts and the in-repo Go cache.
-    install      # Install the htt binary into $GOBIN / $GOPATH/bin.
-    mod-download # Populate the module cache.
-    test         # Run every test suite (e2e, TUI, internal packages).
-    test-e2e     # Run just the e2e CLI harness.
-    test-pkg pkg # Run one package, e.g. `just test-pkg internal/storage`.
-    test-tui     # Run just the TUI snapshot harness.
-    test-unit    # Run all internal/* tests.
-    vet          # Static analysis across the module.
+    build                 # Build the htt binary into ./bin/htt.
+    check                 # Lint with golangci-lint.
+    clean                 # Remove build artifacts and the in-repo Go cache.
+    default               # Default: list recipes.
+    install               # Install the htt binary into $GOBIN / $GOPATH/bin.
+    mod-download          # Populate the module cache.
+    release version notes # Release main as VERSION with NOTES: check, tag, publish, verify.
+    release-check version # Check main is ready to release as VERSION (vX.Y.Z); changes nothing.
+    test                  # Run every test suite (e2e, TUI, internal packages).
+    test-e2e              # Run just the e2e CLI harness.
+    test-pkg pkg          # Run one package, e.g. `just test-pkg internal/storage`.
+    test-tui              # Run just the TUI snapshot harness.
+    test-unit             # Run all internal/* tests (domain, storage, usecase, todo, ...).
+    vet                   # Static analysis across the module.
 ```
+
+Releases are made with `just release`; see
+[`docs/releasing.md`](docs/releasing.md).
 
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the
 same recipes on every push to any branch, and weekly: `go mod tidy

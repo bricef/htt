@@ -76,8 +76,6 @@ Each confirmed against `main` on 2026-11-03.
 
 ## Production grade
 
-- [ ] Automate releases (a `just release` recipe or goreleaser) around
-      the manual steps in `docs/releasing.md`
 - [ ] Set up packaging for release (see https://github.com/goreleaser/goreleaser)
 
 ## Future
@@ -86,6 +84,8 @@ Each confirmed against `main` on 2026-11-03.
 
 ## Done
 
+- [x] Releases: `just release-check vX.Y.Z` and `just release vX.Y.Z
+      notes.md` run the steps in `docs/releasing.md` (2026-11-17)
 - [x] CI on GitHub Actions: tests, vet, lint, tidy modules and
       govulncheck on every push and weekly (2026-11-17)
 - [x] Removed `internal/gcal.go` (2026-11-17), a standalone Google

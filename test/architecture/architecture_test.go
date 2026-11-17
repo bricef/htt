@@ -1,6 +1,6 @@
 // Package architecture asserts the dependency direction between internal
-// packages after the Step 11 rename. It owns no production code; lives
-// under test/ to avoid colliding with internal/gcal.go's package main.
+// packages after the Step 11 rename. It owns no production code, so it
+// lives under test/ with the other suites.
 package architecture
 
 import (

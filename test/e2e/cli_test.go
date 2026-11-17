@@ -615,3 +615,16 @@ func TestRepl_CommandOutputStaysOnScreen(t *testing.T) {
 		t.Errorf("the add's output should be gone after /report:\n%s", screens[2])
 	}
 }
+
+func TestLog_EveryCommandThatLogsConfirmsItsEntry(t *testing.T) {
+	// log start, log end and workon stopped printing anything in the
+	// 2026-05-15 timelog refactor; only log add still confirmed its
+	// entry.
+	e := newEnv(t)
+	e.mustRun("todo", "add", "write the report +work")
+
+	assertEqual(t, "log start", e.mustRun("log", "start").stdout, "Logging entry: @start\n")
+	assertEqual(t, "log add", e.mustRun("log", "add", "reading", "mail").stdout, "Logging entry: reading mail\n")
+	assertEqual(t, "workon", e.mustRun("workon", "0").stdout, "Logging entry: "+today()+" write the report +work\n")
+	assertEqual(t, "log end", e.mustRun("log", "end").stdout, "Logging entry: @end\n")
+}

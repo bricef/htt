@@ -17,8 +17,9 @@ var LogCommand = &cobra.Command{
 }
 
 // appendToday is the small helper every "write a timelog entry"
-// command shares: load today's Timelog, append the task, return the
-// (now-annotated) task for display.
+// command shares (log add, start and end, and workon): load today's
+// Timelog, append the task, and confirm the entry, without the ts:
+// annotation Append gives it.
 func appendToday(task *domain.Task) error {
 	tl, err := timelogRepo().Today()
 	if err != nil {
@@ -27,6 +28,8 @@ func appendToday(task *domain.Task) error {
 	if err := tl.Append(task); err != nil {
 		return fmt.Errorf("append log entry: %w", err)
 	}
+	fmt.Printf("Logging entry: %v\n",
+		task.RemoveAnnotation(domain.TimelogTimestampLabel).ColorString())
 	return nil
 }
 
@@ -40,12 +43,7 @@ var Add = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("parse log entry: %w", err)
 		}
-		if err := appendToday(task); err != nil {
-			return err
-		}
-		fmt.Printf("Logging entry: %v\n",
-			task.RemoveAnnotation(domain.TimelogTimestampLabel).ColorString())
-		return nil
+		return appendToday(task)
 	},
 }
 

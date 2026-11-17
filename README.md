@@ -25,6 +25,69 @@ it — and the reference for every command.
 
 ## Installation
 
+### Download a binary
+
+Every [release](https://github.com/bricef/htt/releases) has a
+ready-to-run `htt` for Linux and macOS, so you don't need Go. Pick the
+archive for your machine (`uname -sm` tells you which you have):
+
+| Machine | `uname -sm` | Archive |
+| --- | --- | --- |
+| Linux on Intel or AMD | `Linux x86_64` | `htt_vX.Y.Z_linux_amd64.tar.gz` |
+| Linux on 64-bit ARM | `Linux aarch64` | `htt_vX.Y.Z_linux_arm64.tar.gz` |
+| Mac with Apple silicon | `Darwin arm64` | `htt_vX.Y.Z_darwin_arm64.tar.gz` |
+| Mac with an Intel processor | `Darwin x86_64` | `htt_vX.Y.Z_darwin_amd64.tar.gz` |
+
+There's no Windows build yet.
+
+Download it and the checksums file, `htt_vX.Y.Z_SHA256SUMS`, from the
+release page, or with [gh](https://cli.github.com/) (v0.3.0 on an
+Apple silicon Mac, say):
+
+```shell
+gh release download v0.3.0 --repo bricef/htt \
+  --pattern htt_v0.3.0_darwin_arm64.tar.gz --pattern htt_v0.3.0_SHA256SUMS
+```
+
+Check the archive against the checksums file. It should say `OK`:
+
+```shell
+grep htt_v0.3.0_darwin_arm64.tar.gz htt_v0.3.0_SHA256SUMS | shasum -a 256 -c   # macOS
+grep htt_v0.3.0_linux_amd64.tar.gz htt_v0.3.0_SHA256SUMS | sha256sum -c        # Linux
+```
+
+Each archive also has a signed build-provenance attestation, which
+shows it was built by htt's release workflow from htt's repository.
+gh checks it:
+
+```shell
+gh attestation verify htt_v0.3.0_darwin_arm64.tar.gz --repo bricef/htt
+```
+
+Then unpack `htt` and put it somewhere on your `PATH`:
+
+```shell
+tar -xzf htt_v0.3.0_darwin_arm64.tar.gz htt
+mv htt ~/.local/bin/
+htt --version
+```
+
+On macOS, a file downloaded with a web browser is quarantined, and
+macOS won't run a quarantined program that isn't signed by an Apple
+developer, which htt isn't: it says Apple can't verify that "htt" is
+free of malware. Clear the quarantine flag to run it:
+
+```shell
+xattr -d com.apple.quarantine ~/.local/bin/htt
+```
+
+(Downloads made with `gh` or `curl` aren't quarantined.)
+
+To update, download the new release the same way. The update notice
+suggests `go install`, which only applies to an install made with Go.
+
+### With Go
+
 With a working Go toolchain:
 
 ```
@@ -150,24 +213,29 @@ docs are under [`docs/plans/`](docs/plans/).
 ```shell
 $ just
 Available recipes:
-    build                 # Build the htt binary into ./bin/htt.
-    check                 # Lint with golangci-lint.
-    clean                 # Remove build artifacts and the in-repo Go cache.
-    default               # Default: list recipes.
-    install               # Install the htt binary into $GOBIN / $GOPATH/bin.
-    mod-download          # Populate the module cache.
-    release version notes # Release main as VERSION with NOTES: check, tag, publish, verify.
-    release-check version # Check main is ready to release as VERSION (vX.Y.Z); changes nothing.
-    test                  # Run every test suite (e2e, TUI, internal packages).
-    test-e2e              # Run just the e2e CLI harness.
-    test-pkg pkg          # Run one package, e.g. `just test-pkg internal/storage`.
-    test-tui              # Run just the TUI snapshot harness.
-    test-unit             # Run all internal/* tests (domain, storage, usecase, todo, ...).
-    vet                   # Static analysis across the module.
+    build                    # Build the htt binary into ./bin/htt.
+    check                    # Lint with golangci-lint.
+    clean                    # Remove build artifacts and the in-repo Go cache.
+    default                  # Default: list recipes.
+    dist version             # Build the release archives for tag VERSION into dist/, as releases do.
+    install                  # Install the htt binary into $GOBIN / $GOPATH/bin.
+    mod-download             # Populate the module cache.
+    release version notes    # Release main as VERSION with NOTES: check, tag, publish, verify.
+    release-binaries version # Rebuild the binaries of the published release VERSION, and check them.
+    release-check version    # Check main is ready to release as VERSION (vX.Y.Z); changes nothing.
+    test                     # Run every test suite (e2e, TUI, internal packages).
+    test-e2e                 # Run just the e2e CLI harness.
+    test-pkg pkg             # Run one package, e.g. `just test-pkg internal/storage`.
+    test-tui                 # Run just the TUI snapshot harness.
+    test-unit                # Run all internal/* tests (domain, storage, usecase, todo, ...).
+    vet                      # Static analysis across the module.
 ```
 
 Releases are made with `just release`; see
-[`docs/releasing.md`](docs/releasing.md).
+[`docs/releasing.md`](docs/releasing.md). Publishing one runs
+[`release-binaries.yml`](.github/workflows/release-binaries.yml),
+which builds the binaries with `scripts/dist.sh` and attaches them to
+the release; `just dist vX.Y.Z` builds the same archives locally.
 
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the
 same recipes on every push to any branch: `go mod tidy -diff`,
@@ -177,8 +245,8 @@ plus govulncheck. A separate workflow,
 Mondays, so a vulnerability published while htt is quiet still shows
 up. GitHub pauses a scheduled workflow after 60 days without activity
 and doesn't resume it by itself; turn it back on with
-`gh workflow enable weekly.yml`. CI's actions are pinned to commits,
-and Dependabot updates them monthly.
+`gh workflow enable weekly.yml`. The workflows' actions are pinned to
+commits, and Dependabot updates them monthly.
 
 Quick dev loop for the TUI. It never writes to the terminal outside
 its own screen; `--log-file` appends its diagnostics to a file, at

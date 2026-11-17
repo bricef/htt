@@ -56,6 +56,14 @@ release-check version:
 release version notes:
     scripts/release.sh {{version}} {{notes}}
 
+# Rebuild the binaries of the published release VERSION, and check them.
+release-binaries version:
+    scripts/release.sh --binaries {{version}}
+
+# Build the release archives for tag VERSION into dist/, as releases do.
+dist version:
+    scripts/dist.sh {{version}} dist
+
 # Must be run by the user outside the sandbox the first time after a
 # fresh checkout: the sandbox blocks writes to ~/go/pkg/mod/cache/download/.
 # (just shows a recipe's last comment line as its description.)
@@ -66,4 +74,4 @@ mod-download:
 
 # Remove build artifacts and the in-repo Go cache.
 clean:
-    rm -rf bin .gocache
+    rm -rf bin dist .gocache

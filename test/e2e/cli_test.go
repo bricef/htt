@@ -537,3 +537,31 @@ func TestInteractive_HelpListsThemesAndColours(t *testing.T) {
 		assertContains(t, "help", r.stdout, role)
 	}
 }
+
+func TestReport_DeletedTasksAreNotCountedAsAdded(t *testing.T) {
+	// The Added section used to walk the archive like any other
+	// context, so a task added and deleted in the period was counted
+	// twice: under Deleted, and under Added in a context named
+	// "archive". A task added and completed still counts as added,
+	// under the context it was completed from.
+	e := newEnv(t)
+	e.mustRun("todo", "add", "keep me")
+	e.mustRun("todo", "add", "finish me")
+	e.mustRun("todo", "add", "drop me")
+	e.mustRun("todo", "do", "1")
+	e.mustRun("todo", "delete", "1")
+
+	r := e.mustRun("report")
+	addedAt := strings.Index(r.stdout, "Added (")
+	deletedAt := strings.Index(r.stdout, "Deleted (")
+	if addedAt < 0 || deletedAt < addedAt {
+		t.Fatalf("expected an Added section before a Deleted section, got:\n%s", r.stdout)
+	}
+	added, deleted := r.stdout[addedAt:deletedAt], r.stdout[deletedAt:]
+
+	assertInOrder(t, "Added", added, "Added (2)\n", "  todo:\n", "    finish me", "    keep me")
+	if strings.Contains(added, "drop me") || strings.Contains(added, "archive") {
+		t.Errorf("Added should leave out the deleted task, got:\n%s", added)
+	}
+	assertInOrder(t, "Deleted", deleted, "Deleted (1)\n", "  todo:\n", "    drop me")
+}

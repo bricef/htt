@@ -70,7 +70,7 @@ func TestIsDisabledInRepl(t *testing.T) {
 		{"todo allowed", []string{"todo", "add", "foo"}, false},
 		{"log allowed", []string{"log", "start"}, false},
 		{"report allowed", []string{"report"}, false},
-		{"sync allowed", []string{"sync"}, false},
+		{"status allowed", []string{"status"}, false},
 		// Subcommand of an allowed command stays allowed.
 		{"log status allowed", []string{"log", "status"}, false},
 	}

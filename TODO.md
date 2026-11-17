@@ -6,20 +6,12 @@ as obsolete, some will become plan documents under
 `docs/plans/active/` when their time comes. Add new items here freely;
 the README itself stays a getting-started doc.
 
-Scoped work lives in [GitHub Issues](https://github.com/bricef/htt/issues):
-sync's problems and future are
-[#12](https://github.com/bricef/htt/issues/12).
+Scoped work lives in [GitHub Issues](https://github.com/bricef/htt/issues).
 
 ## Known issues
 
 Each confirmed against `main` on 2026-11-03.
 
-- **Sync** has two serious bugs and several limits, all in
-  [#12](https://github.com/bricef/htt/issues/12): with no
-  `backing_repo_url` it pushes into the git repository of the current
-  directory, the default `ssh_key_file` is a public key, it never
-  pulls, and the default `file_match_patterns` entry `.context`
-  matches nothing.
 - **`@end` isn't a sentinel.** After `htt log end`, `htt log status`
   reports "Currently working on: @end". Fixing it needs an open/closed
   model for entries (see the wishlist).
@@ -84,7 +76,6 @@ Each confirmed against `main` on 2026-11-03.
   - [ ] Remove `internal/gcal.go`, a dead Google Calendar experiment
         that alone pulls the Google API client, grpc and OpenTelemetry
         into `go.mod`
-- Sync: see [#12](https://github.com/bricef/htt/issues/12)
 
 ## Production grade
 

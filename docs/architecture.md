@@ -14,7 +14,6 @@ internal/
   tui/                     bubble tea interactive mode
   domain/                  Context, Task, Timelog + Repository / TimelogRepository interfaces
   storage/                 MemoryRepository / FileRepository (and timelog impls) — satisfy the domain interfaces
-  repo/                    thin wrapper over go-git for `htt sync` (push-only; see #12)
   update/                  the once-a-day check for a newer GitHub release
   dates/                   date phrases ("next Friday") for --due and the TUI
   parseutils/              parsing helpers for the todo.txt format
@@ -61,8 +60,6 @@ exceptions noted.
 - `update` imports nothing else from `internal/`: it knows GitHub's
   release endpoint and its cache file, nothing about tasks or config.
   `cli` decides when it may run and passes the TUI a notice source.
-- `repo` (sync) sits outside the layering: it wraps go-git, uses
-  `utils` and `vars`, and only `cli` calls it.
 
 `test/architecture/architecture_test.go` enforces the `domain`,
 `storage`, `tui`, `dates` and `update` rules by scanning imports in each
@@ -306,16 +303,6 @@ notice after `Execute`, and `htt interactive` hands the TUI
 `Options.UpdateNotice` for its status line. What it may contact and
 send is promised in the README's Online activity section, and the
 tests pin it.
-
-## Sync
-
-`htt sync` calls `repo.Sync()` in `internal/repo`, a thin layer over
-go-git: init the data directory as a repository if needed, set the
-remote, commit, push over SSH. It sits outside the domain/storage
-layering, ends the process through `utils.Fatal` on any error, and has
-no tests. What it does and doesn't do is in GETTING-STARTED's sync
-section; its problems and the open questions about its future are in
-[#12](https://github.com/bricef/htt/issues/12).
 
 ## Adding a feature
 

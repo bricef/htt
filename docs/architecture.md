@@ -323,7 +323,10 @@ the program.
 
 `internal/update` asks GitHub for the latest release
 (`releasesURL`, fixed at build time) and compares its tag with the
-binary's version from Go's build info. `Start` records the attempt in
+binary's version, `CurrentVersion`: the `version` variable when a
+build sets it with `-ldflags -X` (a source-archive build, which has no
+git information), otherwise Go's build info. `htt --version` prints the
+same. `Start` records the attempt in
 the user cache directory before the request and runs the request in
 the background; `Check.Newer` reports a newer release only on the run
 that asked, and every failure is kept in `Check.Err` rather than

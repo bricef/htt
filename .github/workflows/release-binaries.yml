@@ -1,0 +1,98 @@
+# Builds the binaries for a release and attaches them to its GitHub
+# Release: an archive per platform, a SHA256SUMS file, and a signed
+# build-provenance attestation for each archive (checked with
+# `gh attestation verify`). It runs when a release is published, which
+# `just release` does and then waits for this run, and by hand for an
+# existing release, e.g. to (re)build v0.3.0:
+#
+#   gh workflow run release-binaries.yml --repo bricef/htt -f tag=v0.3.0
+#
+# The build is scripts/dist.sh, as in `just dist`: it builds the tag
+# from a fresh clone, whichever commit this workflow runs from, so a
+# manual run can build an older tag. Uploads use --clobber, so a re-run
+# replaces the assets rather than adding to them.
+#
+# Building and publishing are separate jobs so the build, which
+# downloads and compiles third-party modules, never holds a token that
+# can write to the repository or mint the identity attestations are
+# signed with.
+#
+# Third-party actions are pinned to commit SHAs (the tag is in the
+# trailing comment); Dependabot keeps them current.
+name: Release binaries
+# scripts/release.sh finds this workflow's run for a release by this title.
+run-name: Binaries for ${{ inputs.tag || github.event.release.tag_name }}
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: The release's tag, e.g. v0.3.0
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: release-binaries-${{ inputs.tag || github.event.release.tag_name }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ inputs.tag || github.event.release.tag_name }}
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # every tag, for dist.sh to build from
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false # a release build uses nothing another run left behind
+
+      - name: Build the archives
+        run: scripts/dist.sh "$TAG" dist
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: binaries
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true # a re-run replaces the first attempt's files
+
+  publish:
+    name: Attest and upload
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # upload the release's assets
+      id-token: write # sign the attestation with this workflow's identity
+      attestations: write # store the attestation
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: binaries
+          path: dist
+
+      # One provenance attestation covering every archive in the
+      # checksums file.
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-checksums: dist/htt_${{ env.TAG }}_SHA256SUMS
+
+      - name: Upload to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" dist/* --clobber --repo "$GITHUB_REPOSITORY"

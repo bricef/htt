@@ -279,3 +279,7 @@ known issues. Work that's been scoped lives in
 - https://github.com/Fanteria/todotxt-tui
 - http://todotxt.org/
 - https://www.solidtime.io/ / https://github.com/solidtime-io/solidtime
+
+## License
+
+htt is released under the [MIT License](LICENSE).

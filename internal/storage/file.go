@@ -120,8 +120,11 @@ func (r *FileRepository) Context(name string) (*domain.Context, error) {
 		}
 		// Line is the task's index in ctx.Tasks, the number commands
 		// like delete take. It is not the file line: blank lines are
-		// skipped, so the two differ once a file has one.
+		// skipped, so the two differ once a file has one. FileLine is
+		// the file line, for messages about the file (see
+		// Task.DateWarnings).
 		task.Line = len(ctx.Tasks)
+		task.FileLine = lineNo + 1
 		ctx.Tasks = append(ctx.Tasks, task)
 		lineNo++
 	}

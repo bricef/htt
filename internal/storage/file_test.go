@@ -147,6 +147,12 @@ func TestFileRepository_Context_SkipsBlankLines(t *testing.T) {
 			t.Errorf("Tasks[%d].Line = %d, want %d", i, task.Line, i)
 		}
 	}
+	// FileLine is the line of the file, for messages that point there.
+	for i, want := range []int{1, 4} {
+		if got := ctx.Tasks[i].FileLine; got != want {
+			t.Errorf("Tasks[%d].FileLine = %d, want %d", i, got, want)
+		}
+	}
 }
 
 func TestFileRepository_ContextNames_IgnoresNonTxtAndDirs(t *testing.T) {

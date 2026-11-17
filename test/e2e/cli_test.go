@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -709,4 +710,101 @@ func TestRepl_AnEditorProblemDoesNotEndTheSession(t *testing.T) {
 	r := e.mustRunWithInput("edit-done\nadd still here\nq\n", "repl")
 	assertContains(t, "stderr", r.stderr, "$EDITOR variable is empty or not set")
 	assertEqual(t, "todo.txt", e.readData("todo.txt"), today()+" still here\n")
+}
+
+// A line with a date htt can't read: "All lines are valid. If we
+// detect a misformatted or incorrect date, we should warn, but not
+// break, crash or error out." The line loads with the date read as
+// text, and every command works as before; a warning naming the file
+// and line goes to stderr, once per line per run.
+
+// badDatesTodo is a todo.txt with three bad dates. The blank line
+// makes file lines differ from task numbers: the warnings name lines.
+const badDatesTodo = "fine task\n\n2026-13-45 call the bank\nmeet on 2026-5-3\npay rent due:friday\n"
+
+func badDateWarnings(path string, lines ...int) string {
+	messages := map[int]string{
+		3: "2026-13-45 isn't a real date, so it's text",
+		4: "2026-5-3 isn't written YYYY-MM-DD (2026-05-03), so it's text",
+		5: "due:friday isn't a YYYY-MM-DD date, so the task has no due date",
+	}
+	out := ""
+	for _, line := range lines {
+		out += fmt.Sprintf("warning: %s:%d: %s\n", path, line, messages[line])
+	}
+	return out
+}
+
+func TestDates_BadDatesLoadAndWarnOnStderr(t *testing.T) {
+	e := newEnv(t)
+	e.writeData("todo.txt", badDatesTodo)
+	warnings := badDateWarnings(filepath.Join(e.dataDir, "todo.txt"), 3, 4, 5)
+
+	r := e.mustRun("todo", "show")
+	assertEqual(t, "todo show: stderr", r.stderr, warnings)
+	assertEqual(t, "todo show: stdout", r.stdout,
+		"\n  0 fine task\n  1 2026-13-45 call the bank\n  2 meet on 2026-5-3\n  3 pay rent due:friday\n\n(todo): 4 tasks\n")
+
+	for _, args := range [][]string{
+		{"todo", "show", "--filter", "no-due", "--sort", "due"},
+		{"todo", "search", "bank"},
+		{"todo", "status"},
+		{"status"},
+		{"report"},
+		{"workon", "1"},
+	} {
+		label := "htt " + strings.Join(args, " ")
+		r := e.mustRun(args...) // exit 0
+		assertEqual(t, label+": stderr", r.stderr, warnings)
+		if strings.Contains(r.stdout, "warning") || strings.Contains(r.stdout, "real date") {
+			t.Errorf("%s: a warning reached stdout:\n%s", label, r.stdout)
+		}
+	}
+	assertContains(t, "show --filter no-due", e.mustRun("todo", "show", "--filter", "no-due").stdout, "4 of 4 tasks shown.")
+	assertEqual(t, "todo.txt", e.readData("todo.txt"), badDatesTodo) // nothing rewrote it
+
+	// Commands that don't read the tasks say nothing.
+	for _, args := range [][]string{{"config", "dir"}, {"log", "show"}, {"todo", "edit-done", "--help"}} {
+		assertEqual(t, "htt "+strings.Join(args, " ")+": stderr", e.mustRun(args...).stderr, "")
+	}
+}
+
+func TestDates_CommandsThatChangeTasksStillWork(t *testing.T) {
+	e := newEnv(t)
+	e.writeData("todo.txt", badDatesTodo)
+	todo := filepath.Join(e.dataDir, "todo.txt")
+	d := today()
+
+	r := e.mustRun("todo", "priority", "1", "A")
+	assertEqual(t, "priority: stderr", r.stderr, badDateWarnings(todo, 3, 4, 5))
+	assertContains(t, "priority: stdout", r.stdout, "After:  (A) 2026-13-45 call the bank")
+	// The priority sorts the list, and saving drops the blank line.
+	assertEqual(t, "todo.txt", e.readData("todo.txt"),
+		"(A) 2026-13-45 call the bank\nfine task\nmeet on 2026-5-3\npay rent due:friday\n")
+
+	e.mustRun("todo", "add", "new task")
+	e.mustRun("todo", "do", "0")     // the bank: done.txt now has a bad date
+	e.mustRun("todo", "delete", "1") // 2026-5-3: the archive has one
+	assertEqual(t, "done.txt", e.readData("done.txt"), "x (A) "+d+" 2026-13-45 call the bank context:todo\n")
+	assertContains(t, "archive.txt", e.readData("archive.txt"), "meet on 2026-5-3 archived-from:todo")
+
+	// Completing reads the current list, not done.txt it appends to.
+	r = e.mustRun("todo", "do", "0")
+	assertEqual(t, "do: stderr", r.stderr, "warning: "+todo+":2: "+
+		"due:friday isn't a YYYY-MM-DD date, so the task has no due date\n")
+
+	// report reads done.txt twice and warns once; the archive (deleted
+	// tasks, whose dates nothing reads) never warns.
+	r = e.mustRun("report")
+	assertEqual(t, "report: stderr", r.stderr,
+		"warning: "+filepath.Join(e.dataDir, "done.txt")+":1: 2026-13-45 isn't a real date, so it's text\n"+
+			"warning: "+todo+":1: due:friday isn't a YYYY-MM-DD date, so the task has no due date\n")
+	assertInOrder(t, "report", r.stdout, "Completed (2)\n", "Added (1)\n", "Deleted (1)\n", "meet on 2026-5-3")
+}
+
+func TestRepl_DateWarningsOncePerSession(t *testing.T) {
+	e := newEnv(t)
+	e.writeData("todo.txt", badDatesTodo)
+	r := e.mustRunWithInput("show\n/report\nshow\nq\n", "repl")
+	assertEqual(t, "stderr", r.stderr, badDateWarnings(filepath.Join(e.dataDir, "todo.txt"), 3, 4, 5))
 }

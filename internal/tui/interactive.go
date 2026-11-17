@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"log/slog"
 	"slices"
 	"time"
@@ -52,6 +53,8 @@ type model struct {
 	styles        styles       // colours from the theme
 	updateNotice  func() string
 	now           func() time.Time // the clock searches use for due-date filters
+	datesChecked  *domain.Context  // the context noteDateWarnings last looked at
+	datesWarned   map[string]bool  // the date warnings shown so far; see noteDateWarnings
 }
 
 var controller = NewKeyBindingController().
@@ -166,8 +169,10 @@ func Model(repo domain.Repository, ctx *domain.Context, opts Options) model {
 		styles:        st,
 		updateNotice:  opts.UpdateNotice,
 		now:           time.Now,
+		datesWarned:   map[string]bool{},
 	}
 	m.showTasks(-1)
+	m.noteDateWarnings()
 	return m
 }
 
@@ -185,15 +190,60 @@ func (m model) Init() tea.Cmd {
 	}
 }
 
-// Update handles a message, then sizes the list to the space left
-// between the header and the widgets below it.
+// Update handles a message, notes the date warnings of a list it
+// (re)loaded, then sizes the list to the space left between the
+// header and the widgets below it.
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	next, cmd := m.update(msg)
 	if nm, ok := next.(model); ok {
+		nm.noteDateWarnings()
 		nm.layout()
 		return nm, cmd
 	}
 	return next, cmd
+}
+
+// noteDateWarnings puts the date warnings (Task.DateWarnings) of the
+// list on show on the status line when it has been loaded since the
+// last look: the first, with a count of the rest. Each line's warning
+// is shown once a session, by list, task text and message, so
+// reloading a list, sorting it or changing a task's priority doesn't
+// repeat it. It runs after an action, so it adds to anything the
+// action said rather than being overwritten by it.
+func (m *model) noteDateWarnings() {
+	if m.context == nil || m.context == m.datesChecked {
+		return
+	}
+	m.datesChecked = m.context
+	var fresh []string
+	for i, task := range m.context.Tasks {
+		for _, w := range task.DateWarnings() {
+			key := m.context.Name + "\n" + task.Entry() + "\n" + w
+			if m.datesWarned[key] {
+				continue
+			}
+			m.datesWarned[key] = true
+			if m.context.Name != domain.DoneContextName { // the done tab shows no task numbers
+				w = fmt.Sprintf("Task %d: %s", i, w)
+			}
+			fresh = append(fresh, w)
+		}
+	}
+	if len(fresh) == 0 {
+		return
+	}
+	note := fresh[0]
+	switch more := len(fresh) - 1; {
+	case more == 1:
+		note += " (and 1 more date warning in this list)"
+	case more > 1:
+		note += fmt.Sprintf(" (and %d more date warnings in this list)", more)
+	}
+	note += "."
+	if m.status != "" {
+		note = m.status + " " + note
+	}
+	m.status = note
 }
 
 func (m model) update(msg tea.Msg) (tea.Model, tea.Cmd) {

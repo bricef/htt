@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -112,6 +113,29 @@ func (e *tuiEnv) readData(rel string) string {
 		e.t.Fatalf("could not read %s: %v", p, err)
 	}
 	return string(b)
+}
+
+// terminalOutput runs fn with os.Stdout and os.Stderr going to a pipe
+// and returns what was written to them.
+func terminalOutput(t *testing.T, fn func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := make(chan string)
+	go func() {
+		b, _ := io.ReadAll(r)
+		out <- string(b)
+	}()
+	stdout, stderr := os.Stdout, os.Stderr
+	os.Stdout, os.Stderr = w, w
+	func() {
+		defer func() { os.Stdout, os.Stderr = stdout, stderr }()
+		fn()
+	}()
+	_ = w.Close()
+	return <-out
 }
 
 var ansiRE = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)

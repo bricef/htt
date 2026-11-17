@@ -28,7 +28,8 @@ var (
 // for tasks that is stable even though they might be filtered.
 type Task struct {
 	Raw         string // This is the entire line, including all parsed items, as it would appear in the file
-	Line        int
+	Line        int    // the task's index in its context, the number commands like delete take
+	FileLine    int    // the line of the file the task was read from, counting from 1; 0 if it wasn't read from a file
 	Completed   bool
 	Priority    string
 	CompletedOn time.Time

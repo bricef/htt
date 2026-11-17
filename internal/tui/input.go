@@ -106,7 +106,9 @@ func resolveDue(value string, now time.Time) (string, []string) {
 var priorityShaped = regexp.MustCompile(`^\([A-Za-z]\)$`)
 
 // wordWarnings points out words that will be saved, but not as what
-// they look like.
+// they look like. Dates are the domain's to judge (Task.DateWarnings),
+// so the input warns about the same dates htt warns about when it
+// loads a line.
 func wordWarnings(raw string, adding bool) []string {
 	var out []string
 	for i, tk := range domain.Tokens(raw) {
@@ -122,11 +124,10 @@ func wordWarnings(raw string, adding bool) []string {
 			} else if i > 0 {
 				out = append(out, fmt.Sprintf("%s is text: a priority goes at the start", word))
 			}
-		case tk.Kind == domain.TokenWord && dateShaped.MatchString(word):
-			if _, ok := domain.ParseLocalDate(word); !ok {
-				out = append(out, fmt.Sprintf("%s isn't a real date, so it's text", word))
-			}
 		}
+	}
+	if task, err := domain.NewTask(raw); err == nil {
+		out = append(out, task.DateWarnings()...)
 	}
 	return out
 }

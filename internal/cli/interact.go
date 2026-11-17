@@ -72,7 +72,7 @@ Examples:
 		}
 		defer func() { _ = closeLog() }()
 
-		r := repo()
+		r := baseRepo() // the TUI shows date warnings itself; nothing on stderr
 		ctx, err := r.CurrentContext()
 		if err != nil {
 			return fmt.Errorf("load current context: %w", err)

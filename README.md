@@ -170,10 +170,15 @@ Releases are made with `just release`; see
 [`docs/releasing.md`](docs/releasing.md).
 
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the
-same recipes on every push to any branch, and weekly: `go mod tidy
--diff`, `just test`, `just vet` and `just check` (golangci-lint
-v2.15.0), plus govulncheck. Its actions are pinned to commits, and
-Dependabot updates them monthly.
+same recipes on every push to any branch: `go mod tidy -diff`,
+`just test`, `just vet` and `just check` (golangci-lint v2.15.0),
+plus govulncheck. A separate workflow,
+[`weekly.yml`](.github/workflows/weekly.yml), runs govulncheck on
+Mondays, so a vulnerability published while htt is quiet still shows
+up. GitHub pauses a scheduled workflow after 60 days without activity
+and doesn't resume it by itself; turn it back on with
+`gh workflow enable weekly.yml`. CI's actions are pinned to commits,
+and Dependabot updates them monthly.
 
 Quick dev loop for the TUI. It never writes to the terminal outside
 its own screen; `--log-file` appends its diagnostics to a file, at

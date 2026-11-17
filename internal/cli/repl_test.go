@@ -2,9 +2,14 @@ package cli
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/bricef/htt/internal/vars"
+	"github.com/spf13/viper"
 )
 
 func TestClassifyReplInput(t *testing.T) {
@@ -165,6 +170,24 @@ func TestRepl_ShowFiltersDoNotBleedAcrossCycles(t *testing.T) {
 
 	if want := []string{"no-due"}; !slices.Equal(showFilters, want) {
 		t.Errorf("showFilters after second cycle = %v, want %v", showFilters, want)
+	}
+}
+
+func TestReplHistoryPath_IsInTheConfigDirectory(t *testing.T) {
+	// config_path names the config file. The history path used to be
+	// built under it, as if it were a directory, which fails once the
+	// file exists and switched history off.
+	dir := t.TempDir()
+	configFile := filepath.Join(dir, "config.yaml")
+	if err := os.WriteFile(configFile, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	prev := viper.Get(vars.ConfigKeyConfigPath)
+	viper.Set(vars.ConfigKeyConfigPath, configFile)
+	t.Cleanup(func() { viper.Set(vars.ConfigKeyConfigPath, prev) })
+
+	if got, want := replHistoryPath(), filepath.Join(dir, "repl-history"); got != want {
+		t.Errorf("replHistoryPath() = %q, want %q", got, want)
 	}
 }
 

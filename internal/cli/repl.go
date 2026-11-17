@@ -245,13 +245,14 @@ func replPrompt() string {
 	return fmt.Sprintf("htt(%s)> ", name)
 }
 
-// replHistoryPath returns a usable history file path under the
-// configured config directory, or "" to disable history.
+// replHistoryPath returns a usable history file path in the config
+// directory, or "" to disable history.
 //
-// Resolution order: viper's config_path key (matches the rest of
-// the config-aware code), then $HOME/.config/htt, then disabled.
+// Resolution order: the config directory (vars.ConfigDir, the
+// directory holding config.yaml), then $HOME/.config/htt, then
+// disabled.
 func replHistoryPath() string {
-	dir := vars.Get(vars.ConfigKeyConfigPath)
+	dir := vars.ConfigDir()
 	if dir == "" {
 		if h, err := os.UserHomeDir(); err == nil {
 			dir = filepath.Join(h, vars.DefaultConfigDir)

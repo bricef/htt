@@ -565,3 +565,18 @@ func TestReport_DeletedTasksAreNotCountedAsAdded(t *testing.T) {
 	}
 	assertInOrder(t, "Deleted", deleted, "Deleted (1)\n", "  todo:\n", "    drop me")
 }
+
+func TestRepl_HistoryPersistsAcrossSessions(t *testing.T) {
+	// The REPL built its history path from config_path, which is the
+	// config file, so creating "config.yaml/" as a directory failed and
+	// history was switched off. It lives next to config.yaml.
+	e := newEnv(t)
+	e.mustRunWithInput("add first task\nq\n", "repl")
+	e.mustRunWithInput("add second task\nq\n", "repl")
+
+	b, err := os.ReadFile(filepath.Join(e.home, ".config", "htt", "repl-history"))
+	if err != nil {
+		t.Fatalf("no REPL history next to config.yaml: %v", err)
+	}
+	assertInOrder(t, "repl-history", string(b), "add first task\n", "add second task\n")
+}

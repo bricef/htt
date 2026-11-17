@@ -82,12 +82,22 @@ type runResult struct {
 
 func (e *env) run(args ...string) runResult {
 	e.t.Helper()
+	return e.runWithInput("", args...)
+}
+
+// runWithInput runs htt with input piped to its stdin; "" leaves
+// stdin unconnected, as run does.
+func (e *env) runWithInput(input string, args ...string) runResult {
+	e.t.Helper()
 	args = append([]string{"--no-color"}, args...)
 	cmd := exec.Command(binaryPath, args...)
 	cmd.Env = append([]string{
 		"HOME=" + e.home,
 		"PATH=" + os.Getenv("PATH"),
 	}, e.extraEnv...)
+	if input != "" {
+		cmd.Stdin = strings.NewReader(input)
+	}
 	var outBuf, errBuf bytes.Buffer
 	cmd.Stdout = &outBuf
 	cmd.Stderr = &errBuf
@@ -107,7 +117,13 @@ func (e *env) run(args ...string) runResult {
 
 func (e *env) mustRun(args ...string) runResult {
 	e.t.Helper()
-	r := e.run(args...)
+	return e.mustRunWithInput("", args...)
+}
+
+// mustRunWithInput is runWithInput, failing the test on a non-zero exit.
+func (e *env) mustRunWithInput(input string, args ...string) runResult {
+	e.t.Helper()
+	r := e.runWithInput(input, args...)
 	if r.exitCode != 0 {
 		e.t.Fatalf("htt %s exited %d\nstdout:\n%s\nstderr:\n%s",
 			strings.Join(args, " "), r.exitCode, r.stdout, r.stderr)

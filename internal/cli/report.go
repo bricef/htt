@@ -162,15 +162,19 @@ func startOfDay(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
 }
 
-// reportAdded iterates every context (open and done) and prints tasks
-// whose CreatedOn falls in [since, until], grouped by source context.
+// reportAdded iterates every context but the archive (the open ones
+// and done) and prints tasks whose CreatedOn falls in [since, until],
+// grouped by source context.
 //
 // Open tasks count toward the context they currently live in; done
 // tasks count toward the context recorded in their `context:`
-// annotation (the source they were completed from). Tasks without a
-// CreatedOn are skipped — that's mostly older entries created before
-// Context.AddTask started stamping; they predate the feature and
-// can't be backfilled without losing information.
+// annotation (the source they were completed from). Deleted tasks are
+// left out: they have their own section (reportDeleted), and walking
+// the archive here listed them a second time, under a context named
+// "archive". Tasks without a CreatedOn are skipped — that's mostly
+// older entries created before Context.AddTask started stamping; they
+// predate the feature and can't be backfilled without losing
+// information.
 func reportAdded(since, until time.Time) error {
 	names, err := repo().ContextNames()
 	if err != nil {
@@ -182,6 +186,9 @@ func reportAdded(since, until time.Time) error {
 	count := 0
 
 	for _, name := range names {
+		if name == domain.ArchiveContextName {
+			continue
+		}
 		ctx, err := repo().Context(name)
 		if err != nil {
 			return fmt.Errorf("load context %s: %w", name, err)

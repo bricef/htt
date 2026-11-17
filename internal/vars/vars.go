@@ -1,6 +1,8 @@
 package vars
 
 import (
+	"path/filepath"
+
 	"github.com/spf13/viper"
 )
 
@@ -37,6 +39,21 @@ var (
 // because vars.Get is shorter than viper.GetString
 func Get(name string) string {
 	return viper.GetString(name)
+}
+
+// ConfigDir returns the config directory: the directory holding the
+// config file in effect. That's the file viper read (config.yaml in
+// the working directory, if there is one), or, when it read none (the
+// first run), the directory of config_path, where htt writes the
+// default file. config_path itself names the file, not the directory.
+func ConfigDir() string {
+	if f := viper.ConfigFileUsed(); f != "" {
+		return filepath.Dir(f)
+	}
+	if p := Get(ConfigKeyConfigPath); p != "" {
+		return filepath.Dir(p)
+	}
+	return ""
 }
 
 func GetBool(name string) bool {

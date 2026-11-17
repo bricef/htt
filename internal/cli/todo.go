@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
-	"os/exec"
 	"regexp"
 	"strings"
 	"time"
@@ -126,11 +125,6 @@ var edit = &cobra.Command{
 			return fmt.Errorf("get task: %w", err)
 		}
 
-		editor, ok := os.LookupEnv("EDITOR")
-		if !ok || editor == "" {
-			return errors.New("$EDITOR variable is empty or not set")
-		}
-
 		f, err := os.CreateTemp("", "hypothetical-tracker-todo")
 		if err != nil {
 			return fmt.Errorf("open temp file: %w", err)
@@ -145,15 +139,8 @@ var edit = &cobra.Command{
 			return fmt.Errorf("close temp file: %w", err)
 		}
 
-		proc := exec.Command(editor, name)
-		proc.Stdin = os.Stdin
-		proc.Stdout = os.Stdout
-		proc.Stderr = os.Stderr
-		if err := proc.Start(); err != nil {
-			return fmt.Errorf("start editor: %w", err)
-		}
-		if err := proc.Wait(); err != nil {
-			return fmt.Errorf("run editor: %w", err)
+		if err := utils.EditFilePath(name); err != nil {
+			return err
 		}
 
 		content, err := os.ReadFile(name)
@@ -208,8 +195,7 @@ var editDone = &cobra.Command{
 		if path == "" {
 			return fmt.Errorf("active repository does not expose a file path")
 		}
-		utils.EditFilePath(path)
-		return nil
+		return utils.EditFilePath(path)
 	},
 }
 
@@ -223,8 +209,7 @@ var editArchive = &cobra.Command{
 		if path == "" {
 			return fmt.Errorf("active repository does not expose a file path")
 		}
-		utils.EditFilePath(path)
-		return nil
+		return utils.EditFilePath(path)
 	},
 }
 

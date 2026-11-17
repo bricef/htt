@@ -237,7 +237,10 @@ Deleted task: 2026-05-15 submit timesheet archived-from:todo deleted-on:2026-05-
 
 `htt todo edit-archive` (alias `ea`) opens the archive in `$EDITOR` if
 you want to recover or prune entries, and `htt todo edit-done` (alias
-`ed`) does the same for the done list.
+`ed`) does the same for the done list. If `$EDITOR` isn't set, or the
+editor won't start or exits with an error, these, `htt todo edit` and
+`htt log edit` say so (`❌ $EDITOR variable is empty or not set`) and
+exit with status 1.
 
 When you can't decide what to do next, `htt todo random` prints one
 task from the current context at random.
@@ -271,6 +274,36 @@ Phrases the parser understands include `Friday`, `next Monday`,
 `tomorrow`, `in 3 days`, `in two weeks`, and absolute dates as
 `YYYY-MM-DD`. A phrase the parser doesn't recognise surfaces as
 an error rather than silently dropping the flag.
+
+**Dates htt can't read.** Every line loads, whatever its dates, and
+works as before. A date htt can't read is text: an impossible date
+(`2026-13-45`, `2026-02-30`) or one not written `YYYY-MM-DD`
+(`2026-5-3`) is just a word of the task, and a `due:` value that isn't
+a `YYYY-MM-DD` date (`due:2026-02-30`, or `due:friday` typed into the
+file by hand) leaves the task with no due date, so `overdue`,
+`due-soon` and `--sort due` pass it by. htt points each one out on
+stderr, naming the file and line:
+
+```
+$ htt todo show
+warning: /home/you/.htt/data/todo.txt:2: 2026-13-45 isn't a real date, so it's text
+warning: /home/you/.htt/data/todo.txt:3: due:friday isn't a YYYY-MM-DD date, so the task has no due date
+
+  0 renew passport
+  1 2026-13-45 call the bank
+  2 pay rent due:friday
+
+(todo): 3 tasks
+```
+
+A warning never changes what a command prints on stdout or its exit
+status. Commands warn about the lists they read, once per line each
+time they run: the current context for the `todo` commands, `status`
+and `workon`, every list and `done.txt` for `htt report`, and once a
+session in the REPL. Completing, deleting or moving a task doesn't
+warn about the list it goes to, and the archive never warns: its
+tasks are deleted, and nothing reads their dates. The TUI says it on
+its status line instead.
 
 ## Sorting and filtering
 
@@ -320,11 +353,11 @@ you actually worked on, one file per day, each entry timestamped.
   context, so you don't retype it.
 - `htt log end` writes an `@end` entry.
 
-Only `log add` prints anything; the others write their entry silently
-(see [`TODO.md`](TODO.md#known-issues)).
+Each prints the entry it logged:
 
 ```
 $ htt log start
+Logging entry: @start
 $ htt log add reviewing the auth PR
 Logging entry: reviewing the auth PR
 $ htt todo
@@ -333,6 +366,7 @@ $ htt todo
 
 (work): 1 tasks
 $ htt workon 0
+Logging entry: 2026-05-15 review PR for the new auth flow
 ```
 
 `htt log show` (alias `s`) prints today's log. `htt log status`
@@ -355,6 +389,7 @@ When you stop for the day:
 
 ```
 $ htt log end
+Logging entry: @end
 ```
 
 A note on `@end`: it's an entry like any other, so after
@@ -397,8 +432,9 @@ Time logged
 ```
 
 Time is counted between consecutive log entries, so the entry you're
-still on isn't included. One known issue: a task you've deleted is
-also listed under Added, as if from a context named `archive`.
+still on isn't included. A task added and completed in the period
+counts under both Added and Completed, by the context it was in; a
+deleted task is listed only under Deleted.
 
 ## The rollup
 
@@ -421,6 +457,7 @@ Current Context: work
 
 ```
 ~/.config/htt/config.yaml          ← config (see Configuration below)
+~/.config/htt/repl-history         ← commands typed in `htt repl`
 ~/.htt/data/                       ← all task files
   current-context                  ← name of the active context
   todo.txt                         ← one file per context
@@ -465,9 +502,10 @@ a throwaway task list, surprising if you didn't expect it.
 | `check_for_updates`   | `true`                          | check GitHub for a newer release, at most once a day (see [Online activity](README.md#online-activity)) |
 
 The `config` subcommands print single values: `htt config where-data`
-(the data directory), `htt config dir` (the tracker directory — despite
-the name, not the config directory) and `htt config context` (the
-current context).
+(the data directory), `htt config dir` (the config directory, the one
+holding the `config.yaml` in effect: `~/.config/htt`, or the current
+directory when htt is reading a `config.yaml` there) and `htt config
+context` (the current context).
 
 ## Optional: interactive mode
 
@@ -529,7 +567,8 @@ the file keeps its order.
 - **Notes.** The input also points out words that won't mean what
   they look like: `(a)` (priorities are capitals), `(B)` after the
   start of the task (it's text there), a priority other than A, B or
-  C, an impossible date like `2026-13-45`, or an `x` at the start of a
+  C, a date htt can't read like `2026-13-45` or `2026-5-3` (see
+  [Dates htt can't read](#due-dates)), or an `x` at the start of a
   new task (it marks the task done). These save as typed.
 
 Tasks in the done tab can't be added or edited here; `f` opens
@@ -540,6 +579,12 @@ editor exits. If `$EDITOR` isn't set, or the editor won't start or
 exits with an error, the TUI says so on a line above the keymap and
 carries on; after an editor error it still reloads, in case the file
 was saved.
+
+When a tab shows tasks with dates htt can't read (see
+[Dates htt can't read](#due-dates)), the same line says so for the
+first, with a count of the rest: `Task 1: 2026-13-45 isn't a real
+date, so it's text (and 1 more date warning in this list).` Each
+line is mentioned once a session.
 
 The TUI works on the same data files as the CLI — you can switch
 between them in the same session without anything getting out of sync.
@@ -627,17 +672,26 @@ time=2026-11-02T10:15:05.392Z level=DEBUG msg=action action=do
 ## Optional: REPL mode
 
 `htt repl` opens a todo-mode shell — handy for a focused pass over
-your tasks without retyping `htt todo` on every line. Each cycle
-clears the screen, shows the current context, then prompts:
+your tasks without retyping `htt todo` on every line. It shows the
+current context, then prompts. Each command clears the screen, then
+shows the line you typed, the command's output, and the context again
+with the command's effect:
 
 ```
+htt(work)> add update on-call runbook
+Added: 2026-05-15 update on-call runbook
 
   0 (A) 2026-05-15 ship the auth refactor
   1 2026-05-15 review PR for the new auth flow
+  2 2026-05-15 update on-call runbook
 
-(work): 2 tasks
-htt(work)> add update on-call runbook
+(work): 3 tasks
+htt(work)>
 ```
+
+The output stays on screen until your next command. If it and the
+list together are taller than the terminal, the top of the output
+scrolls back, as in any shell.
 
 Commands without a prefix dispatch as `todo <cmd>`: `add foo`,
 `delete 0`, `+ 1`, `do 0`, `context home`. Prefix a line with `/`
@@ -646,15 +700,11 @@ to escape to a full CLI command: `/log start`, `/report --since 7d`.
 screens / recursive prompts). `/help` shows the REPL's own help.
 
 Exit with Ctrl-D, Ctrl-C, or by typing `quit`, `exit`, or `q`. An
-empty Enter refreshes the view. Up/down arrows walk the commands
-you've typed this session.
-
-Two known issues (see [`TODO.md`](TODO.md#known-issues)): command
-history isn't saved between sessions, and because the screen is
-cleared as soon as a command finishes, a command's own output
-(`Added: …`, search results, `/report`) disappears straight away —
-your terminal's scrollback may still have it. The REPL suits changing
-tasks more than reading output.
+empty Enter clears the last output and redraws the context. Up/down
+arrows walk the commands you've typed, earlier sessions included:
+they're kept in `repl-history` in the config directory
+(`htt config dir`). Warnings about dates htt can't read show once a
+session.
 
 ## Where to go next
 

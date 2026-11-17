@@ -11,7 +11,17 @@ import (
 // SetRepository to inject a memory-backed repo.
 var defaultRepo domain.Repository
 
+// repo returns the Repository CLI commands use: defaultRepo, warning
+// on stderr about the dates htt can't read in each context a command
+// loads (see warningRepository).
 func repo() domain.Repository {
+	return warningRepository{baseRepo()}
+}
+
+// baseRepo returns defaultRepo itself, without the warnings. The TUI
+// gets this one: it owns the terminal, and shows date warnings on its
+// status line.
+func baseRepo() domain.Repository {
 	if defaultRepo == nil {
 		// Pointer file lives under tracker_path to preserve the legacy
 		// layout for users that overrode tracker_path independently of

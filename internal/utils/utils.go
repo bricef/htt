@@ -118,22 +118,26 @@ func StringSliceIndex(slice []string, item string) (int, error) {
 	return 0, errors.New("could not find item in slice")
 }
 
-func EditFilePath(filepath string) {
+// EditFilePath opens filepath in $EDITOR on this terminal and waits
+// for the editor to exit. It returns an error when $EDITOR is unset or
+// empty, or the editor can't start or exits with an error.
+func EditFilePath(filepath string) error {
 	editor, ok := os.LookupEnv("EDITOR")
 	if !ok || editor == "" {
-		Fatal("$EDITOR variable is empty or not set. Could not edit task.")
+		return errors.New("$EDITOR variable is empty or not set")
 	}
 
 	proc := exec.Command(editor, filepath)
 	proc.Stdin = os.Stdin
 	proc.Stdout = os.Stdout
 	proc.Stderr = os.Stderr
-
-	err := proc.Start()
-	DieOnError("Failed to start the editor: ", err)
-
-	err = proc.Wait()
-	DieOnError("Error running editor: ", err)
+	if err := proc.Start(); err != nil {
+		return fmt.Errorf("start editor: %w", err)
+	}
+	if err := proc.Wait(); err != nil {
+		return fmt.Errorf("run editor: %w", err)
+	}
+	return nil
 }
 
 func ClearScreen() {

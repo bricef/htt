@@ -216,6 +216,44 @@ func TestTUI_NextContext_SwitchesCurrent(t *testing.T) {
 	}
 }
 
+func TestTUI_DateWarningsGoOnTheStatusLineOncePerSession(t *testing.T) {
+	// A line with a date htt can't read loads like any other. The TUI
+	// owns the terminal, so it says so on the status line, never on
+	// stdout or stderr: once per line per session, when the list it's
+	// in is shown or reloaded.
+	e := newTUIEnv(t)
+	e.seedContext("todo", "fine task", "2026-13-45 call the bank", "pay rent due:friday")
+	e.seedContext("work", "ship it")
+	e.seedCurrentContext("todo")
+
+	written := terminalOutput(t, func() {
+		e.start("todo")
+		v := e.view()
+		assertViewContains(t, v, "2026-13-45 call the bank")
+		assertViewContains(t, v, "Task 1: 2026-13-45 isn't a real date, so it's text (and 1 more date warning in this list).")
+
+		// A key clears it, and showing the list again doesn't repeat
+		// it, nor does changing the task.
+		e.press('l')
+		assertViewNotContains(t, e.view(), "isn't")
+		e.press('h')
+		assertViewNotContains(t, e.view(), "isn't")
+		e.press('j')
+		e.press('+')
+		assertViewContains(t, e.view(), "(C) 2026-13-45 call the bank")
+		assertViewNotContains(t, e.view(), "isn't")
+
+		// A new line with a bad date gets its own.
+		e.press('n')
+		e.type_("dentist 2026-5-3")
+		e.pressKey(tea.KeyEnter)
+		assertViewContains(t, e.view(), "Task 3: 2026-5-3 isn't written YYYY-MM-DD (2026-05-03), so it's text.")
+	})
+	if written != "" {
+		t.Errorf("the TUI wrote to the terminal directly:\n%s", written)
+	}
+}
+
 func TestTUI_Quit_EmitsTeaQuit(t *testing.T) {
 	e := newTUIEnv(t)
 	e.seedContext("todo", "x")

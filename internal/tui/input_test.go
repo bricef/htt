@@ -109,6 +109,13 @@ func TestWordWarnings(t *testing.T) {
 		{"x call mum", true, []string{`"x" at the start marks the task done`}},
 		{"x 2026-05-16 call mum", false, nil}, // editing a done task's line is fine
 		{"2026-13-45 call mum", false, []string{"2026-13-45 isn't a real date, so it's text"}},
+		// The date warnings are the domain's (Task.DateWarnings), the
+		// ones htt gives for a line it loads.
+		{"call mum 2026-5-3", false, []string{"2026-5-3 isn't written YYYY-MM-DD (2026-05-03), so it's text"}},
+		{"(a) call mum 2026-02-30", false, []string{
+			"(a) is text: priorities are capitals, (A)",
+			"2026-02-30 isn't a real date, so it's text",
+		}},
 	}
 	for _, tc := range cases {
 		if got := wordWarnings(tc.raw, tc.adding); !slices.Equal(got, tc.want) {

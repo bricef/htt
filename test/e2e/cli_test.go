@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -536,4 +537,274 @@ func TestInteractive_HelpListsThemesAndColours(t *testing.T) {
 	for _, role := range []string{"separator,", "priority_a,", "plus_tag,", "at_tag,", "hash_tag,", "annotation,", "date."} {
 		assertContains(t, "help", r.stdout, role)
 	}
+}
+
+func TestReport_DeletedTasksAreNotCountedAsAdded(t *testing.T) {
+	// The Added section used to walk the archive like any other
+	// context, so a task added and deleted in the period was counted
+	// twice: under Deleted, and under Added in a context named
+	// "archive". A task added and completed still counts as added,
+	// under the context it was completed from.
+	e := newEnv(t)
+	e.mustRun("todo", "add", "keep me")
+	e.mustRun("todo", "add", "finish me")
+	e.mustRun("todo", "add", "drop me")
+	e.mustRun("todo", "do", "1")
+	e.mustRun("todo", "delete", "1")
+
+	r := e.mustRun("report")
+	addedAt := strings.Index(r.stdout, "Added (")
+	deletedAt := strings.Index(r.stdout, "Deleted (")
+	if addedAt < 0 || deletedAt < addedAt {
+		t.Fatalf("expected an Added section before a Deleted section, got:\n%s", r.stdout)
+	}
+	added, deleted := r.stdout[addedAt:deletedAt], r.stdout[deletedAt:]
+
+	assertInOrder(t, "Added", added, "Added (2)\n", "  todo:\n", "    finish me", "    keep me")
+	if strings.Contains(added, "drop me") || strings.Contains(added, "archive") {
+		t.Errorf("Added should leave out the deleted task, got:\n%s", added)
+	}
+	assertInOrder(t, "Deleted", deleted, "Deleted (1)\n", "  todo:\n", "    drop me")
+}
+
+func TestRepl_HistoryPersistsAcrossSessions(t *testing.T) {
+	// The REPL built its history path from config_path, which is the
+	// config file, so creating "config.yaml/" as a directory failed and
+	// history was switched off. It lives next to config.yaml.
+	e := newEnv(t)
+	e.mustRunWithInput("add first task\nq\n", "repl")
+	e.mustRunWithInput("add second task\nq\n", "repl")
+
+	b, err := os.ReadFile(filepath.Join(e.home, ".config", "htt", "repl-history"))
+	if err != nil {
+		t.Fatalf("no REPL history next to config.yaml: %v", err)
+	}
+	assertInOrder(t, "repl-history", string(b), "add first task\n", "add second task\n")
+}
+
+// replScreens splits REPL output at each clear-screen sequence: the
+// last element is what the terminal shows when the REPL exits.
+func replScreens(t *testing.T, stdout string) []string {
+	t.Helper()
+	screens := strings.Split(stdout, "\x1b[H\x1b[2J")
+	if len(screens) < 2 {
+		t.Fatalf("the REPL never cleared the screen:\n%q", stdout)
+	}
+	return screens[1:]
+}
+
+func TestRepl_CommandOutputStaysOnScreen(t *testing.T) {
+	// Each cycle cleared the screen straight after a command ran, so
+	// its output (Added: …, a report) was wiped at once. The screen is
+	// now cleared before a command runs: after it come the command as
+	// typed, its output, and the view, refreshed to show its effect.
+	e := newEnv(t)
+	d := today()
+	r := e.mustRunWithInput("add buy milk\n/report\nq\n", "repl")
+	screens := replScreens(t, r.stdout)
+	if len(screens) != 3 {
+		t.Fatalf("want 3 screens (start, add, /report), got %d:\n%q", len(screens), r.stdout)
+	}
+
+	assertInOrder(t, "start", screens[0], "(todo): Context is empty.\n")
+	assertInOrder(t, "after add", screens[1],
+		"htt(todo)> add buy milk\n", "Added: "+d+" buy milk\n", "  0 "+d+" buy milk\n", "(todo): 1 tasks\n")
+	assertInOrder(t, "after /report", screens[2],
+		"htt(todo)> /report\n", "Activity since", "Added (1)\n", "  0 "+d+" buy milk\n", "(todo): 1 tasks\n")
+	// The clear still wipes the previous command's output.
+	if strings.Contains(screens[2], "Added: ") {
+		t.Errorf("the add's output should be gone after /report:\n%s", screens[2])
+	}
+}
+
+func TestLog_EveryCommandThatLogsConfirmsItsEntry(t *testing.T) {
+	// log start, log end and workon stopped printing anything in the
+	// 2026-05-15 timelog refactor; only log add still confirmed its
+	// entry.
+	e := newEnv(t)
+	e.mustRun("todo", "add", "write the report +work")
+
+	assertEqual(t, "log start", e.mustRun("log", "start").stdout, "Logging entry: @start\n")
+	assertEqual(t, "log add", e.mustRun("log", "add", "reading", "mail").stdout, "Logging entry: reading mail\n")
+	assertEqual(t, "workon", e.mustRun("workon", "0").stdout, "Logging entry: "+today()+" write the report +work\n")
+	assertEqual(t, "log end", e.mustRun("log", "end").stdout, "Logging entry: @end\n")
+}
+
+func TestEditCommands_EditorProblemsFailLikeTodoEdit(t *testing.T) {
+	// todo edit-done, todo edit-archive and log edit ended through
+	// utils.Fatal: a timestamped log line instead of the ❌ error
+	// todo edit returns. All four now fail the same way.
+	commands := [][]string{
+		{"todo", "edit", "0"},
+		{"todo", "edit-done"},
+		{"todo", "edit-archive"},
+		{"log", "edit"},
+	}
+	cases := []struct {
+		name   string
+		editor string // "" leaves $EDITOR unset
+		stderr string
+	}{
+		{"no editor", "", "❌ $EDITOR variable is empty or not set\n"},
+		{"editor fails", "false", "❌ run editor: exit status 1\n"},
+	}
+	for _, tc := range cases {
+		for _, args := range commands {
+			label := tc.name + ": htt " + strings.Join(args, " ")
+			e := newEnv(t)
+			e.mustRun("todo", "add", "a task")
+			if tc.editor != "" {
+				e.extraEnv = []string{"EDITOR=" + tc.editor}
+			}
+			r := e.run(args...)
+			if r.exitCode != 1 {
+				t.Errorf("%s: exit code %d, want 1", label, r.exitCode)
+			}
+			assertEqual(t, label+": stderr", r.stderr, tc.stderr)
+			assertEqual(t, label+": stdout", r.stdout, "")
+		}
+	}
+}
+
+func TestEditCommands_SaveWhatTheEditorWrites(t *testing.T) {
+	e := newEnv(t)
+	editor := filepath.Join(e.home, "editor.sh")
+	if err := os.WriteFile(editor, []byte("#!/bin/sh\necho 'edited by the editor' > \"$1\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	e.extraEnv = []string{"EDITOR=" + editor}
+	e.mustRun("todo", "add", "a task")
+
+	r := e.mustRun("todo", "edit", "0")
+	assertContains(t, "stdout", r.stdout, "After:  edited by the editor")
+	assertEqual(t, "todo.txt", e.readData("todo.txt"), "edited by the editor\n")
+
+	e.mustRun("todo", "edit-done")
+	assertEqual(t, "done.txt", e.readData("done.txt"), "edited by the editor\n")
+}
+
+func TestConfigDir_PrintsTheConfigDirectory(t *testing.T) {
+	// `htt config dir` printed the tracker directory (where the
+	// current-context pointer lives), not the directory its name says.
+	e := newEnv(t)
+	configDir := filepath.Join(e.home, ".config", "htt")
+	assertEqual(t, "config dir", e.mustRun("config", "dir").stdout, configDir+"\n")
+
+	// Moving the data and tracker directories doesn't move it.
+	e.writeConfig("data_path: " + filepath.Join(e.home, "tasks") + "\ntracker_path: " + filepath.Join(e.home, "tracker") + "\n")
+	assertEqual(t, "config dir with moved data", e.mustRun("config", "dir").stdout, configDir+"\n")
+
+	// A config.yaml in the working directory is the config in effect.
+	e.workDir = t.TempDir()
+	if err := os.WriteFile(filepath.Join(e.workDir, "config.yaml"), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	assertEqual(t, "config dir with a local config.yaml", e.mustRun("config", "dir").stdout, e.workDir+"\n")
+
+	assertContains(t, "config dir --help", e.mustRun("config", "dir", "--help").stdout, "config directory")
+}
+
+func TestRepl_AnEditorProblemDoesNotEndTheSession(t *testing.T) {
+	// utils.Fatal exited the process, taking the REPL with it.
+	e := newEnv(t)
+	r := e.mustRunWithInput("edit-done\nadd still here\nq\n", "repl")
+	assertContains(t, "stderr", r.stderr, "$EDITOR variable is empty or not set")
+	assertEqual(t, "todo.txt", e.readData("todo.txt"), today()+" still here\n")
+}
+
+// A line with a date htt can't read: "All lines are valid. If we
+// detect a misformatted or incorrect date, we should warn, but not
+// break, crash or error out." The line loads with the date read as
+// text, and every command works as before; a warning naming the file
+// and line goes to stderr, once per line per run.
+
+// badDatesTodo is a todo.txt with three bad dates. The blank line
+// makes file lines differ from task numbers: the warnings name lines.
+const badDatesTodo = "fine task\n\n2026-13-45 call the bank\nmeet on 2026-5-3\npay rent due:friday\n"
+
+func badDateWarnings(path string, lines ...int) string {
+	messages := map[int]string{
+		3: "2026-13-45 isn't a real date, so it's text",
+		4: "2026-5-3 isn't written YYYY-MM-DD (2026-05-03), so it's text",
+		5: "due:friday isn't a YYYY-MM-DD date, so the task has no due date",
+	}
+	out := ""
+	for _, line := range lines {
+		out += fmt.Sprintf("warning: %s:%d: %s\n", path, line, messages[line])
+	}
+	return out
+}
+
+func TestDates_BadDatesLoadAndWarnOnStderr(t *testing.T) {
+	e := newEnv(t)
+	e.writeData("todo.txt", badDatesTodo)
+	warnings := badDateWarnings(filepath.Join(e.dataDir, "todo.txt"), 3, 4, 5)
+
+	r := e.mustRun("todo", "show")
+	assertEqual(t, "todo show: stderr", r.stderr, warnings)
+	assertEqual(t, "todo show: stdout", r.stdout,
+		"\n  0 fine task\n  1 2026-13-45 call the bank\n  2 meet on 2026-5-3\n  3 pay rent due:friday\n\n(todo): 4 tasks\n")
+
+	for _, args := range [][]string{
+		{"todo", "show", "--filter", "no-due", "--sort", "due"},
+		{"todo", "search", "bank"},
+		{"todo", "status"},
+		{"status"},
+		{"report"},
+		{"workon", "1"},
+	} {
+		label := "htt " + strings.Join(args, " ")
+		r := e.mustRun(args...) // exit 0
+		assertEqual(t, label+": stderr", r.stderr, warnings)
+		if strings.Contains(r.stdout, "warning") || strings.Contains(r.stdout, "real date") {
+			t.Errorf("%s: a warning reached stdout:\n%s", label, r.stdout)
+		}
+	}
+	assertContains(t, "show --filter no-due", e.mustRun("todo", "show", "--filter", "no-due").stdout, "4 of 4 tasks shown.")
+	assertEqual(t, "todo.txt", e.readData("todo.txt"), badDatesTodo) // nothing rewrote it
+
+	// Commands that don't read the tasks say nothing.
+	for _, args := range [][]string{{"config", "dir"}, {"log", "show"}, {"todo", "edit-done", "--help"}} {
+		assertEqual(t, "htt "+strings.Join(args, " ")+": stderr", e.mustRun(args...).stderr, "")
+	}
+}
+
+func TestDates_CommandsThatChangeTasksStillWork(t *testing.T) {
+	e := newEnv(t)
+	e.writeData("todo.txt", badDatesTodo)
+	todo := filepath.Join(e.dataDir, "todo.txt")
+	d := today()
+
+	r := e.mustRun("todo", "priority", "1", "A")
+	assertEqual(t, "priority: stderr", r.stderr, badDateWarnings(todo, 3, 4, 5))
+	assertContains(t, "priority: stdout", r.stdout, "After:  (A) 2026-13-45 call the bank")
+	// The priority sorts the list, and saving drops the blank line.
+	assertEqual(t, "todo.txt", e.readData("todo.txt"),
+		"(A) 2026-13-45 call the bank\nfine task\nmeet on 2026-5-3\npay rent due:friday\n")
+
+	e.mustRun("todo", "add", "new task")
+	e.mustRun("todo", "do", "0")     // the bank: done.txt now has a bad date
+	e.mustRun("todo", "delete", "1") // 2026-5-3: the archive has one
+	assertEqual(t, "done.txt", e.readData("done.txt"), "x (A) "+d+" 2026-13-45 call the bank context:todo\n")
+	assertContains(t, "archive.txt", e.readData("archive.txt"), "meet on 2026-5-3 archived-from:todo")
+
+	// Completing reads the current list, not done.txt it appends to.
+	r = e.mustRun("todo", "do", "0")
+	assertEqual(t, "do: stderr", r.stderr, "warning: "+todo+":2: "+
+		"due:friday isn't a YYYY-MM-DD date, so the task has no due date\n")
+
+	// report reads done.txt twice and warns once; the archive (deleted
+	// tasks, whose dates nothing reads) never warns.
+	r = e.mustRun("report")
+	assertEqual(t, "report: stderr", r.stderr,
+		"warning: "+filepath.Join(e.dataDir, "done.txt")+":1: 2026-13-45 isn't a real date, so it's text\n"+
+			"warning: "+todo+":1: due:friday isn't a YYYY-MM-DD date, so the task has no due date\n")
+	assertInOrder(t, "report", r.stdout, "Completed (2)\n", "Added (1)\n", "Deleted (1)\n", "meet on 2026-5-3")
+}
+
+func TestRepl_DateWarningsOncePerSession(t *testing.T) {
+	e := newEnv(t)
+	e.writeData("todo.txt", badDatesTodo)
+	r := e.mustRunWithInput("show\n/report\nshow\nq\n", "repl")
+	assertEqual(t, "stderr", r.stderr, badDateWarnings(filepath.Join(e.dataDir, "todo.txt"), 3, 4, 5))
 }

@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"slices"
+	"strings"
 
 	"github.com/bricef/htt/internal/domain"
 	tea "github.com/charmbracelet/bubbletea"
@@ -327,7 +328,7 @@ var IncreasePriority = mkAction("increase priority", func(m model) (tea.Model, t
 	if !ok {
 		return m, nil, errNoTaskSelected
 	}
-	_, changed, err := m.context.IncreasePriority(strID(it.index))
+	before, changed, err := m.context.IncreasePriority(strID(it.index))
 	if err != nil {
 		return m, tea.Quit, fmt.Errorf("raise priority of task %d: %w", it.index, err)
 	}
@@ -336,15 +337,32 @@ var IncreasePriority = mkAction("increase priority", func(m model) (tea.Model, t
 	}
 	m.context.Sort()
 	m.showTasks(indexOf(m.context, changed))
+	m.status = datedNote(before, changed)
 	return m, tea.ClearScreen, nil
 })
+
+// datedNote explains a date a rewrite gave a task: with less in front
+// of its text, the text's first word would have been read as the done
+// mark, a priority or a date, so the domain put today's date in front
+// (see domain's rebuild). "" when no date was added.
+func datedNote(before, after *domain.Task) string {
+	dated := (before.CreatedOn.IsZero() && !after.CreatedOn.IsZero()) ||
+		(before.CompletedOn.IsZero() && !after.CompletedOn.IsZero())
+	if !dated {
+		return ""
+	}
+	if first, _, _ := strings.Cut(after.Entry(), " "); first != "" {
+		return fmt.Sprintf("Added today's date, so %q stays part of the task.", first)
+	}
+	return "Added today's date, so the task still reads as it did."
+}
 
 var DecreasePriority = mkAction("decrease priority", func(m model) (tea.Model, tea.Cmd, error) {
 	it, ok := m.selectedTask()
 	if !ok {
 		return m, nil, errNoTaskSelected
 	}
-	_, changed, err := m.context.DecreasePriority(strID(it.index))
+	before, changed, err := m.context.DecreasePriority(strID(it.index))
 	if err != nil {
 		return m, tea.Quit, fmt.Errorf("lower priority of task %d: %w", it.index, err)
 	}
@@ -353,5 +371,6 @@ var DecreasePriority = mkAction("decrease priority", func(m model) (tea.Model, t
 	}
 	m.context.Sort()
 	m.showTasks(indexOf(m.context, changed))
+	m.status = datedNote(before, changed)
 	return m, tea.ClearScreen, nil
 })

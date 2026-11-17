@@ -98,6 +98,16 @@ $ htt todo
 The file is sorted by priority after each priority change, so
 re-listing shows the most urgent first — and indexes can move.
 
+A task's first words have fixed meanings in todo.txt: `x` marks it
+done, `(B)` is its priority, and a date is when it was created. If
+taking away a priority would leave a task starting with one of those
+(lowering `(C) x foo` would leave `x foo`, which reads as done), htt
+puts today's date in front instead: `(C) x foo` becomes
+`2026-11-17 x foo`, still open, still "x foo", and the TUI says so.
+Removing an annotation from the start of a task works the same way.
+Tasks htt added already start with their created date, so this only
+touches tasks you wrote by hand.
+
 ## Completing tasks
 
 `htt todo do <id>` (alias `htt t x`) marks the task complete, stamps it

@@ -39,6 +39,10 @@ func TestRewrite_DatesATaskRatherThanChangeWhatItSays(t *testing.T) {
 		{"removing a leading annotation keeps a date as text", "due:x 2026-05-20 buy", remove("due"), today() + " 2026-05-20 buy"},
 		{"a done task's (B) stays text", "x (C) (B) foo", unprioritise, "x " + today() + " (B) foo"},
 		{"a done task can need both its dates", "x due:x 2026-05-20 foo", remove("due"), "x " + today() + " " + today() + " 2026-05-20 foo"},
+		// With no text left, a lone x or (A) at the end of the line is a
+		// word: the done mark and a priority need a word after them.
+		{"a done task with no text stays done", "x note:été", remove("note"), "x " + today()},
+		{"a task with no text keeps its priority", "(A) note:x", remove("note"), "(A) " + today()},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

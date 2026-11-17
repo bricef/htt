@@ -85,8 +85,9 @@ GitHub Actions workflow that builds the binaries (see
 runs when a release is published. It builds, for Linux and macOS on
 amd64 and arm64:
 
-- `htt_vX.Y.Z_<os>_<arch>.tar.gz`, holding `htt` and `README.md`
-  (and `LICENSE`, once the repository has one);
+- `htt_vX.Y.Z_<os>_<arch>.tar.gz`, holding `htt`, `README.md` and
+  `LICENSE` (releases before the MIT licence was added, v0.3.0 and
+  earlier, have no `LICENSE`);
 - `htt_vX.Y.Z_SHA256SUMS`, the SHA-256 of each archive;
 
 then makes a signed build-provenance attestation for the archives and

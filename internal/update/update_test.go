@@ -55,6 +55,24 @@ func finish(t *testing.T, cfg Config) *Check {
 	return c
 }
 
+func TestPickVersion(t *testing.T) {
+	cases := []struct{ given, built, want string }{
+		{"", "v0.3.0", "v0.3.0"}, // go install @v0.3.0, or a build from the tag
+		{"", "v0.3.1-0.20261117120000-abcdef123456+dirty", "v0.3.1-0.20261117120000-abcdef123456+dirty"},
+		{"", "(devel)", ""},                           // no version recorded
+		{"", "", ""},                                  // no build info at all
+		{"v0.4.0", "(devel)", "v0.4.0"},               // a source build given its version
+		{"0.4.0", "(devel)", "v0.4.0"},                // as package managers write it
+		{"v0.4.0", "v0.3.0", "v0.4.0"},                // given wins over the build info
+		{"not-a-version", "(devel)", "not-a-version"}, // shown as given; the check then stays off
+	}
+	for _, tc := range cases {
+		if got := pickVersion(tc.given, tc.built); got != tc.want {
+			t.Errorf("pickVersion(%q, %q) = %q, want %q", tc.given, tc.built, got, tc.want)
+		}
+	}
+}
+
 func TestDefaultURLIsGitHubsReleaseEndpoint(t *testing.T) {
 	// The README promises that the update check contacts this URL and
 	// nothing else.

@@ -107,6 +107,21 @@ Releases are listed on the
 [releases page](https://github.com/bricef/htt/releases);
 `htt --version` tells you which one you have.
 
+### From source
+
+htt takes its version from git: `go install …@vX.Y.Z`, or a build in a
+clone checked out at a release tag, knows it. A build from a source
+archive (the `.tar.gz` GitHub offers for each release, as a package
+manager uses) has no git information, so pass the version in, or
+`htt --version` says "unknown" and the update check stays off:
+
+```
+go build -ldflags "-X github.com/bricef/htt/internal/update.version=v0.3.1" -o htt ./cmd/htt
+```
+
+The `v` is optional (`version=0.3.1` works too), and a version given
+this way wins over anything git says.
+
 ## Usage
 
 ```

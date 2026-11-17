@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"golang.org/x/mod/semver"
@@ -36,15 +37,44 @@ const (
 	installCommand = "go install github.com/bricef/htt/cmd/htt@latest"
 )
 
-// CurrentVersion is the running binary's version from its build info:
-// vX.Y.Z for a release install, a pseudo-version for builds between
-// releases, and "" when Go recorded none.
+// version is a version given at build time, for builds Go can't stamp
+// from git, such as a package manager building a release's source
+// archive:
+//
+//	go build -ldflags "-X github.com/bricef/htt/internal/update.version=v0.3.1" ./cmd/htt
+//
+// Unset in every other build, which takes its version from the build
+// info instead.
+var version string
+
+// CurrentVersion is the running binary's version: the one given at build
+// time if there is one (see version), otherwise the build info's: vX.Y.Z
+// for a release install or a build from a release tag, a pseudo-version
+// for builds between releases, and "" when Go recorded none.
 func CurrentVersion() string {
-	bi, ok := debug.ReadBuildInfo()
-	if !ok || bi.Main.Version == "(devel)" {
+	built := ""
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		built = bi.Main.Version
+	}
+	return pickVersion(version, built)
+}
+
+// pickVersion chooses between a version given at build time and the
+// build info's. A given version wins: whoever passed it knows what they
+// built. Package managers tend to write versions without the leading v
+// (0.3.1); that's accepted and given its v, since the update check only
+// compares vX.Y.Z versions. "(devel)" is Go saying it has no version.
+func pickVersion(given, built string) string {
+	if given != "" {
+		if !strings.HasPrefix(given, "v") && semver.IsValid("v"+given) {
+			return "v" + given
+		}
+		return given
+	}
+	if built == "(devel)" {
 		return ""
 	}
-	return bi.Main.Version
+	return built
 }
 
 // DefaultStatePath is where checks remember the last attempt: the

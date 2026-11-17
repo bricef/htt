@@ -19,8 +19,6 @@ internal/
   parseutils/              parsing helpers for the todo.txt format
   utils/                   small odds and ends (StringToFilename, EditFilePath, Fatal, …)
   vars/                    viper config keys + defaults
-  gcal.go                  standalone Google Calendar experiment (package main);
-                           not part of htt, nothing imports it
 test/
   e2e/                     black-box tests that drive the compiled binary
   tui/                     TUI tests that drive the model through Update/View

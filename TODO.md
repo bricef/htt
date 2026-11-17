@@ -73,9 +73,6 @@ Each confirmed against `main` on 2026-11-03.
 - Code
   - [ ] Fork goparsec to fix messed up API choices (AST/Node
         distinction? simple querying)
-  - [ ] Remove `internal/gcal.go`, a dead Google Calendar experiment
-        that alone pulls the Google API client, grpc and OpenTelemetry
-        into `go.mod`
 
 ## Production grade
 
@@ -90,6 +87,9 @@ Each confirmed against `main` on 2026-11-03.
 
 ## Done
 
+- [x] Removed `internal/gcal.go` (2026-11-17), a standalone Google
+      Calendar agenda printer copied in from elsewhere; with it went the
+      Google API client, gRPC, OAuth and OpenTelemetry
 - [x] Removed `htt sync` and its go-git backend (2026-11-17): sync
       will be a separate engine. Old config keys are ignored, and a
       `.git/` in the data directory is left alone

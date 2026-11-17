@@ -1,8 +1,13 @@
 # CI runs the same checks as a local `just test && just vet && just check`
 # (the justfile stays the source of truth for them), plus a tidy-module
 # check and govulncheck. It runs on every push to any branch, so a
-# Dependabot branch is checked before its PR is merged, and weekly, so
-# a newly published vulnerability shows up without a push.
+# Dependabot branch is checked before its PR is merged.
+#
+# The weekly vulnerability scan is a separate workflow, weekly.yml: in
+# a public repository GitHub disables a workflow with a schedule after
+# 60 days without activity, and a disabled workflow isn't triggered by
+# anything, pushes included. Keeping the schedule out of this file
+# means only the weekly scan can be paused.
 #
 # Third-party actions are pinned to commit SHAs (the tag is in the
 # trailing comment); Dependabot keeps them current.
@@ -11,8 +16,6 @@ name: CI
 on:
   push:
   workflow_dispatch:
-  schedule:
-    - cron: "0 6 * * 1" # Mondays, 06:00 UTC
 
 permissions:
   contents: read

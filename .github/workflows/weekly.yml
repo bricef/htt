@@ -1,0 +1,39 @@
+# A weekly govulncheck of main, so a vulnerability published while htt
+# is quiet shows up without a push. (CI, ci.yml, runs the same scan on
+# every push.)
+#
+# In a public repository GitHub disables a scheduled workflow after 60
+# days without activity, and doesn't re-enable it when activity
+# resumes. That's why this is its own workflow: a pause stops only
+# this scan, never CI. To turn it back on:
+#
+#   gh workflow enable weekly.yml
+#
+# (or "Enable workflow" on the Actions tab). A commit that changes the
+# cron line below also re-enables it.
+name: Weekly vulnerability scan
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # Mondays, 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  vulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Known vulnerabilities in code htt calls
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...

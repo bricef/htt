@@ -56,6 +56,9 @@ jobs:
       - name: Lint
         run: just check
 
+      - name: Shell scripts
+        run: shellcheck scripts/*.sh
+
   vulncheck:
     name: govulncheck
     runs-on: ubuntu-latest

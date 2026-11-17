@@ -46,7 +46,9 @@ func main() {
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			// Config not found.
-			fmt.Printf("Could not find a configuration file.\nCreating a default file at %s.\n", defaultConfigfilepath)
+			// On stderr: a note about htt itself, not the command's
+			// output, which may be piped (`htt --version`, `todo show`).
+			fmt.Fprintf(os.Stderr, "Could not find a configuration file.\nCreating a default file at %s.\n", defaultConfigfilepath)
 			utils.EnsurePath(defaultConfigfilepath)
 			err = viper.WriteConfigAs(defaultConfigfilepath)
 			if err != nil {

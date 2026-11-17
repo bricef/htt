@@ -40,6 +40,20 @@ run() { # a command that changes something outside this checkout
 	fi
 }
 
+version_of() { # BINARY: what it prints for --version
+	# In a scratch home that already has a config file, as dist.sh does:
+	# a first run would otherwise create one and, up to v0.3.x, say so on
+	# stdout ahead of the version. It also keeps the check out of the
+	# real home.
+	local home out
+	home=$(mktemp -d)
+	mkdir -p "$home/.config/htt"
+	: >"$home/.config/htt/config.yaml"
+	out=$(HOME=$home "$1" --version)
+	rm -rf "$home"
+	echo "$out"
+}
+
 sha256() { # FILE: its SHA-256 digest
 	if command -v sha256sum >/dev/null; then
 		sha256sum "$1" | cut -d' ' -f1
@@ -103,7 +117,7 @@ check_binaries() { # VERSION: every expected asset is attached, and this machine
 	gh attestation verify "$tmp/$archive" --repo "$repo" --signer-workflow "$repo/.github/workflows/$binaries_workflow"
 	echo "$archive's provenance attestation verifies"
 	tar -xzf "$tmp/$archive" -C "$tmp" htt
-	got=$("$tmp/htt" --version)
+	got=$(version_of "$tmp/htt")
 	[[ $got == "htt version $version" ]] || fail "the downloaded htt says '$got'"
 	echo "the downloaded htt says: $got"
 	rm -rf "$tmp"
@@ -219,7 +233,7 @@ tmp=$(mktemp -d)
 (
 	cd "$tmp" # outside any module, as a user would be
 	GOBIN="$tmp/bin" go install "$module/cmd/htt@$version"
-	got=$("$tmp/bin/htt" --version)
+	got=$(version_of "$tmp/bin/htt")
 	[[ $got == "htt version $version" ]] || fail "the installed htt says '$got'"
 	echo "$got, $(go version -m "$tmp/bin/htt" | head -1 | cut -d' ' -f2)"
 	for _ in $(seq 20); do # the proxy's @latest can lag a few minutes

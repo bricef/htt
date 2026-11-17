@@ -488,6 +488,26 @@ func TestVersion_PrintsTheBuildVersion(t *testing.T) {
 	assertContains(t, "stdout", r.stdout, "htt version v")
 }
 
+func TestFirstRun_SaysItCreatedTheConfigOnStderr(t *testing.T) {
+	// On a first run htt writes a default config file and says so. That
+	// note goes to stderr: on stdout it got in front of a command's own
+	// output, so `htt --version` on a fresh machine printed three lines.
+	e := newEnv(t)
+	configFile := filepath.Join(e.home, ".config", "htt", "config.yaml")
+	if err := os.Remove(configFile); err != nil {
+		t.Fatal(err)
+	}
+
+	r := e.mustRun("--version")
+	if lines := strings.Split(strings.TrimSpace(r.stdout), "\n"); len(lines) != 1 || !strings.HasPrefix(lines[0], "htt version v") {
+		t.Errorf("stdout should be the version line alone, got %q", r.stdout)
+	}
+	assertContains(t, "stderr", r.stderr, "Creating a default file at "+configFile)
+	if _, err := os.Stat(configFile); err != nil {
+		t.Errorf("the first run should still create the config file: %v", err)
+	}
+}
+
 func TestUpdateCheck_NoNetworkWithoutATerminal(t *testing.T) {
 	// The e2e harness runs htt without a terminal, as a script would.
 	// Route any HTTPS through a local "proxy" that only counts

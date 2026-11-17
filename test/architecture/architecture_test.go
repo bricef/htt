@@ -60,8 +60,8 @@ func TestArchitecture_DependencyDirections(t *testing.T) {
 		},
 		"internal/tui": {
 			"internal/cli",
-			// utils' editor and Fatal helpers exit the process and
-			// write to the terminal, which the TUI owns.
+			// utils' Fatal helpers exit the process, and its editor
+			// helper runs $EDITOR on the terminal, which the TUI owns.
 			"internal/utils",
 		},
 	}

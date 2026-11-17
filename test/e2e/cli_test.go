@@ -628,3 +628,64 @@ func TestLog_EveryCommandThatLogsConfirmsItsEntry(t *testing.T) {
 	assertEqual(t, "workon", e.mustRun("workon", "0").stdout, "Logging entry: "+today()+" write the report +work\n")
 	assertEqual(t, "log end", e.mustRun("log", "end").stdout, "Logging entry: @end\n")
 }
+
+func TestEditCommands_EditorProblemsFailLikeTodoEdit(t *testing.T) {
+	// todo edit-done, todo edit-archive and log edit ended through
+	// utils.Fatal: a timestamped log line instead of the ❌ error
+	// todo edit returns. All four now fail the same way.
+	commands := [][]string{
+		{"todo", "edit", "0"},
+		{"todo", "edit-done"},
+		{"todo", "edit-archive"},
+		{"log", "edit"},
+	}
+	cases := []struct {
+		name   string
+		editor string // "" leaves $EDITOR unset
+		stderr string
+	}{
+		{"no editor", "", "❌ $EDITOR variable is empty or not set\n"},
+		{"editor fails", "false", "❌ run editor: exit status 1\n"},
+	}
+	for _, tc := range cases {
+		for _, args := range commands {
+			label := tc.name + ": htt " + strings.Join(args, " ")
+			e := newEnv(t)
+			e.mustRun("todo", "add", "a task")
+			if tc.editor != "" {
+				e.extraEnv = []string{"EDITOR=" + tc.editor}
+			}
+			r := e.run(args...)
+			if r.exitCode != 1 {
+				t.Errorf("%s: exit code %d, want 1", label, r.exitCode)
+			}
+			assertEqual(t, label+": stderr", r.stderr, tc.stderr)
+			assertEqual(t, label+": stdout", r.stdout, "")
+		}
+	}
+}
+
+func TestEditCommands_SaveWhatTheEditorWrites(t *testing.T) {
+	e := newEnv(t)
+	editor := filepath.Join(e.home, "editor.sh")
+	if err := os.WriteFile(editor, []byte("#!/bin/sh\necho 'edited by the editor' > \"$1\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	e.extraEnv = []string{"EDITOR=" + editor}
+	e.mustRun("todo", "add", "a task")
+
+	r := e.mustRun("todo", "edit", "0")
+	assertContains(t, "stdout", r.stdout, "After:  edited by the editor")
+	assertEqual(t, "todo.txt", e.readData("todo.txt"), "edited by the editor\n")
+
+	e.mustRun("todo", "edit-done")
+	assertEqual(t, "done.txt", e.readData("done.txt"), "edited by the editor\n")
+}
+
+func TestRepl_AnEditorProblemDoesNotEndTheSession(t *testing.T) {
+	// utils.Fatal exited the process, taking the REPL with it.
+	e := newEnv(t)
+	r := e.mustRunWithInput("edit-done\nadd still here\nq\n", "repl")
+	assertContains(t, "stderr", r.stderr, "$EDITOR variable is empty or not set")
+	assertEqual(t, "todo.txt", e.readData("todo.txt"), today()+" still here\n")
+}

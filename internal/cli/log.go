@@ -78,8 +78,7 @@ var Edit = &cobra.Command{
 		if path == "" {
 			return fmt.Errorf("active timelog repository does not expose a file path")
 		}
-		utils.EditFilePath(path)
-		return nil
+		return utils.EditFilePath(path)
 	},
 }
 

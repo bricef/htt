@@ -4,17 +4,26 @@
 #
 #   just release-check v0.4.0        # every check; changes nothing
 #   just release v0.4.0 notes.md     # check, tag, publish, verify
+#   just release-binaries v0.4.0     # rebuild a release's binaries, verify
 #
-# RELEASE_DRY_RUN=1 prints the commands that would tag and publish
-# instead of running them (and skips verifying the install).
+# Publishing a release starts the release-binaries workflow, which
+# attaches its binaries; `just release` waits for that run and checks
+# what it attached. `just release-binaries` runs the workflow again for
+# a release that's already out, and makes the same checks.
+#
+# RELEASE_DRY_RUN=1 prints the commands that would tag, publish or run
+# the workflow instead of running them (and skips verifying the install
+# and the binaries).
 set -euo pipefail
 
 repo=bricef/htt
 module=github.com/bricef/htt
 govulncheck=golang.org/x/vuln/cmd/govulncheck@v1.9.0 # the version CI runs
+binaries_workflow=release-binaries.yml
+here=$(cd "$(dirname "$0")" && pwd)
 
 usage() {
-	echo "usage: release.sh --check-only vX.Y.Z | release.sh vX.Y.Z NOTES.md" >&2
+	echo "usage: release.sh --check-only vX.Y.Z | release.sh vX.Y.Z NOTES.md | release.sh --binaries vX.Y.Z" >&2
 	exit 2
 }
 step() { printf '\n==> %s\n' "$*"; }
@@ -31,15 +40,108 @@ run() { # a command that changes something outside this checkout
 	fi
 }
 
+sha256() { # FILE: its SHA-256 digest
+	if command -v sha256sum >/dev/null; then
+		sha256sum "$1" | cut -d' ' -f1
+	else
+		shasum -a 256 "$1" | cut -d' ' -f1
+	fi
+}
+
+binaries_runs() { # VERSION: "id status conclusion" of its release-binaries runs, newest first
+	# The workflow's run-name is "Binaries for <tag>".
+	gh run list --repo "$repo" --workflow "$binaries_workflow" --limit 50 \
+		--json databaseId,displayTitle,status,conclusion \
+		--jq '.[] | [.databaseId, .status, .conclusion, .displayTitle] | @tsv' |
+		awk -F '\t' -v title="Binaries for $1" '$4 == title { print $1, $2, $3 }'
+}
+
+wait_for_binaries() { # VERSION SEEN: wait for its newest run whose id isn't in SEEN to succeed
+	local version=$1 seen=" $2 " newest id status conclusion last="" tries=0
+	echo "waiting for the $binaries_workflow run for $version"
+	while :; do
+		newest=$(binaries_runs "$version" | awk -v seen="$seen" 'index(seen, " " $1 " ") == 0 && !found { print; found = 1 }')
+		if [[ -n $newest ]]; then
+			read -r id status conclusion <<<"$newest"
+			[[ $status == "$last" ]] || echo "run $id: $status"
+			last=$status
+			[[ $status == completed ]] && break
+			((tries < 120)) || fail "run $id is still $status after 30 minutes: https://github.com/$repo/actions/runs/$id"
+		else
+			((tries < 12)) || fail "no $binaries_workflow run for $version started within 3 minutes: https://github.com/$repo/actions/workflows/$binaries_workflow"
+		fi
+		tries=$((tries + 1))
+		sleep 15
+	done
+	[[ $conclusion == success ]] || fail "run $id finished '$conclusion': https://github.com/$repo/actions/runs/$id"
+	echo "run $id succeeded: https://github.com/$repo/actions/runs/$id"
+}
+
+check_binaries() { # VERSION: every expected asset is attached, and this machine's archive checks out
+	local version=$1 expected attached name missing="" os arch sums archive tmp want got
+	expected=$("$here/dist.sh" --assets "$version")
+	attached=$(gh release view "$version" --repo "$repo" --json assets --jq '.assets[].name')
+	while read -r name; do
+		grep -qxF -- "$name" <<<"$attached" || missing+=" $name"
+	done <<<"$expected"
+	[[ -z $missing ]] || fail "the $version release is missing:$missing"
+	echo "attached: $(paste -sd ' ' - <<<"$expected")"
+
+	os=$(go env GOHOSTOS) arch=$(go env GOHOSTARCH)
+	sums=$(grep 'SHA256SUMS$' <<<"$expected")
+	archive=$(grep -F "_${os}_$arch." <<<"$expected" || true)
+	if [[ -z $archive ]]; then
+		echo "there's no archive for this machine ($os/$arch) to try"
+		return
+	fi
+	tmp=$(mktemp -d)
+	gh release download "$version" --repo "$repo" --dir "$tmp" --pattern "$archive" --pattern "$sums"
+	want=$(awk -v f="$archive" '$2 == f { print $1 }' "$tmp/$sums")
+	got=$(sha256 "$tmp/$archive")
+	[[ -n $want && $got == "$want" ]] || fail "$archive's SHA-256 is $got, but $sums says '$want'"
+	echo "$archive matches $sums"
+	gh attestation verify "$tmp/$archive" --repo "$repo" --signer-workflow "$repo/.github/workflows/$binaries_workflow"
+	echo "$archive's provenance attestation verifies"
+	tar -xzf "$tmp/$archive" -C "$tmp" htt
+	got=$("$tmp/htt" --version)
+	[[ $got == "htt version $version" ]] || fail "the downloaded htt says '$got'"
+	echo "the downloaded htt says: $got"
+	rm -rf "$tmp"
+}
+
 check_only=false
-if [[ ${1:-} == --check-only ]]; then
+binaries_only=false
+case ${1:-} in
+--check-only)
 	check_only=true
 	shift
-fi
+	;;
+--binaries)
+	binaries_only=true
+	shift
+	;;
+esac
 version=${1:-}
 notes=${2:-}
 [[ -n $version ]] || usage
-$check_only || [[ -n $notes ]] || usage
+$check_only || $binaries_only || [[ -n $notes ]] || usage
+
+if $binaries_only; then
+	step "Rebuild the binaries for the $version release"
+	"$here/dist.sh" --assets "$version" >/dev/null # a version, not some other ref
+	gh release view "$version" --repo "$repo" --json url --jq .url
+	seen=$(binaries_runs "$version" | cut -d' ' -f1 | tr '\n' ' ')
+	run gh workflow run "$binaries_workflow" --repo "$repo" -f "tag=$version"
+	if [[ -n $dry_run ]]; then
+		step "Dry run: not waiting for or checking the binaries"
+		exit 0
+	fi
+	wait_for_binaries "$version" "$seen"
+	step "Check the binaries"
+	check_binaries "$version"
+	step "$version's binaries are attached: https://github.com/$repo/releases/tag/$version"
+	exit 0
+fi
 
 step "Version $version"
 [[ $version =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] ||
@@ -103,10 +205,11 @@ finish="$version is tagged and pushed; publish it with: gh release create $versi
 
 step "Publish the GitHub release"
 run gh release create "$version" --repo "$repo" --title "htt $version" --notes-file "$notes" --verify-tag --latest
-finish="$version is published; check the install by hand: GOBIN=\$(mktemp -d) go install $module/cmd/htt@$version"
+finish="$version is published; check the install by hand: GOBIN=\$(mktemp -d) go install $module/cmd/htt@$version; and the binaries with: just release-binaries $version"
 
 if [[ -n $dry_run ]]; then
-	step "Dry run: not verifying an install"
+	step "Dry run: not verifying the install or the binaries"
+	echo "the $binaries_workflow run would attach: $("$here/dist.sh" --assets "$version" | paste -sd ' ' -)"
 	finish=""
 	exit 0
 fi
@@ -131,5 +234,10 @@ rm -rf "$tmp"
 tag=$(gh api "repos/$repo/releases/latest" --jq .tag_name)
 [[ $tag == "$version" ]] || fail "GitHub's latest release is $tag, not $version"
 echo "GitHub's latest release is $tag (what the update check reads)"
+finish="$version is released and go install works, but its binaries aren't checked; once the cause is fixed, rebuild and check them with: just release-binaries $version"
+
+step "Binaries from the $binaries_workflow run"
+wait_for_binaries "$version" ""
+check_binaries "$version"
 finish=""
 step "Released $version: https://github.com/$repo/releases/tag/$version"

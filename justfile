@@ -56,6 +56,10 @@ release-check version:
 release version notes:
     scripts/release.sh {{version}} {{notes}}
 
+# Rebuild the binaries of the published release VERSION, and check them.
+release-binaries version:
+    scripts/release.sh --binaries {{version}}
+
 # Build the release archives for tag VERSION into dist/, as releases do.
 dist version:
     scripts/dist.sh {{version}} dist

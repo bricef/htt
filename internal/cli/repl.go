@@ -15,8 +15,9 @@ import (
 
 // Repl runs an interactive todo-mode shell.
 //
-// Each cycle clears the screen, renders the current context, and
-// reads one command line. Inputs without a leading slash dispatch
+// Each line entered clears the screen, runs its command, and shows
+// the command's output above the current context, which stays on
+// screen until the next line. Inputs without a leading slash dispatch
 // as `todo <input>` (todo-mode default); inputs starting with `/`
 // have the slash stripped and dispatch as a full CLI command.
 //
@@ -47,10 +48,15 @@ func init() {
 // print to stderr but don't break the loop — only EOF, interrupt,
 // or an exit word exits.
 //
-// The view shown above the prompt is either the current context
-// (the default) or the REPL help text (after `/help`). Any
-// dispatch returns the user to the context view on the next
-// cycle.
+// The screen shows, top to bottom: the last command as typed and
+// its output, the view, and the prompt. The view is either the
+// current context (the default) or the REPL help text (after
+// `/help`); any dispatch returns the user to the context view.
+//
+// Entering a line clears the screen before its command runs, not
+// after, so the command's output stays on screen until the next
+// line; the view is drawn after the command, so it shows the
+// command's effect. An empty line just redraws the view.
 func runRepl() error {
 	rl, err := readline.NewEx(&readline.Config{
 		Prompt:          replPrompt(),
@@ -64,15 +70,19 @@ func runRepl() error {
 	defer func() { _ = rl.Close() }()
 
 	showHelp := false
-	for {
-		rl.SetPrompt(replPrompt())
+	renderView := func() {
 		if showHelp {
-			_, _ = fmt.Fprint(os.Stdout, ansiClearScreen)
 			printReplHelp(os.Stdout)
 		} else {
 			renderReplView()
 		}
+	}
 
+	_, _ = fmt.Fprint(os.Stdout, ansiClearScreen)
+	renderView()
+	for {
+		prompt := replPrompt()
+		rl.SetPrompt(prompt)
 		line, err := rl.Readline()
 		if errors.Is(err, io.EOF) || errors.Is(err, readline.ErrInterrupt) {
 			fmt.Println()
@@ -83,27 +93,29 @@ func runRepl() error {
 		}
 
 		kind, parsed := classifyReplInput(line)
-		switch kind {
-		case replInputNone:
-			// Empty Enter refreshes whichever view is current.
-			continue
-		case replInputExit:
+		if kind == replInputExit {
 			return nil
+		}
+		_, _ = fmt.Fprint(os.Stdout, ansiClearScreen)
+		switch kind {
 		case replInputHelp:
 			showHelp = true
-			continue
 		case replInputDispatch:
 			showHelp = false
+			fmt.Println(prompt + strings.TrimSpace(line))
 			if isDisabledInRepl(parsed) {
 				fmt.Fprintf(os.Stderr, "%q is not available inside the REPL\n", parsed[0])
-				continue
-			}
-			resetReplFlags()
-			RootCmd.SetArgs(parsed)
-			if err := RootCmd.Execute(); err != nil {
-				fmt.Fprintln(os.Stderr, err)
+			} else {
+				resetReplFlags()
+				RootCmd.SetArgs(parsed)
+				if err := RootCmd.Execute(); err != nil {
+					fmt.Fprintln(os.Stderr, err)
+				}
 			}
 		}
+		// replInputNone, an empty Enter, refreshes whichever view is
+		// current.
+		renderView()
 	}
 }
 
@@ -187,11 +199,10 @@ func resetReplFlags() {
 // trailing characters from the prior task list bleed through.
 const ansiClearScreen = "\033[H\033[2J"
 
-// renderReplView clears the screen and prints the current context.
-// Errors here print but don't break the loop — a load failure
-// shouldn't lock the user out of the prompt.
+// renderReplView prints the current context. Errors here print but
+// don't break the loop — a load failure shouldn't lock the user out
+// of the prompt.
 func renderReplView() {
-	_, _ = fmt.Fprint(os.Stdout, ansiClearScreen)
 	ctx, err := repo().CurrentContext()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Could not load current context:", err)

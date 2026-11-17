@@ -580,3 +580,38 @@ func TestRepl_HistoryPersistsAcrossSessions(t *testing.T) {
 	}
 	assertInOrder(t, "repl-history", string(b), "add first task\n", "add second task\n")
 }
+
+// replScreens splits REPL output at each clear-screen sequence: the
+// last element is what the terminal shows when the REPL exits.
+func replScreens(t *testing.T, stdout string) []string {
+	t.Helper()
+	screens := strings.Split(stdout, "\x1b[H\x1b[2J")
+	if len(screens) < 2 {
+		t.Fatalf("the REPL never cleared the screen:\n%q", stdout)
+	}
+	return screens[1:]
+}
+
+func TestRepl_CommandOutputStaysOnScreen(t *testing.T) {
+	// Each cycle cleared the screen straight after a command ran, so
+	// its output (Added: …, a report) was wiped at once. The screen is
+	// now cleared before a command runs: after it come the command as
+	// typed, its output, and the view, refreshed to show its effect.
+	e := newEnv(t)
+	d := today()
+	r := e.mustRunWithInput("add buy milk\n/report\nq\n", "repl")
+	screens := replScreens(t, r.stdout)
+	if len(screens) != 3 {
+		t.Fatalf("want 3 screens (start, add, /report), got %d:\n%q", len(screens), r.stdout)
+	}
+
+	assertInOrder(t, "start", screens[0], "(todo): Context is empty.\n")
+	assertInOrder(t, "after add", screens[1],
+		"htt(todo)> add buy milk\n", "Added: "+d+" buy milk\n", "  0 "+d+" buy milk\n", "(todo): 1 tasks\n")
+	assertInOrder(t, "after /report", screens[2],
+		"htt(todo)> /report\n", "Activity since", "Added (1)\n", "  0 "+d+" buy milk\n", "(todo): 1 tasks\n")
+	// The clear still wipes the previous command's output.
+	if strings.Contains(screens[2], "Added: ") {
+		t.Errorf("the add's output should be gone after /report:\n%s", screens[2])
+	}
+}

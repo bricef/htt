@@ -17,12 +17,6 @@ var (
 	ConfigKeyTrackerDir      = "tracker_path"
 	ConfigKeyConfigPath      = "config_path"
 	ConfigKeyDataDir         = "data_path"
-	ConfigKeyRemoteName      = "remote_name"
-	ConfigKeyRepoURL         = "backing_repo_url"
-	ConfigKeyFilePatterns    = "file_match_patterns"
-	ConfigKeyAuthorName      = "author_name"
-	ConfigKeyAuthorEmail     = "author_email"
-	ConfigKeySSHKeyFile      = "ssh_key_file"
 	ConfigKeyDisableColor    = NoColorFlag
 	ConfigKeyTUITheme        = "tui.theme"  // a built-in theme name
 	ConfigKeyTUIColors       = "tui.colors" // per-role colour overrides
@@ -34,14 +28,9 @@ var (
 	DefaultDataDir         = ".htt"
 	DefaultDataDirName     = "data"
 	DefaultConfigDir       = ".config/htt"
-	DefaultRemoteName      = "origin"
 	DefaultTimelogDirName  = "timelogs"
-	DefaultFileExtension   = ".txt"
 	DefaultContextFileName = "current-context"
-	DefaultCommitterName   = "HTT"
-	DefaultCommitterEmail  = "htt@fractallambda.com"
 	DefaultTUITheme        = "default" // matches tui.DefaultThemeName
-	DefaultFilePatterns    = []string{"*" + DefaultFileExtension, ".context", DefaultTimelogDirName, ".gitignore"}
 )
 
 // Get a config variale by name
@@ -52,10 +41,6 @@ func Get(name string) string {
 
 func GetBool(name string) bool {
 	return viper.GetBool(name)
-}
-
-func GetStringSlice(name string) []string {
-	return viper.GetStringSlice(name)
 }
 
 func GetStringMapString(name string) map[string]string {

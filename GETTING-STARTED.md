@@ -433,13 +433,14 @@ Current Context: work
     2026-05-15.log
     2026-05-14.log
     …
-  .git/                            ← only after you first run htt sync
 ~/.cache/htt/update-check.json     ← when htt last checked for a new release
 ```
 
 Each context file is plain todo.txt format — one task per line, no
 header. You can edit them by hand; `htt` rewrites a file only when a
-command changes it, keeping the previous version as `.bak`.
+command changes it, keeping the previous version as `.bak`. Anything
+else in the data directory, such as a `.git/` if you keep it under
+version control, htt leaves alone.
 
 `htt config where-data` prints the data directory if you ever forget
 where it lives.
@@ -459,12 +460,6 @@ a throwaway task list, surprising if you didn't expect it.
 | `tracker_path`        | `~/.htt/data`                   | where the `current-context` pointer lives             |
 | `config_path`         | `~/.config/htt/config.yaml`     | the config file itself (informational)                |
 | `no-color`            | `false`                         | `true` does what `--no-color` does, every time        |
-| `backing_repo_url`    | unset                           | sync: the SSH remote to push to                       |
-| `remote_name`         | `origin`                        | sync: the name given to that remote                   |
-| `ssh_key_file`        | `~/.ssh/id_rsa.pub`             | sync: the private key to push with (the default won't work; see below) |
-| `author_name`         | `HTT`                           | sync: the commit author                               |
-| `author_email`        | `htt@fractallambda.com`         | sync: the commit author's email                       |
-| `file_match_patterns` | `*.txt`, `.context`, `timelogs`, `.gitignore` | sync: which files get committed     |
 | `tui.theme`           | `default`                       | the TUI's colour theme (see [Colours and themes](#colours-and-themes)) |
 | `tui.colors`          | unset                           | per-colour overrides on top of the theme              |
 | `check_for_updates`   | `true`                          | check GitHub for a newer release, at most once a day (see [Online activity](README.md#online-activity)) |
@@ -660,85 +655,6 @@ cleared as soon as a command finishes, a command's own output
 (`Added: …`, search results, `/report`) disappears straight away —
 your terminal's scrollback may still have it. The REPL suits changing
 tasks more than reading output.
-
-## Optional: git sync
-
-`htt sync` commits your data directory to git and pushes it to a
-remote. It's manual and push-only: nothing syncs unless you run it,
-and it never pulls. Its problems and limits are tracked in
-[#12](https://github.com/bricef/htt/issues/12).
-
-> **Set `backing_repo_url` before you first run `htt sync`.** Without
-> it, sync pushes your data into whatever git repository the current
-> directory belongs to.
-
-What a sync does:
-
-1. Makes the data directory a git repository (branch `master`) if it
-   isn't one yet.
-2. Points the remote `remote_name` (default `origin`) at
-   `backing_repo_url`.
-3. Commits the files matching `file_match_patterns`: every context
-   file, `done.txt`, `archive.txt` and `timelogs/`. The
-   `current-context` pointer and `.bak` files aren't committed, so
-   each machine keeps its own current context.
-4. Pushes over SSH, as user `git`, with the private key in
-   `ssh_key_file`.
-
-To set it up, create an empty repository (no README or licence, so
-htt's `master` is its only branch) and point the config at it:
-
-```yaml
-backing_repo_url: git@github.com:you/tasks.git
-ssh_key_file: /home/you/.ssh/id_ed25519
-author_name: You
-author_email: you@example.com
-```
-
-The remote has to be SSH (HTTPS remotes fail with
-`invalid auth method`), and the key has to be a private key without a
-passphrase (there's no ssh-agent support). The default `ssh_key_file`,
-`~/.ssh/id_rsa.pub`, is a public key and never works.
-
-```
-$ htt sync
-2026/05/15 09:30:12 ℹ️  Could not open repository. Attempting to create one instead.
-2026/05/15 09:30:12 ✅  Created commit of changes with hash  a9a6bdf6…
-2026/05/15 09:30:13 ✅  Pushed commit a9a6bdf6… to origin
-```
-
-**A second machine.** Clone the backing repository into the data
-directory before running `htt sync` there (move any existing files
-out of the way first):
-
-```
-$ git clone git@github.com:you/tasks.git ~/.htt/data
-```
-
-A machine that syncs from its own fresh data directory instead has its
-push rejected (`non-fast-forward update`) and never sees the other
-machine's tasks.
-
-**When another machine has pushed.** `htt sync` commits locally, then
-the push is rejected and it exits with an error. Bring the data
-directory up to date with git, then sync again:
-
-```
-$ git -C ~/.htt/data pull --no-rebase origin master
-$ htt sync
-```
-
-(Spell out `origin master`: on the machine where `htt sync` created
-the repository, `master` has no upstream set, so a bare `git pull`
-doesn't know where to pull from.)
-
-If both machines changed the same context since the last sync, git
-reports a merge conflict in that file. The files are plain text, one
-task per line, so resolve it as you would any conflict, commit, then
-sync.
-
-Every failed sync still leaves its local commit behind, and any error
-ends the command straight away.
 
 ## Where to go next
 

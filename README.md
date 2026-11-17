@@ -15,10 +15,6 @@ also edit by hand.
   editing with a live preview and tag completion, task lines coloured
   by priority, tag and date, colour themes (Monokai, VS Code, Dracula,
   Nord, Solarized, Gruvbox) and per-colour config.
-- **Git sync** (`htt sync`): manual and push-only for now. Read
-  [its setup and limits](GETTING-STARTED.md#optional-git-sync) before
-  using it; [#12](https://github.com/bricef/htt/issues/12) tracks
-  its problems.
 
 New to `htt`? [`GETTING-STARTED.md`](GETTING-STARTED.md) is a
 fifteen-minute walkthrough of the realistic workflow — add a task,
@@ -64,7 +60,6 @@ Available Commands:
   repl        Interactive todo-mode shell.
   report      Summarise activity in a time period.
   status      Show the status of the tasklist and time log.
-  sync        Commit the data directory and push it to the backing git repo.
   todo        Manage todo lists.
   workon      Log that work has begun on numbered item in the current context.
 
@@ -90,8 +85,8 @@ have.
 
 ## Online activity
 
-htt works offline. It reaches the network in two cases only, and
-never sends your tasks or time logs anywhere you haven't configured.
+htt works offline. It reaches the network for one thing only, the
+update check below, and never sends your tasks or time logs anywhere.
 
 ### Update check
 
@@ -122,12 +117,6 @@ htt checks whether a newer release exists, so you hear about fixes.
   release it saw.
 - **Turning it off:** set `check_for_updates: false` in your config
   file (`~/.config/htt/config.yaml`).
-
-### Sync
-
-`htt sync` pushes your data directory to the git remote you configure
-(`backing_repo_url`), over SSH, and only when you run it. See
-[its section in GETTING-STARTED](GETTING-STARTED.md#optional-git-sync).
 
 There is nothing else: no telemetry, no analytics, no other servers.
 (Installing with `go install` downloads htt through the Go module
@@ -187,8 +176,7 @@ $ tail -f debug.log
 
 [`TODO.md`](TODO.md) holds the wishlist of unscoped ideas and a list of
 known issues. Work that's been scoped lives in
-[GitHub Issues](https://github.com/bricef/htt/issues), starting with
-[#12](https://github.com/bricef/htt/issues/12) for sync.
+[GitHub Issues](https://github.com/bricef/htt/issues).
 
 ## Prior art
 

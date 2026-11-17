@@ -442,6 +442,43 @@ func TestInteractive_ThemeConfigLeavesOtherCommandsAlone(t *testing.T) {
 	assertContains(t, "config yaml", r.stdout, "theme: monokai")
 }
 
+func TestConfig_KeysFromTheRemovedSyncCommandStillLoad(t *testing.T) {
+	// Config files written before `htt sync` was removed carry its
+	// keys, and the default file htt wrote on first run had most of
+	// them. htt ignores them now; they must not stop it starting.
+	e := newEnv(t)
+	e.writeConfig("backing_repo_url: git@github.com:you/tasks.git\n" +
+		"ssh_key_file: /home/you/.ssh/id_ed25519\n" +
+		"file_match_patterns:\n- '*.txt'\n- .context\n- timelogs\n- .gitignore\n" +
+		"remote_name: origin\n" +
+		"author_name: You\n" +
+		"author_email: you@example.com\n")
+
+	e.mustRun("todo", "add", "still works")
+	assertContains(t, "todo show", e.mustRun("todo", "show").stdout, "still works")
+	e.mustRun("status")
+	e.mustRun("report")
+	e.mustRun("config", "yaml")
+}
+
+func TestDataDir_AGitRepositoryInsideIsLeftAlone(t *testing.T) {
+	// People keep the data directory in git, so it can hold .git/ and
+	// .gitignore. Neither is a context, and htt never writes to them.
+	e := newEnv(t)
+	e.writeData(".git/HEAD", "ref: refs/heads/master\n")
+	e.writeData(".gitignore", "*.bak\n")
+	e.writeData("todo.txt", "first\n")
+
+	e.mustRun("todo", "add-to", "work", "ship feature")
+	e.mustRun("log", "start")
+	e.mustRun("log", "end")
+
+	r := e.mustRun("todo", "status")
+	assertContains(t, "stdout", r.stdout, "Available Contexts: todo work \n")
+	assertEqual(t, ".git/HEAD", e.readData(".git/HEAD"), "ref: refs/heads/master\n")
+	assertEqual(t, ".gitignore", e.readData(".gitignore"), "*.bak\n")
+}
+
 func TestVersion_PrintsTheBuildVersion(t *testing.T) {
 	e := newEnv(t)
 	r := e.mustRun("--version")

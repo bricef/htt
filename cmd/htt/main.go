@@ -29,11 +29,6 @@ func main() {
 	viper.SetDefault(vars.ConfigKeyTrackerDir, dataDir)
 	viper.SetDefault(vars.ConfigKeyConfigPath, defaultConfigfilepath)
 	viper.SetDefault(vars.ConfigKeyDataDir, dataDir)
-	viper.SetDefault(vars.ConfigKeyRemoteName, vars.DefaultRemoteName)
-	viper.SetDefault(vars.ConfigKeyFilePatterns, vars.DefaultFilePatterns)
-	viper.SetDefault(vars.ConfigKeyAuthorName, vars.DefaultCommitterName)
-	viper.SetDefault(vars.ConfigKeyAuthorEmail, vars.DefaultCommitterEmail)
-	viper.SetDefault(vars.ConfigKeySSHKeyFile, filepath.Join(homeDir, ".ssh", "id_rsa.pub"))
 	viper.SetDefault(vars.ConfigKeyTUITheme, vars.DefaultTUITheme)
 	viper.SetDefault(vars.ConfigKeyCheckForUpdates, true)
 

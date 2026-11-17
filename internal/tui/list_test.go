@@ -290,6 +290,40 @@ func TestList_PriorityChangeKeepsTheCursorOnTheTask(t *testing.T) {
 	}
 }
 
+func TestList_LoweringSaysWhenItDatesATask(t *testing.T) {
+	// Lowering (C) x foo to no priority would leave "x foo", which reads
+	// as done; the task gets today's date in front instead, and the TUI
+	// says so.
+	today := time.Now().Format("2006-01-02")
+	m, repo := seedSearchModel(t, "(C) x foo", "(C) plain")
+
+	next, _ := DecreasePriority.Act(m)
+	m = asModel(t, next)
+	if got := repo.raws(t, "todo"); !slices.Contains(got, today+" x foo") {
+		t.Errorf("todo = %q, want %q", got, today+" x foo")
+	}
+	if want := `Added today's date, so "x" stays part of the task.`; m.status != want {
+		t.Errorf("status = %q, want %q", m.status, want)
+	}
+
+	m.status = ""
+	m.selectTask(indexOf(m.context, mustNewTask(t, "(C) plain")))
+	next, _ = DecreasePriority.Act(m)
+	m = asModel(t, next)
+	if m.status != "" {
+		t.Errorf("lowering a task that needs no date should say nothing, said %q", m.status)
+	}
+}
+
+func mustNewTask(t *testing.T, raw string) *domain.Task {
+	t.Helper()
+	task, err := domain.NewTask(raw)
+	if err != nil {
+		t.Fatalf("NewTask(%q): %v", raw, err)
+	}
+	return task
+}
+
 func TestList_DoneTabHasNoTaskNumbers(t *testing.T) {
 	m, _ := seedModel(t, domain.DoneContextName, "x 2026-05-15 finished thing")
 	m.width, m.height = 100, 20

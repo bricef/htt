@@ -100,6 +100,21 @@ func TestTUI_EditTask_RewritesItsLineInTheFile(t *testing.T) {
 	assertViewContains(t, e.view(), "beta +garden due:2026-06-01")
 }
 
+func TestTUI_LoweringToNoPriorityKeepsTheTaskOpen(t *testing.T) {
+	// "x foo" would read as done; the date in front keeps x as text.
+	e := newTUIEnv(t)
+	e.seedContext("todo", "(C) x foo")
+	e.start("todo")
+
+	e.press('-')
+
+	want := time.Now().Format("2006-01-02") + " x foo\n"
+	if got := e.readData("todo.txt"); got != want {
+		t.Errorf("todo.txt = %q, want %q", got, want)
+	}
+	assertViewContains(t, e.view(), `Added today's date, so "x" stays part of the task.`)
+}
+
 func TestTUI_AddEmptyTask_DoesNotWrite(t *testing.T) {
 	e := newTUIEnv(t)
 	e.seedContext("todo", "existing")

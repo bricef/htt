@@ -1,0 +1,11 @@
+# Keeps the commit-pinned actions in .github/workflows current. Go
+# module security updates come from GitHub's Dependabot security
+# updates and don't need an entry here.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7 # let a new action release settle before adopting it

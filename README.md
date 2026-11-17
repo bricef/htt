@@ -1,5 +1,7 @@
 # Hypothetical Tasks & Time Tracker (htt)
 
+[![CI](https://github.com/bricef/htt/actions/workflows/ci.yml/badge.svg)](https://github.com/bricef/htt/actions/workflows/ci.yml)
+
 `htt` is a [todo.txt](http://todotxt.org/)-compatible command-line todo
 list manager and time tracker. Tasks live in plain-text files you can
 also edit by hand.
@@ -160,6 +162,12 @@ Available recipes:
     test-unit    # Run all internal/* tests.
     vet          # Static analysis across the module.
 ```
+
+CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the
+same recipes on every push to any branch, and weekly: `go mod tidy
+-diff`, `just test`, `just vet` and `just check` (golangci-lint
+v2.15.0), plus govulncheck. Its actions are pinned to commits, and
+Dependabot updates them monthly.
 
 Quick dev loop for the TUI. It never writes to the terminal outside
 its own screen; `--log-file` appends its diagnostics to a file, at

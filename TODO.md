@@ -79,7 +79,6 @@ Each confirmed against `main` on 2026-11-03.
 - [ ] Automate releases (a `just release` recipe or goreleaser) around
       the manual steps in `docs/releasing.md`
 - [ ] Set up packaging for release (see https://github.com/goreleaser/goreleaser)
-- [ ] Set up CI
 
 ## Future
 
@@ -87,6 +86,8 @@ Each confirmed against `main` on 2026-11-03.
 
 ## Done
 
+- [x] CI on GitHub Actions: tests, vet, lint, tidy modules and
+      govulncheck on every push and weekly (2026-11-17)
 - [x] Removed `internal/gcal.go` (2026-11-17), a standalone Google
       Calendar agenda printer copied in from elsewhere; with it went the
       Google API client, gRPC, OAuth and OpenTelemetry

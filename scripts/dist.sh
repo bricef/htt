@@ -52,6 +52,19 @@ assets() { # VERSION: every file a release carries, archives first
 	done
 	sums_name "$1"
 }
+version_of() { # BINARY: what it prints for --version
+	# Run in a scratch home that already has a config file: on a first
+	# run htt creates one and, up to v0.3.x, says so on stdout, ahead of
+	# the version (a fresh CI runner is a first run). Nothing touches the
+	# real home either.
+	local home out
+	home=$(mktemp -d)
+	mkdir -p "$home/.config/htt"
+	: >"$home/.config/htt/config.yaml"
+	out=$(HOME=$home "$1" --version)
+	rm -rf "$home"
+	echo "$out"
+}
 sha256() { # FILE...: "digest  name" lines, as sha256sum prints them
 	if command -v sha256sum >/dev/null; then
 		sha256sum "$@"
@@ -114,7 +127,7 @@ for platform in $platforms; do
 		grep -qxF -- "$want" <<<"$settings" || fail "the $platform binary wasn't built with $want"
 	done
 	if [[ $platform == "$host" ]]; then
-		says=$("$stage/$exe" --version)
+		says=$(version_of "$stage/$exe")
 		[[ $says == "htt version $version" ]] || fail "the $platform binary says '$says'"
 		ran="$platform binary says: $says"
 	fi

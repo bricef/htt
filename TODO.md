@@ -71,6 +71,9 @@ Each confirmed against `main` on 2026-11-03.
 
 ## Done
 
+- [x] The update notice suits every install (2026-11-18): it gives the
+      release page to download from as well as `go install`, and the
+      TUI's one-line form fits an 80-column status line
 - [x] Release binaries (2026-11-17): every release gets archives for
       Linux and macOS on amd64 and arm64, a SHA256SUMS file and
       build-provenance attestations, built by GitHub Actions

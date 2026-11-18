@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 // defaultReleasesURL is releasesURL before any test points it elsewhere.
@@ -110,15 +111,33 @@ func TestNewer_ComparesVersions(t *testing.T) {
 	}
 }
 
-func TestNotice_SaysWhatToDo(t *testing.T) {
+// The notice can't know how htt was installed, so it gives both ways
+// to update: download the release (binary installs), or go install.
+func TestNotice_SaysHowToUpdateEitherWay(t *testing.T) {
 	r := Release{Version: "v0.2.0", Current: "v0.1.0", URL: "https://github.com/bricef/htt/releases/tag/v0.2.0"}
-	for _, want := range []string{"v0.2.0", "you have v0.1.0", "go install github.com/bricef/htt/cmd/htt@latest", r.URL, "check_for_updates: false"} {
-		if !strings.Contains(r.Notice(), want) {
-			t.Errorf("Notice() missing %q:\n%s", want, r.Notice())
-		}
+	want := "A new version of htt is available: v0.2.0 (you have v0.1.0).\n" +
+		"  Download it:  https://github.com/bricef/htt/releases/tag/v0.2.0\n" +
+		"  Or with Go:   go install github.com/bricef/htt/cmd/htt@latest\n" +
+		"Turn this check off with check_for_updates: false in your config file."
+	if got := r.Notice(); got != want {
+		t.Errorf("Notice() =\n%s\nwant\n%s", got, want)
 	}
-	if short := r.Short(); strings.Contains(short, "\n") || !strings.Contains(short, "v0.2.0") {
-		t.Errorf("Short() = %q, want one line naming the release", short)
+}
+
+// statusLineWidth is what the TUI's status line holds on an 80-column
+// terminal: it pads the message by a column on each side.
+const statusLineWidth = 78
+
+func TestShort_GivesBothWaysOnOneStatusLine(t *testing.T) {
+	r := Release{Version: "v0.2.0", Current: "v0.1.0", URL: "https://github.com/bricef/htt/releases/tag/v0.2.0"}
+	if got, want := r.Short(), "htt v0.2.0 is out: github.com/bricef/htt/releases, or go install …@latest"; got != want {
+		t.Errorf("Short() = %q, want %q", got, want)
+	}
+	// Long versions, on either side, still fit: the running version
+	// can be a pseudo-version, so the short form leaves it out.
+	long := Release{Version: "v10.10.10", Current: "v0.1.1-0.20261103100930-bfa719f3d777", URL: "https://github.com/bricef/htt/releases/tag/v10.10.10"}
+	if n := utf8.RuneCountInString(long.Short()); n > statusLineWidth {
+		t.Errorf("Short() is %d columns, more than the status line's %d: %q", n, statusLineWidth, long.Short())
 	}
 }
 

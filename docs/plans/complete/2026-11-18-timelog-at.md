@@ -85,14 +85,19 @@ Shipped as planned. Choices made while building:
   reset, and the report's fix line, its date and the days it goes on)
   made a test fail every time.
 
-Not built, needing a decision:
+Decided after the merge (Brice, 2026-11-18):
 
-- **The REPL can't take the quoted forms.** It splits a line at its
-  spaces and doesn't read quotes, so `/log end --at "yesterday
-  17:30"` is an error there (nothing is logged); `--at 17:30` works.
-  Reading quotes in the REPL would change every line typed there
-  with a quote in it (`add say "hi"` would lose its quotes), so it is
-  Brice's call. GETTING-STARTED says so, and a test pins it.
+- **The REPL reads quotes as the shell does.** At first it split a
+  line at its spaces and didn't read quotes, so `/log end --at
+  "yesterday 17:30"` was an error there. Brice chose to reconcile the
+  REPL with the terminal: quotes in task text are unusual, and the
+  shell strips them too. A `"` or `'` at the start of a word, or after
+  a `=`, opens a quoted part that closes at the next quote of its kind
+  ending a word; an apostrophe inside a word (`Sam's`, `kids'`) or a
+  quote nothing closes stays as typed, so ordinary task text doesn't
+  change meaning or fail, where the shell would wait for a closing
+  quote. Lines without quotes split as before (`replWords` in
+  internal/cli/repl_words.go).
 
 Found while building, not fixed (it predates `--at`, and is in
 TODO.md's known issues): where the clocks go forward at midnight, as

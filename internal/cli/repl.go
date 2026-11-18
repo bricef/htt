@@ -138,9 +138,9 @@ const (
 //   - empty / whitespace-only      → (none, nil)
 //   - "quit" / "exit" / "q"        → (exit, nil)
 //   - "/help" (with any trailers)  → (help, nil)
-//   - "/<rest>"                    → (dispatch, strings.Fields(rest))
+//   - "/<rest>"                    → (dispatch, replWords(rest))
 //                                    or (none, nil) if rest is empty
-//   - "<anything>"                 → (dispatch, ["todo", ...fields])
+//   - "<anything>"                 → (dispatch, ["todo", ...replWords(line)])
 func classifyReplInput(line string) (replInputKind, []string) {
 	s := strings.TrimSpace(line)
 	if s == "" {
@@ -152,7 +152,7 @@ func classifyReplInput(line string) (replInputKind, []string) {
 	}
 	if strings.HasPrefix(s, "/") {
 		rest := strings.TrimSpace(s[1:])
-		fields := strings.Fields(rest)
+		fields := replWords(rest)
 		if len(fields) == 0 {
 			return replInputNone, nil
 		}
@@ -161,7 +161,7 @@ func classifyReplInput(line string) (replInputKind, []string) {
 		}
 		return replInputDispatch, fields
 	}
-	return replInputDispatch, append([]string{"todo"}, strings.Fields(s)...)
+	return replInputDispatch, append([]string{"todo"}, replWords(s)...)
 }
 
 // isDisabledInRepl rejects commands that don't make sense inside
@@ -248,6 +248,9 @@ REPL controls:
   /<command> [args...]      run any htt command (e.g. /log start, /report)
   /help                     this message
   quit, exit, q             leave the REPL (Ctrl-D / Ctrl-C also work)
+
+Quotes group words, as in a shell: /log end --at "yesterday 17:30".
+An apostrophe in a word (Sam's) is kept as typed.
 
 For per-command details, use /<command> --help (e.g. /todo add --help).`
 

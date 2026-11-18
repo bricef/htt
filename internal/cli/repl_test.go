@@ -45,6 +45,13 @@ func TestClassifyReplInput(t *testing.T) {
 		{"slash report", "/report --since 7d", replInputDispatch, []string{"report", "--since", "7d"}},
 		{"slash trims rest", "/   log start", replInputDispatch, []string{"log", "start"}},
 
+		// Quotes group words, as in the shell; apostrophes stay.
+		{"slash quoted --at", `/log end --at "yesterday 17:30"`, replInputDispatch, []string{"log", "end", "--at", "yesterday 17:30"}},
+		{"slash --at= quoted", `/log add --at="2026-11-17 9:00" filing`, replInputDispatch, []string{"log", "add", "--at=2026-11-17 9:00", "filing"}},
+		{"todo quoted word", `add "buy milk" today`, replInputDispatch, []string{"todo", "add", "buy milk", "today"}},
+		{"todo apostrophe", "add call Sam's dentist", replInputDispatch, []string{"todo", "add", "call", "Sam's", "dentist"}},
+		{"slash quoted help is help", `/help "x y"`, replInputHelp, nil},
+
 		// /help builtin
 		{"slash help", "/help", replInputHelp, nil},
 		{"slash help with trailers", "/help extra args", replInputHelp, nil},

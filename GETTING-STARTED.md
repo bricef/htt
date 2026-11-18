@@ -905,9 +905,13 @@ Commands without a prefix dispatch as `todo <cmd>`: `add foo`,
 to escape to a full CLI command: `/log start`, `/report --since 7d`.
 `/interactive` and `/repl` are disabled inside the REPL (no nested
 screens / recursive prompts). `/help` shows the REPL's own help.
-The REPL splits a line at its spaces and doesn't read quotes, so of
-the `--at` forms only `/log end --at 17:30` works there; give
-`"yesterday 17:30"` or a date from the shell.
+Quotes group words as they do in a shell, so a line means the same
+in the REPL as in a terminal: `/log end --at "yesterday 17:30"`,
+`/log add --at='2026-11-17 9:00' filing`, or `add "buy milk"` (the
+quotes are dropped, as the shell drops them). An apostrophe inside a
+word stays as typed, so `add call Sam's dentist` keeps its `'`, and
+so does a quote nothing closes; the shell would wait for the closing
+quote instead. Backslashes, `$` and `*` are plain text.
 
 Exit with Ctrl-D, Ctrl-C, or by typing `quit`, `exit`, or `q`. An
 empty Enter clears the last output and redraws the context. Up/down

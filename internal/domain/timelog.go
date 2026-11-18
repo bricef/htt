@@ -1,19 +1,21 @@
 package domain
 
 import (
+	"errors"
 	"fmt"
+	"slices"
 	"time"
 )
 
 // Timelog is one day's worth of activity entries. Each entry is a
-// Task annotated with a "ts:<RFC3339>" timestamp by Append.
+// Task annotated with a "ts:<RFC3339>" timestamp by Append or AppendAt.
 //
 // The repo seam is the same pattern as Context: Timelogs handed out
-// by a TimelogRepository carry a wired repo and can use Append (which
-// saves). Struct-literal Timelogs work for pure-method tests
-// (IsEmpty, Timesheet) — those never touch the repo. Calling
-// Append on a struct-literal Timelog will nil-deref; that's a
-// programmer error, and we want it loud.
+// by a TimelogRepository carry a wired repo and can use Append and
+// AppendAt (which save). Struct-literal Timelogs work for pure-method
+// tests (IsEmpty, Timesheet) — those never touch the repo. Calling
+// Append or AppendAt on a struct-literal Timelog will nil-deref; that's
+// a programmer error, and we want it loud.
 type Timelog struct {
 	Date    time.Time
 	Entries []*Task
@@ -57,11 +59,62 @@ func entryTimestamp(t *Task) (time.Time, error) {
 // persists through the wired repo. The task pointer is mutated in
 // place (Annotate mutates the receiver), so callers can read its
 // post-annotation Raw / Annotations afterwards.
+//
+// The entry goes at the end, whatever the times of the entries before
+// it; AppendAt places an entry by its time.
 func (l *Timelog) Append(task *Task) error {
 	now := time.Now().UTC()
 	if _, err := task.Annotate(TimelogTimestampLabel, now.Format(time.RFC3339)); err != nil {
 		return fmt.Errorf("annotate entry timestamp: %w", err)
 	}
 	l.Entries = append(l.Entries, task)
+	return l.repo.Save(l)
+}
+
+// ErrFutureEntry is AppendAt's error for a time later than now.
+var ErrFutureEntry = errors.New("an entry can't be logged later than now")
+
+// AppendAt logs task at the time at, which is on the log's day, rather
+// than now: it annotates task with at under TimelogTimestampLabel, in
+// UTC to the second as Append stamps now, puts it in its place in time
+// and persists through the wired repo, as Append does. Its place is
+// right after the last entry logged at or before at, or first: so in a
+// day in time order it lands between the entries before and after it,
+// and after any logged at the same time, which, logged earlier, then
+// run for no time (see Timesheet). The entries already there keep their
+// order, in time or not.
+//
+// It refuses, changing nothing (neither the log nor task), a time later
+// than now (ErrFutureEntry) and one off the log's day. now is the
+// current time, and its location the local zone, as for Timesheet: at
+// is on the log's day when its date there is the log's Date's year,
+// month and day, the date a log's file is named by. An entry without a
+// readable ts: is an error too, since the new one can't be placed
+// against it.
+func (l *Timelog) AppendAt(task *Task, at, now time.Time) error {
+	if at.After(now) {
+		return fmt.Errorf("%w: %s is after %s", ErrFutureEntry, at.Format(time.RFC3339), now.Format(time.RFC3339))
+	}
+	// By the date rather than from midnight to midnight: where the
+	// clocks go forward at midnight, time.Date puts a midnight that
+	// doesn't exist an hour early, on the day before.
+	local := at.In(now.Location())
+	if y, m, d := local.Date(); y != l.Date.Year() || m != l.Date.Month() || d != l.Date.Day() {
+		return fmt.Errorf("%s isn't on the log's day, %s", local.Format(time.RFC3339), l.Date.Format("2006-01-02"))
+	}
+	place := 0 // the new entry's index
+	for i, entry := range l.Entries {
+		logged, err := entryTimestamp(entry)
+		if err != nil {
+			return fmt.Errorf("entry %d: %w", i, err)
+		}
+		if !logged.After(at) {
+			place = i + 1
+		}
+	}
+	if _, err := task.Annotate(TimelogTimestampLabel, at.UTC().Format(time.RFC3339)); err != nil {
+		return fmt.Errorf("annotate entry timestamp: %w", err)
+	}
+	l.Entries = slices.Insert(l.Entries, place, task)
 	return l.repo.Save(l)
 }

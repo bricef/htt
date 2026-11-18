@@ -27,6 +27,7 @@ func withMemoryRepo(t *testing.T) *storage.MemoryRepository {
 	SetRepository(repo)
 	addDue = ""
 	addToDue = ""
+	logAt = atFlag{}
 	showSortKey = ""
 	showFilters = nil
 	t.Cleanup(func() { SetRepository(prev) })

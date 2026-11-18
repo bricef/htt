@@ -189,6 +189,7 @@ func isDisabledInRepl(args []string) bool {
 func resetReplFlags() {
 	addDue = ""
 	addToDue = ""
+	logAt = atFlag{}
 	reportSince = "7d"
 	showSortKey = ""
 	showFilters = nil

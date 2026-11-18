@@ -11,10 +11,11 @@ import (
 	"github.com/spf13/viper"
 )
 
-// uncategorisedLabel is what the report calls the time of the entries
-// no category matched (domain.Interval.Uncategorised), on a line of its
-// own, so an unmapped or misspelt tag stands out. That time is in the
-// default category, which decides whether it counts as work.
+// uncategorisedLabel is what the report and the status commands call
+// the entries no category matched (domain.Interval.Uncategorised): the
+// report gives their time a line of its own, so an unmapped or misspelt
+// tag stands out. They are in the default category, which decides
+// whether their time counts as work.
 const uncategorisedLabel = "uncategorised"
 
 // timelogCategoriser builds the time log's categories from the config

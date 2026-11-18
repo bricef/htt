@@ -174,7 +174,8 @@ entry runs to local midnight (`DayUnended`) unless it is an `@end`
 leave their day. `Timesheet` takes `now`, and `now`'s zone is the
 local one, so tests pin both. `htt report` sums the sheets (`Worked`,
 `ByCategory`, `Uncategorised`); `htt log status` reads `Status`,
-`EndedAt` and `Current`.
+`EndedAt` and `Current`, whose `Category` (its name, and whether it
+is work) and `Uncategorised` it shows.
 
 Each interval has a `Category` from a `Categoriser`'s `Match`
 (`timelog_category.go`): the first category with one of the entry's
@@ -189,7 +190,9 @@ time. The domain holds no config: `cli` reads `timelog.categories`
 and `timelog.default_category` (`timelog_config.go`) and builds the
 categoriser, as it builds the TUI's theme. `NewCategoriser` and
 `WithDefault` check the categories, and `cli` names the config key in
-the error.
+the error. A bad config stops `htt report` before it prints; `htt log
+status`, `log active` and `htt status` warn on stderr and show the
+entry without categories (`Timesheet` with a nil categoriser).
 
 ## Repositories
 

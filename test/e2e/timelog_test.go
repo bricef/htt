@@ -299,7 +299,8 @@ func TestReport_BadTimelogConfigFailsNamingTheKey(t *testing.T) {
 		// It fails before the report starts.
 		assertEqual(t, "stdout", r.stdout, "")
 
-		// Commands that don't need the categories carry on.
+		// Other commands carry on: status with a warning (see
+		// TestLog_StatusWithABadConfigWarnsAndCarriesOn).
 		e.mustRun("log", "add", "still logging")
 		e.mustRun("log", "status")
 		e.mustRun("todo", "add", "still works")
@@ -313,16 +314,17 @@ func TestLog_StatusAndActiveFollowTheDay(t *testing.T) {
 	assertEqual(t, "log status, empty", e.mustRun("log", "status").stdout, "Not currently working on any task.\n")
 	assertEqual(t, "log active, empty", e.mustRun("log", "active").stdout, "No active task.\n")
 
-	// Working: the current entry and how long it has run.
+	// Working: the current entry, its category and how long it has
+	// run. With no categories configured, nothing matches.
 	e.writeTodayLog(loc,
 		todayEntry{2*time.Hour + 30*time.Second, "@start"},
 		todayEntry{time.Hour + 30*time.Second, "review the PR +htt"})
 	assertEqual(t, "log status, working", e.mustRun("log", "status").stdout,
-		"Currently working on: review the PR +htt (1h0m)\n")
+		"Currently working on: review the PR +htt (uncategorised, 1h0m)\n")
 	assertEqual(t, "log active, working", e.mustRun("log", "active").stdout,
-		"Working on: review the PR +htt (1h0m)\n")
+		"Working on: review the PR +htt (uncategorised, 1h0m)\n")
 	assertInOrder(t, "status, working", e.mustRun("status").stdout,
-		"Currently working on: review the PR +htt (1h0m)\n", "Available Contexts:")
+		"Currently working on: review the PR +htt (uncategorised, 1h0m)\n", "Available Contexts:")
 
 	// After @end: not working, and since when.
 	ended := 20*time.Minute + 30*time.Second
@@ -341,6 +343,131 @@ func TestLog_StatusAndActiveFollowTheDay(t *testing.T) {
 	out := e.mustRun("log", "status").stdout
 	if !strings.HasPrefix(out, "Currently working on: back at it (") {
 		t.Errorf("log status after an entry that follows @end = %q, want it working on the entry", out)
+	}
+}
+
+// statusLines runs log status, log active and htt status, and checks
+// each prints its line (htt status first, before the contexts) and
+// nothing on stderr.
+func (e *env) statusLines(label, status, active string) {
+	e.t.Helper()
+	r := e.mustRun("log", "status")
+	assertEqual(e.t, label+": log status", r.stdout, status)
+	assertEqual(e.t, label+": log status stderr", r.stderr, "")
+	r = e.mustRun("log", "active")
+	assertEqual(e.t, label+": log active", r.stdout, active)
+	assertEqual(e.t, label+": log active stderr", r.stderr, "")
+	r = e.mustRun("status")
+	if !strings.HasPrefix(r.stdout, status) {
+		e.t.Errorf("%s: htt status = %q, want it to start with %q", label, r.stdout, status)
+	}
+	assertEqual(e.t, label+": htt status stderr", r.stderr, "")
+}
+
+func TestLog_StatusNamesTheCategory(t *testing.T) {
+	e, loc := timelogEnv(t)
+	e.writeConfig(planConfig)
+
+	// Nothing logged today: unchanged.
+	e.statusLines("empty", "Not currently working on any task.\n", "No active task.\n")
+
+	// A category that counts as work.
+	e.writeTodayLog(loc,
+		todayEntry{2*time.Hour + 30*time.Second, "@start"},
+		todayEntry{time.Hour + 30*time.Second, "review the PR +htt"})
+	e.statusLines("htt",
+		"Currently working on: review the PR +htt (htt, 1h0m)\n",
+		"Working on: review the PR +htt (htt, 1h0m)\n")
+
+	// A category with work: false: not working, from both.
+	e.writeTodayLog(loc,
+		todayEntry{2*time.Hour + 30*time.Second, "review the PR +htt"},
+		todayEntry{12*time.Minute + 10*time.Second, "@lunch"})
+	e.statusLines("break", "Not working: @lunch (break, 12m)\n", "Not working: @lunch (break, 12m)\n")
+
+	// No category's tag: uncategorised, working as the default
+	// category, the built-in working, says.
+	e.writeTodayLog(loc,
+		todayEntry{2*time.Hour + 30*time.Second, "review the PR +htt"},
+		todayEntry{5*time.Minute + 10*time.Second, "reading the news"})
+	e.statusLines("uncategorised",
+		"Currently working on: reading the news (uncategorised, 5m)\n",
+		"Working on: reading the news (uncategorised, 5m)\n")
+
+	// After @end: unchanged.
+	ended := 20*time.Minute + 30*time.Second
+	e.writeTodayLog(loc,
+		todayEntry{2*time.Hour + 30*time.Second, "review the PR +htt"},
+		todayEntry{ended, "@end"})
+	want := "Not working (day ended at " + time.Now().In(loc).Add(-ended).Format("15:04") + ")\n"
+	e.statusLines("ended", want, want)
+}
+
+func TestLog_StatusUncategorisedFollowsTheDefault(t *testing.T) {
+	// Uncategorised time is work or not as the default category says:
+	// here break, which isn't.
+	e, loc := timelogEnv(t)
+	e.writeConfig(planConfig + "  default_category: break\n")
+	e.writeTodayLog(loc,
+		todayEntry{2*time.Hour + 30*time.Second, "review the PR +htt"},
+		todayEntry{5*time.Minute + 10*time.Second, "reading the news"})
+	e.statusLines("uncategorised, default break",
+		"Not working: reading the news (uncategorised, 5m)\n",
+		"Not working: reading the news (uncategorised, 5m)\n")
+
+	// The default's own tag matches it: named, not uncategorised.
+	e.writeTodayLog(loc,
+		todayEntry{2*time.Hour + 30*time.Second, "review the PR +htt"},
+		todayEntry{5*time.Minute + 10*time.Second, "@break coffee"})
+	e.statusLines("the default's tag",
+		"Not working: @break coffee (break, 5m)\n",
+		"Not working: @break coffee (break, 5m)\n")
+}
+
+func TestLog_StatusWithABadConfigWarnsAndCarriesOn(t *testing.T) {
+	// A timelog config htt can't use doesn't stop the status commands:
+	// one warning on stderr, the exit code unchanged, and the entry
+	// shown without its category, as before status read them.
+	cases := []struct{ config, problem string }{
+		{"timelog:\n  categories:\n    - name: break\n      tags: [\"@lunch\"]\n      work: false\n    - name: admin\n",
+			"config: timelog.categories: category 2 (admin): no tags, and it isn't the default category, so no entry can be in it; list its tags, or make it the default category"},
+		{"timelog:\n  default_category: misc\n",
+			`config: timelog.default_category: "misc" isn't a category (want one of: working)`},
+	}
+	for _, tc := range cases {
+		e, loc := timelogEnv(t)
+		e.writeConfig(tc.config)
+		warning := "warning: " + tc.problem + "; showing entries without their categories\n"
+		e.writeTodayLog(loc,
+			todayEntry{2*time.Hour + 30*time.Second, "review the PR +htt"},
+			todayEntry{12*time.Minute + 10*time.Second, "@lunch"})
+
+		r := e.run("log", "status")
+		assertEqual(t, "log status", r.stdout, "Currently working on: @lunch (12m)\n")
+		assertEqual(t, "log status stderr", r.stderr, warning)
+		if r.exitCode != 0 {
+			t.Errorf("log status exited %d, want 0", r.exitCode)
+		}
+		r = e.run("log", "active")
+		assertEqual(t, "log active", r.stdout, "Working on: @lunch (12m)\n")
+		assertEqual(t, "log active stderr", r.stderr, warning)
+		if r.exitCode != 0 {
+			t.Errorf("log active exited %d, want 0", r.exitCode)
+		}
+		r = e.run("status")
+		assertInOrder(t, "htt status", r.stdout, "Currently working on: @lunch (12m)\n", "Available Contexts:")
+		assertEqual(t, "htt status stderr", r.stderr, warning)
+		if r.exitCode != 0 {
+			t.Errorf("htt status exited %d, want 0", r.exitCode)
+		}
+
+		// With no entry to show, there's nothing to warn about.
+		e.writeTodayLog(loc,
+			todayEntry{2*time.Hour + 30*time.Second, "review the PR +htt"},
+			todayEntry{20*time.Minute + 30*time.Second, "@end"})
+		r = e.mustRun("log", "status")
+		assertContains(t, "log status after @end", r.stdout, "Not working (day ended at ")
+		assertEqual(t, "log status after @end, stderr", r.stderr, "")
 	}
 }
 

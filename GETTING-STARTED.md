@@ -388,7 +388,9 @@ Logging entry: 2026-05-15 review PR for the new auth flow
 
 `htt log show` (alias `s`) prints today's log. `htt log status`
 (alias `htt log ?`) and `htt log active` both report the entry you're
-on and how long it has been running:
+on, its category and how long it has been running. Until you set up
+[categories](#categories), or when none of them matches the entry, it
+is `uncategorised`:
 
 ```
 $ htt log show
@@ -397,9 +399,9 @@ reviewing the auth PR ts:2026-05-15T09:00:12Z
 2026-05-15 review PR for the new auth flow ts:2026-05-15T10:32:08Z
 
 $ htt log status
-Currently working on: 2026-05-15 review PR for the new auth flow (12m)
+Currently working on: 2026-05-15 review PR for the new auth flow (uncategorised, 12m)
 $ htt log active
-Working on: 2026-05-15 review PR for the new auth flow (12m)
+Working on: 2026-05-15 review PR for the new auth flow (uncategorised, 12m)
 ```
 
 ### Breaks and the end of the day
@@ -413,7 +415,13 @@ Logging entry: @lunch
 
 Give it a category that doesn't count as work (see
 [Categories](#categories)) and reports leave it out of the time you
-worked, while still showing it.
+worked, while still showing it, and `htt log status` and
+`htt log active` say you're not working:
+
+```
+$ htt log status
+Not working: @lunch (break, 12m)
+```
 
 `htt log end` ends the day: the entry before it stops there, and
 `htt log status` says so:
@@ -462,7 +470,8 @@ timelog:
 - A category counts as work unless it says `work: false`.
 - Entries no category matches are **uncategorised**: `htt report`
   lists their time on a line of its own, so a tag you haven't mapped,
-  or one spelt differently (`+HTT`), stands out. Whether that time
+  or one spelt differently (`+HTT`), stands out, and `htt log status`
+  names them `uncategorised` too. Whether that time
   counts as work follows the **default category**: `working`, which
   counts as work, unless `default_category` names one of your
   categories, whose `work` then decides. The default category's own
@@ -485,6 +494,16 @@ unquoted `@` can't start a value. A config htt can't use stops
 ```
 $ htt report
 ❌ config: timelog.categories: category 3 (admin): no tags, and it isn't the default category, so no entry can be in it; list its tags, or make it the default category
+```
+
+`htt log status`, `htt log active` and `htt status` carry on: they
+warn on stderr, and show the entry without its category until you fix
+the config:
+
+```
+$ htt log status
+warning: config: timelog.categories: category 3 (admin): no tags, and it isn't the default category, so no entry can be in it; list its tags, or make it the default category; showing entries without their categories
+Currently working on: review the PR +htt (1h0m)
 ```
 
 The log files themselves don't change: categories are read from the
@@ -557,7 +576,7 @@ It's the natural "where am I?" command.
 
 ```
 $ htt status
-Currently working on: 2026-05-15 review PR for the new auth flow (24m)
+Currently working on: 2026-05-15 review PR for the new auth flow (uncategorised, 24m)
 Available Contexts: home todo work
 Current Context: work
 

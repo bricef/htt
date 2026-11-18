@@ -116,6 +116,20 @@ of the open questions above.
   it: `Categoriser.Match` says whether a category matched, each
   `Interval` carries `Uncategorised`, `ByCategory` is matched time
   only and `Timesheet.Uncategorised` the rest; `Worked` is unchanged.
+- **Status names the category.** `log status`, `log active` and
+  `htt status` read the categories, so "Only `htt report` reads the
+  categories" above no longer holds. The running entry gets its
+  category and how long it has run:
+  `Currently working on: review the PR +htt (htt, 1h0m)` (`Working on:
+  …` from `log active`); `Not working: @lunch (break, 12m)` from both
+  when the category doesn't count as work; and `uncategorised` when no
+  category matched, working or not as the default category says. The
+  lines after an `@end` and on a day with nothing logged don't change.
+  A bad `timelog` config doesn't stop them: they warn on stderr
+  (`warning: config: timelog.…: …; showing entries without their
+  categories`), keep the exit code, and show the entry as before,
+  without its category. They warn only when they show an entry, since
+  no other line has a category to lose.
 
 ## Motivation
 
@@ -257,6 +271,7 @@ Clarified by Brice during the build (2026-11-18):
   24:00 rule, a forgotten `@end` is otherwise fixed only by editing the
   file.
 - Should `log status` name the category, or only the report?
+  Decided: it does (see Amendments in Outcome).
 - Should the report list time in the default category separately as
   "uncategorised" too, so unmapped tags are noticed? Decided: yes (see
   Amendments in Outcome).

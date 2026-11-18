@@ -784,9 +784,12 @@ func TestDates_BadDatesLoadAndWarnOnStderr(t *testing.T) {
 	assertEqual(t, "todo.txt", e.readData("todo.txt"), badDatesTodo) // nothing rewrote it
 
 	// Commands that don't read the tasks say nothing.
-	for _, args := range [][]string{{"config", "dir"}, {"log", "show"}, {"todo", "edit-done", "--help"}} {
+	for _, args := range [][]string{{"config", "dir"}, {"todo", "edit-done", "--help"}} {
 		assertEqual(t, "htt "+strings.Join(args, " ")+": stderr", e.mustRun(args...).stderr, "")
 	}
+	// log show reads the time log, where workon put the bank's line.
+	assertEqual(t, "htt log show: stderr", e.mustRun("log", "show").stderr,
+		"warning: "+filepath.Join(e.dataDir, "timelogs", today()+".log")+":1: 2026-13-45 isn't a real date, so it's text\n")
 }
 
 func TestDates_CommandsThatChangeTasksStillWork(t *testing.T) {
@@ -880,6 +883,75 @@ func TestDates_TypedTasksWarnAsTheyAreWritten(t *testing.T) {
 	// Fine dates say nothing.
 	r = e.mustRun("todo", "add-to", "home", "renew passport due:2026-12-01")
 	assertEqual(t, "a fine task: stderr", r.stderr, "")
+}
+
+// Time-log entries are tasks too: a command that reads a time log warns
+// about the entries whose dates htt can't read, as it does for task
+// files. The ts: timestamp htt gives each entry is its own, and never
+// warns.
+func TestDates_TimeLogEntriesWarnOnStderr(t *testing.T) {
+	e := newEnv(t)
+	d := today()
+	logRel := filepath.Join("timelogs", d+".log")
+	logFile := filepath.Join(e.dataDir, logRel)
+	// The blank line makes file lines differ from entry numbers.
+	e.writeData(logRel, "@start ts:"+d+"T00:01:00Z\n\n"+
+		"call the bank about 2026-13-45 ts:"+d+"T00:02:00Z\n"+
+		"review due:friday ts:"+d+"T00:03:00Z\n")
+	warnings := func(lines ...int) string {
+		messages := map[int]string{
+			3: "2026-13-45 isn't a real date, so it's text",
+			4: "due:friday isn't a YYYY-MM-DD date, so the task has no due date",
+		}
+		out := ""
+		for _, line := range lines {
+			out += fmt.Sprintf("warning: %s:%d: %s\n", logFile, line, messages[line])
+		}
+		return out
+	}
+
+	for _, args := range [][]string{
+		{"log", "show"},
+		{"log", "status"},
+		{"log", "active"},
+		{"status"},
+		{"report"},
+	} {
+		label := "htt " + strings.Join(args, " ")
+		r := e.mustRun(args...) // exit 0
+		assertEqual(t, label+": stderr", r.stderr, warnings(3, 4))
+		if strings.Contains(r.stdout, "warning") || strings.Contains(r.stdout, "real date") {
+			t.Errorf("%s: a warning reached stdout:\n%s", label, r.stdout)
+		}
+	}
+	assertContains(t, "log show", e.mustRun("log", "show").stdout, "call the bank about 2026-13-45 ts:")
+
+	// Commands that don't read the time log say nothing.
+	for _, args := range [][]string{{"todo", "show"}, {"log", "edit", "--help"}} {
+		assertEqual(t, "htt "+strings.Join(args, " ")+": stderr", e.mustRun(args...).stderr, "")
+	}
+
+	// log add reads the day's log before it appends; saving drops the
+	// blank line, and later warnings name the lines as saved.
+	r := e.mustRun("log", "add", "lunch")
+	assertEqual(t, "log add: stderr", r.stderr, warnings(3, 4))
+	r = e.mustRun("log", "show")
+	assertEqual(t, "log show after log add: stderr", r.stderr,
+		"warning: "+logFile+":2: 2026-13-45 isn't a real date, so it's text\n"+
+			"warning: "+logFile+":3: due:friday isn't a YYYY-MM-DD date, so the task has no due date\n")
+}
+
+func TestRepl_TimeLogWarningsOncePerSession(t *testing.T) {
+	e := newEnv(t)
+	d := today()
+	logFile := filepath.Join(e.dataDir, "timelogs", d+".log")
+	e.writeData(filepath.Join("timelogs", d+".log"), "call the bank about 2026-13-45 ts:"+d+"T00:02:00Z\n")
+	// The typed entry warns as it's logged; reading the log again in
+	// the same session repeats neither warning.
+	r := e.mustRunWithInput("/log status\n/log add read the 2026-5-3 minutes\n/log show\n/report\nq\n", "repl")
+	assertEqual(t, "stderr", r.stderr,
+		"warning: "+logFile+":1: 2026-13-45 isn't a real date, so it's text\n"+
+			"warning: "+logFile+":2: 2026-5-3 isn't written YYYY-MM-DD (2026-05-03), so it's text\n")
 }
 
 func TestRepl_ATypedTaskWarnsOnce(t *testing.T) {

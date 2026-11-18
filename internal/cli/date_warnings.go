@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"time"
 
 	"github.com/bricef/htt/internal/domain"
 )
@@ -46,6 +47,30 @@ func (r warningRepository) Contexts() ([]*domain.Context, error) {
 	return ctxs, err
 }
 
+// warningTimelogRepository is the TimelogRepository CLI commands use
+// (see timelogRepo): warningRepository for time logs. Each day's log a
+// command loads warns about the entries with dates htt can't read, in
+// the same form and with the same once-per-run record. An entry's ts:
+// timestamp is htt's own, not a date Task.DateWarnings reads, so it
+// never warns. Timelog.Append saves through the wrapped repository.
+type warningTimelogRepository struct{ domain.TimelogRepository }
+
+func (r warningTimelogRepository) Today() (*domain.Timelog, error) {
+	tl, err := r.TimelogRepository.Today()
+	if err == nil {
+		warnTimelog(r.TimelogRepository, tl, tl.Entries)
+	}
+	return tl, err
+}
+
+func (r warningTimelogRepository) Day(date time.Time) (*domain.Timelog, error) {
+	tl, err := r.TimelogRepository.Day(date)
+	if err == nil {
+		warnTimelog(r.TimelogRepository, tl, tl.Entries)
+	}
+	return tl, err
+}
+
 // warnTypedTask warns about the dates htt can't read in a task the user
 // typed (todo add, add-to, replace, edit), once it's saved in ctx, so a
 // bad date is pointed out as it's written rather than by the next
@@ -59,11 +84,16 @@ func warnTypedTask(ctx *domain.Context, task *domain.Task) {
 // warnTypedEntry is warnTypedTask for a time-log entry the user typed
 // (log add), once it's saved in tl.
 func warnTypedEntry(tl *domain.Timelog, entry *domain.Task) {
-	file := timelogRepo().LogPath(tl.Date)
+	warnTimelog(timelogRepo(), tl, []*domain.Task{entry})
+}
+
+// warnTimelog warns about entries, lines of tl.
+func warnTimelog(r domain.TimelogRepository, tl *domain.Timelog, entries []*domain.Task) {
+	file := r.LogPath(tl.Date)
 	if file == "" {
 		file = "timelog " + tl.Date.Format("2006-01-02") // a repository without files, in tests
 	}
-	warnDates(file, []*domain.Task{entry})
+	warnDates(file, entries)
 }
 
 // warnContext warns about tasks, lines of ctx. The archive never warns.

@@ -170,4 +170,10 @@ func TestFileTimelogRepository_Day_SkipsBlankLines(t *testing.T) {
 			t.Errorf("Entries[%d].Line = %d, want %d", i, entry.Line, i)
 		}
 	}
+	// FileLine is the line of the file, for messages that point there.
+	for i, want := range []int{1, 4} {
+		if got := l.Entries[i].FileLine; got != want {
+			t.Errorf("Entries[%d].FileLine = %d, want %d", i, got, want)
+		}
+	}
 }

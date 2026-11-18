@@ -157,10 +157,9 @@ as messages naming the word: a date-shaped word that is impossible
 `NewTask` already parsed. The CLI and the TUI both show these (see
 [CLI wiring](#cli-wiring) and [TUI](#tui)); neither refuses the line.
 `Task.Line` is the task's index in its context; `Task.FileLine`, set
-by `FileRepository` as it reads or saves a task (and by
-`FileTimelogRepository` as it saves an entry), is its line in the file
-(they differ once the file has a blank line), for messages that point
-into the file.
+by `FileRepository` and `FileTimelogRepository` as they read or save a
+task or entry, is its line in the file (they differ once the file has
+a blank line), for messages that point into the file.
 
 ### `Timelog`
 
@@ -245,6 +244,14 @@ on completion, the archive on deletion, a move's target), go through
 the wrapped repository and don't warn, and the archive never warns.
 `htt interactive` hands the TUI `baseRepo()`: the TUI owns the
 terminal and shows the warnings on its status line.
+
+`timelogRepo()` does the same for time logs: it wraps the configured
+repository in `warningTimelogRepository`, which warns about the
+entries of each day's log a command loads (`Today`, `Day`), in the
+same form and with the same once-per-run record, naming the file
+`LogPath` gives. An entry's `ts:` timestamp isn't a date
+`Task.DateWarnings` reads, so it never warns. `Timelog.Append` saves
+through the wrapped repository.
 
 Commands that write a task the user typed (`todo add`, `add-to`,
 `replace`, `edit`, and `log add` for a time-log entry) warn about it

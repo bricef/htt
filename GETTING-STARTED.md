@@ -300,7 +300,11 @@ A warning never changes what a command prints on stdout or its exit
 status. Commands warn about the lists they read, once per line each
 time they run: the current context for the `todo` commands, `status`
 and `workon`, every list and `done.txt` for `htt report`, and once a
-session in the REPL. A task you type with such a date warns as it's
+session in the REPL. Time logs are checked the same way (their
+entries are tasks too): today's for the `log` commands but `log edit`,
+for `status` and for `workon`, and each day's in its range for
+`htt report`. The `ts:`
+timestamp htt gives each entry never warns. A task you type with such a date warns as it's
 written, naming the line it went to: `todo add`, `add-to`, `replace`
 and `edit`, and `log add` for the time log. It's written all the
 same:

@@ -76,8 +76,10 @@ func (r *FileTimelogRepository) Day(date time.Time) (*domain.Timelog, error) {
 			return nil, fmt.Errorf("parse %s:%d: %w", r.LogPath(date), lineNo, err)
 		}
 		// Line is the entry's index in l.Entries, as for todo tasks,
-		// not its file line.
+		// not its file line; FileLine is the file line, for messages
+		// about the file.
 		task.Line = len(l.Entries)
+		task.FileLine = lineNo + 1
 		l.Entries = append(l.Entries, task)
 		lineNo++
 	}

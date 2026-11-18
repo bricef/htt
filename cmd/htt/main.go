@@ -30,6 +30,7 @@ func main() {
 	viper.SetDefault(vars.ConfigKeyConfigPath, defaultConfigfilepath)
 	viper.SetDefault(vars.ConfigKeyDataDir, dataDir)
 	viper.SetDefault(vars.ConfigKeyTUITheme, vars.DefaultTUITheme)
+	viper.SetDefault(vars.ConfigKeyTimelogDefaultCategory, vars.DefaultTimelogCategory)
 	viper.SetDefault(vars.ConfigKeyCheckForUpdates, true)
 
 	// viper.WriteConfigAs("dump.yaml")

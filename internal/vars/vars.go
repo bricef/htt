@@ -24,6 +24,12 @@ var (
 	ConfigKeyTUIColors       = "tui.colors" // per-role colour overrides
 	ConfigKeyCheckForUpdates = "check_for_updates"
 
+	// The time log section: its categories (a list, since the first
+	// match wins) and the category of entries none matches.
+	ConfigKeyTimelog                = "timelog"
+	ConfigKeyTimelogCategories      = "timelog.categories"
+	ConfigKeyTimelogDefaultCategory = "timelog.default_category"
+
 	// Default values
 	DefaultContext         = "todo"
 	DefaultDoneFileName    = "done"
@@ -33,6 +39,7 @@ var (
 	DefaultTimelogDirName  = "timelogs"
 	DefaultContextFileName = "current-context"
 	DefaultTUITheme        = "default" // matches tui.DefaultThemeName
+	DefaultTimelogCategory = "working" // matches domain.DefaultCategoryName
 )
 
 // Get a config variale by name

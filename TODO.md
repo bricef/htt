@@ -71,6 +71,10 @@ Each confirmed against `main` on 2026-11-03.
 
 ## Done
 
+- [x] `just release-check` (and `just release`) warns when GitHub has
+      paused the weekly scan (2026-11-18), with the command that turns
+      it back on; a warning only, and a failed lookup says so and
+      carries on
 - [x] Time logs are checked for dates htt can't read (2026-11-18):
       the `log` commands but `log edit`, `status`, `workon` and
       `htt report` warn about such entries on stderr as they do for

@@ -33,6 +33,14 @@ GitHub Actions workflow that builds the binaries (see
    - `just test`, `just vet`, `just check`, `go mod tidy -diff` and
      govulncheck (the version CI runs) pass locally.
 
+   It also looks up whether the weekly vulnerability scan
+   (`weekly.yml`) is still on: GitHub turns a scheduled workflow off
+   after 60 days without activity and never turns it back on. If it's
+   off, it warns with the command that turns it back on
+   (`gh workflow enable weekly.yml --repo bricef/htt`); if the lookup
+   fails, it says so. Neither stops a release, and `just release`
+   checks the same.
+
    It ends by listing what was merged since the last release, to write
    the notes from. Fix anything govulncheck says htt's code reaches
    before releasing; a standard-library fix means raising the `go`

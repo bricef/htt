@@ -272,7 +272,8 @@ plus govulncheck. A separate workflow,
 Mondays, so a vulnerability published while htt is quiet still shows
 up. GitHub pauses a scheduled workflow after 60 days without activity
 and doesn't resume it by itself; turn it back on with
-`gh workflow enable weekly.yml`. The workflows' actions are pinned to
+`gh workflow enable weekly.yml` (`just release-check` warns when it's
+off). The workflows' actions are pinned to
 commits, and Dependabot updates them monthly.
 
 Quick dev loop for the TUI. It never writes to the terminal outside

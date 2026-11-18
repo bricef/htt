@@ -13,11 +13,6 @@ Scoped work lives in [GitHub Issues](https://github.com/bricef/htt/issues).
 Each confirmed against `main` on 2026-11-03.
 
 - **`:` in the TUI keymap does nothing yet** (command mode).
-- **htt doesn't build for Windows** (confirmed 2026-11-17), so there's
-  no Windows binary and `go install` fails there too: goterm v1.0.3
-  uses `unix.EOPNOTSUPP` on every platform. goterm v1.0.4 fixes it
-  (htt then builds and vets for windows/amd64 and windows/arm64);
-  after the bump, add both to the platforms in `scripts/dist.sh`.
 - **Where the clocks go forward at midnight, the report gets that night
   wrong** (confirmed 2026-11-18, in `America/Santiago` on 2026-09-06):
   that midnight doesn't exist, and `time.Date` puts it an hour early,
@@ -71,6 +66,16 @@ Each confirmed against `main` on 2026-11-03.
 
 ## Done
 
+- [x] Windows (2026-11-18): htt builds for Windows with goterm
+      v1.0.4, CI builds, vets and tests it there, and releases after
+      v0.4.0 have Windows binaries, a zip holding `htt.exe` for amd64
+      and arm64. Fixed on the way: the first run couldn't make its
+      config directory there, the REPL read nothing from a pipe, and
+      colours could print as escape codes (fatih/color v1.19.0 turns
+      them on). Skipped on Windows: the time-log e2e tests that set
+      htt's zone with TZ (Go ignores it there) and those whose editor
+      is a shell script. Was the known issue "htt doesn't build for
+      Windows"
 - [x] Status flags a forgotten `log end` (2026-11-18): `htt log status`
       and `htt status` look at the last day logged before today, up to
       two weeks back, and when it has no `@end` add a line after the

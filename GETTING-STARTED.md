@@ -471,7 +471,8 @@ timelog:
 - Entries no category matches are **uncategorised**: `htt report`
   lists their time on a line of its own, so a tag you haven't mapped,
   or one spelt differently (`+HTT`), stands out, and `htt log status`
-  names them `uncategorised` too. Whether that time
+  names them `uncategorised` too. (So no category can be called
+  `uncategorised`: the config says so.) Whether that time
   counts as work follows the **default category**: `working`, which
   counts as work, unless `default_category` names one of your
   categories, whose `work` then decides. The default category's own

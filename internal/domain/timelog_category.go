@@ -12,6 +12,11 @@ import (
 // (WithDefault). It counts as work.
 const DefaultCategoryName = "working"
 
+// UncategorisedName is what the report and the status commands call the
+// entries no category matched (Interval.Uncategorised). It's reserved:
+// a category of that name would read as a second "uncategorised".
+const UncategorisedName = "uncategorised"
+
 // Category classifies time-log entries by their todo.txt tags. Work
 // says whether its time counts as worked time; a break doesn't.
 type Category struct {
@@ -60,6 +65,9 @@ func NewCategoriser(categories []Category) (*Categoriser, error) {
 			return nil, fmt.Errorf("category %d: no name", pos)
 		}
 		label := fmt.Sprintf("category %d (%s)", pos, name)
+		if name == UncategorisedName {
+			return nil, fmt.Errorf("%s: the name is reserved for time no category's tags match; pick another", label)
+		}
 		if other, ok := names[name]; ok {
 			return nil, fmt.Errorf("%s: the name is already category %d's", label, other)
 		}

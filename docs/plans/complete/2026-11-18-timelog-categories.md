@@ -116,6 +116,9 @@ of the open questions above.
   it: `Categoriser.Match` says whether a category matched, each
   `Interval` carries `Uncategorised`, `ByCategory` is matched time
   only and `Timesheet.Uncategorised` the rest; `Worked` is unchanged.
+  The name is reserved (`domain.UncategorisedName`): a category called
+  `uncategorised` is a config error, since it would print a second
+  line of that name (decided at review).
 - **Status names the category.** `log status`, `log active` and
   `htt status` read the categories, so "Only `htt report` reads the
   categories" above no longer holds. The running entry gets its

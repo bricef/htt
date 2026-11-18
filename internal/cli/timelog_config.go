@@ -15,8 +15,8 @@ import (
 // the entries no category matched (domain.Interval.Uncategorised): the
 // report gives their time a line of its own, so an unmapped or misspelt
 // tag stands out. They are in the default category, which decides
-// whether their time counts as work.
-const uncategorisedLabel = "uncategorised"
+// whether their time counts as work. The domain reserves the name.
+const uncategorisedLabel = domain.UncategorisedName
 
 // timelogCategoriser builds the time log's categories from the config
 // in effect.

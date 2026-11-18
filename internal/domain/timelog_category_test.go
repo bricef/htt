@@ -251,6 +251,10 @@ func TestNewCategoriser_Errors(t *testing.T) {
 	}{
 		{"empty name", []Category{{Name: "", Tags: []string{"@a"}}}, "category 1: no name"},
 		{"blank name", []Category{{Name: "  ", Tags: []string{"@a"}}}, "category 1: no name"},
+		// The report and status call unmatched time "uncategorised"; a
+		// category of that name would print a second line with it.
+		{"reserved name", []Category{{Name: "uncategorised", Tags: []string{"@misc"}}},
+			`category 1 (uncategorised): the name is reserved for time no category's tags match; pick another`},
 		{"duplicate name", []Category{
 			{Name: "break", Tags: []string{"@a"}},
 			{Name: "htt", Tags: []string{"+htt"}},

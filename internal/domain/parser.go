@@ -104,7 +104,7 @@ func annotationOnly(name string, s parsec.Scanner, node parsec.Queryable) parsec
 // the date, since a regexp can't look ahead; datePromote trims it.
 const dateToken = `[0-9]{4}-[0-9]{2}-[0-9]{2}(?:[ \t\r\n]|$)`
 
-//NewTodoParser creates a new Parser
+// NewTodoParser creates a new Parser
 func NewTodoParser() *parseutils.Parser {
 	g := parsec.NewAST("TODO", 1000)
 

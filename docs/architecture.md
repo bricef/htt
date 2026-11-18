@@ -165,14 +165,27 @@ a blank line), for messages that point into the file.
 
 A day's worth of activity entries. Each entry is a `Task` annotated
 with a `ts:<RFC3339>` timestamp by `Timelog.Append`. Persistent method
-is `Append`; pure methods are `Latest`, `Duration`, `IsEmpty`, and
-`Spans` (the closed intervals between consecutive entries, which
-`htt report` sums).
+is `Append`; the pure ones are `IsEmpty` and `Timesheet`
+(`timesheet.go`), which reads the day as `Interval`s: each entry runs
+until the next one; an `@end` (`IsDayEnd`: the entry is just `@end`)
+makes none, so the gap after it belongs to nothing; and the day's last
+entry runs to local midnight (`DayUnended`) unless it is an `@end`
+(`DayEnded`), or, today, until now (`DayInProgress`). Intervals never
+leave their day. `Timesheet` takes `now`, and `now`'s zone is the
+local one, so tests pin both. `htt report` sums the sheets (`Worked`,
+`ByCategory`); `htt log status` reads `Status`, `EndedAt` and
+`Current`.
 
-"Latest" returns whatever was last appended, including `@end` — so
-`htt log status` after `htt log end` reports "Currently working on
-@end (Xm)". That's the current product behaviour; sentinel-aware
-semantics (an explicit Open/Closed flag per entry) is feature work.
+Each interval has a `Category` from a `Categoriser`
+(`timelog_category.go`): the first category with one of the entry's
+tags, matched exactly, or the default category (`working`, or the one
+`WithDefault` names, whose `Work` applies). `Work: false` keeps a
+category, such as breaks, out of worked time. The domain holds no
+config: `cli` reads `timelog.categories` and
+`timelog.default_category` (`timelog_config.go`) and builds the
+categoriser, as it builds the TUI's theme. `NewCategoriser` and
+`WithDefault` check the categories, and `cli` names the config key in
+the error.
 
 ## Repositories
 
@@ -394,6 +407,9 @@ Worth reading if you're touching the relevant area:
 - `2026-05-15-timelogs-refactor.md` — why `TimelogRepository` is a
   separate interface from `Repository`, and why "last entry wins"
   semantics survived the refactor.
+- `2026-11-18-timelog-categories.md` — how a day's entries become
+  intervals, what `@end` and the 24:00 rule mean, and why categories
+  are a list matched by exact tags.
 - `2026-11-02-tui-log-file.md` — why the TUI has its own logger and
   how actions report errors.
 - `2026-11-02-tui-editor-exec.md` — how the editor gets the terminal,

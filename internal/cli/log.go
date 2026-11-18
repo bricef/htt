@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/bricef/htt/internal/domain"
 	"github.com/bricef/htt/internal/utils"
@@ -103,23 +104,7 @@ var Active = &cobra.Command{
 	Short: "Show active task, if any.",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		tl, err := timelogRepo().Today()
-		if err != nil {
-			return fmt.Errorf("load today's timelog: %w", err)
-		}
-		current := tl.Latest()
-		if current == nil {
-			fmt.Println("No active task.")
-			return nil
-		}
-		dur, err := tl.Duration()
-		if err != nil {
-			return fmt.Errorf("read entry duration: %w", err)
-		}
-		fmt.Printf("Working on: %s (%s)\n",
-			current.RemoveAnnotation(domain.TimelogTimestampLabel).ColorString(),
-			utils.HumanizeDuration(dur))
-		return nil
+		return printToday("No active task.", "Working on:")
 	},
 }
 
@@ -139,8 +124,18 @@ var Start = &cobra.Command{
 
 var End = &cobra.Command{
 	Use:   "end",
-	Short: "End the timelog for the day.",
-	Args:  cobra.NoArgs,
+	Short: "End the day in the time log.",
+	Long: `Log an @end entry, which ends the day: the entry before it stops
+there. An entry logged after it starts again, and the time between
+them counts as nothing.
+
+A day without an @end counts its last entry until midnight, and
+htt report flags it.
+
+For a break, log an entry rather than ending the day, such as
+htt log add @lunch, and give it a category that doesn't count as work
+(see timelog.categories in GETTING-STARTED.md).`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		task, err := domain.NewTask("@end")
 		if err != nil {
@@ -152,26 +147,40 @@ var End = &cobra.Command{
 }
 
 // printStatus is shared by `htt log status` and `htt status` (the outer
-// rollup command). Mirrors the legacy timelogs.ShowStatus output:
-// "Currently working on: <entry> (<duration>)" or "Not currently
-// working on any task."
+// rollup command): "Currently working on: <entry> (<duration>)", "Not
+// working (day ended at HH:MM)" after an @end, or "Not currently
+// working on any task." on a day with nothing logged.
 func printStatus() error {
+	return printToday("Not currently working on any task.", "Currently working on:")
+}
+
+// printToday prints where today's time log stands: the entry running
+// now and how long it has run, after the working prefix; that the day
+// ended, and when, after an @end; or the empty line on a day with
+// nothing logged. `log status` and `log active` word those two lines
+// differently. Neither needs the categories, so a bad timelog config
+// doesn't stop them.
+func printToday(empty, working string) error {
 	tl, err := timelogRepo().Today()
 	if err != nil {
 		return fmt.Errorf("load today's timelog: %w", err)
 	}
-	latest := tl.Latest()
-	if latest == nil {
-		fmt.Println("Not currently working on any task.")
-		return nil
-	}
-	dur, err := tl.Duration()
+	now := time.Now()
+	sheet, err := tl.Timesheet(nil, now)
 	if err != nil {
-		return fmt.Errorf("read entry duration: %w", err)
+		return fmt.Errorf("read today's timelog: %w", err)
 	}
-	fmt.Printf("Currently working on: %v (%v) \n",
-		latest.RemoveAnnotation(domain.TimelogTimestampLabel).ColorString(),
-		utils.HumanizeDuration(dur))
+	switch sheet.Status {
+	case domain.DayEnded:
+		fmt.Printf("Not working (day ended at %s)\n", sheet.EndedAt.In(now.Location()).Format("15:04"))
+	case domain.DayInProgress:
+		current := sheet.Current()
+		fmt.Printf("%s %s (%s)\n", working,
+			current.Entry.RemoveAnnotation(domain.TimelogTimestampLabel).ColorString(),
+			utils.HumanizeDuration(current.Duration()))
+	default: // nothing logged today
+		fmt.Println(empty)
+	}
 	return nil
 }
 

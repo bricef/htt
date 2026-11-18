@@ -360,13 +360,15 @@ whatever order the view is in.
 ## Time logging
 
 The activity log is a separate stream from todos — a record of what
-you actually worked on, one file per day, each entry timestamped.
+you actually worked on, one file per day, each entry timestamped. An
+entry means "from now on I'm doing this": its time runs until the
+next entry.
 
 - `htt log start` writes a `@start` entry.
 - `htt log add <text>` (alias `htt log +`) logs what you're doing now.
 - `htt workon <id>` (alias `wo`) logs a task from the current todo
   context, so you don't retype it.
-- `htt log end` writes an `@end` entry.
+- `htt log end` writes an `@end` entry, which ends the day.
 
 Each prints the entry it logged:
 
@@ -385,8 +387,8 @@ Logging entry: 2026-05-15 review PR for the new auth flow
 ```
 
 `htt log show` (alias `s`) prints today's log. `htt log status`
-(alias `htt log ?`) and `htt log active` both report the latest entry
-and how long ago it started:
+(alias `htt log ?`) and `htt log active` both report the entry you're
+on and how long it has been running:
 
 ```
 $ htt log show
@@ -400,21 +402,88 @@ $ htt log active
 Working on: 2026-05-15 review PR for the new auth flow (12m)
 ```
 
-When you stop for the day:
+### Breaks and the end of the day
+
+A break is an entry like any other:
+
+```
+$ htt log add @lunch
+Logging entry: @lunch
+```
+
+Give it a category that doesn't count as work (see
+[Categories](#categories)) and reports leave it out of the time you
+worked, while still showing it.
+
+`htt log end` ends the day: the entry before it stops there, and
+`htt log status` says so:
 
 ```
 $ htt log end
 Logging entry: @end
+$ htt log status
+Not working (day ended at 17:00)
 ```
 
-A note on `@end`: it's an entry like any other, so after
-`htt log end`, `htt log status` reports
-"Currently working on: @end (3m)". That's a known wart (listed in
-[`TODO.md`](TODO.md#known-issues)); a stricter open/closed model for
-entries is on the wishlist.
+An entry logged after an `@end` starts again, and the time between
+them counts as nothing, so a day where `log end` marked lunch still
+adds up. A day with no `@end` counts its last entry until midnight,
+and `htt report` flags it; today's last entry counts until now. Each
+day stands alone, midnight to midnight in your time zone: an entry
+still running at midnight stops there, and the next day starts with
+its own first entry.
 
 `htt log edit` (alias `e`) opens today's log file in `$EDITOR`, for
 fixing a forgotten `log end` or a typo.
+
+### Categories
+
+Categories sort your time by the entries' todo.txt tags (`+project`,
+`@context`, `#tag`), in the `timelog` section of the config file:
+
+```yaml
+timelog:
+  categories:            # first match wins
+    - name: break
+      tags: ["@break", "@lunch"]
+      work: false
+    - name: htt
+      tags: ["+htt"]
+    - name: admin
+      tags: ["@email", "+admin"]
+  default_category: working
+```
+
+- An entry goes to the **first** category in the list with one of its
+  tags, so `+htt @lunch` is a break. A tag can be in one category
+  only.
+- Tags match **exactly** as written: `@break` matches `@break coffee`,
+  but not `@Break`, `@breakfast` or `@break-time`.
+- A category counts as work unless it says `work: false`.
+- Entries no category matches go to the **default category**:
+  `working`, which counts as work, unless `default_category` names one
+  of your categories, whose `work` then decides.
+- `@start` is an ordinary entry: the time between `htt log start` and
+  your first real entry is `working`, unless you give `@start` a
+  category.
+- `htt workon` logs the task's text, tags included, so a task's
+  `+project` picks its category.
+- A category that exists only to be the default needs no tags: give
+  it a name (and `work: false` if its time shouldn't count) and name
+  it in `default_category`. Any other category needs at least one tag,
+  or nothing could ever be in it.
+
+**Quote the tags**: in YAML an unquoted `#` starts a comment and an
+unquoted `@` can't start a value. A config htt can't use stops
+`htt report` with an error naming the key:
+
+```
+$ htt report
+❌ config: timelog.categories: category 3 (admin): no tags, and it isn't the default category, so no entry can be in it; list its tags, or make it the default category
+```
+
+The log files themselves don't change: categories are read from the
+tags each time, so changing them recounts past days too.
 
 ## Reports
 
@@ -442,14 +511,31 @@ Deleted (0)
   (none)
 
 Time logged
-  2026-05-15  1h 32m
-  Total: 1h 32m (excluding currently-active entry)
+  2026-05-13  14h 15m worked (no @end: counted to 24:00)
+    break       45m
+    htt      6h 10m
+    admin     8h 0m
+    working      5m
+  2026-05-14    7h 0m worked
+    break     1h 0m
+    htt      4h 50m
+    admin    1h 30m
+    working     40m
+  2026-05-15   1h 44m worked (in progress)
+    working  1h 44m
+  Total: 22h 59m worked
+    break    1h 45m
+    htt      11h 0m
+    admin    9h 30m
+    working  2h 29m
 ```
 
-Time is counted between consecutive log entries, so the entry you're
-still on isn't included. A task added and completed in the period
-counts under both Added and Completed, by the context it was in; a
-deleted task is listed only under Deleted.
+Time logged gives each day's worked time, then its time in each
+category, breaks included, and the same totals for the period. A day
+without an `@end` is counted to midnight and flagged; today's last
+entry counts until now, in progress. A task added and completed in
+the period counts under both Added and Completed, by the context it
+was in; a deleted task is listed only under Deleted.
 
 ## The rollup
 
@@ -515,6 +601,8 @@ a throwaway task list, surprising if you didn't expect it.
 | `tui.theme`           | `default`                       | the TUI's colour theme (see [Colours and themes](#colours-and-themes)) |
 | `tui.colors`          | unset                           | per-colour overrides on top of the theme              |
 | `check_for_updates`   | `true`                          | check GitHub for a newer release, at most once a day (see [Online activity](README.md#online-activity)) |
+| `timelog.categories`  | unset                           | categories for time-log entries, by tag (see [Categories](#categories)) |
+| `timelog.default_category` | `working`                 | the category of entries no category matches (see [Categories](#categories)) |
 
 The `config` subcommands print single values: `htt config where-data`
 (the data directory), `htt config dir` (the config directory, the one

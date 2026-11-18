@@ -129,6 +129,8 @@ Each confirmed against `main` on 2026-11-03.
 - [x] REPL: a command's output stays on screen until the next command
       (2026-11-17)
 - [x] REPL history is saved, in the config directory (2026-11-17)
+- [x] REPL reads quotes as the shell does, so every `--at` form works
+      there; apostrophes in words stay (2026-11-18)
 - [x] `htt report` no longer lists deleted tasks under Added
       (2026-11-17)
 - [x] Releases: `just release-check vX.Y.Z` and `just release vX.Y.Z

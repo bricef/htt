@@ -293,27 +293,42 @@ func TestLogAt_TheDayTheClocksChange(t *testing.T) {
 }
 
 func TestRepl_At(t *testing.T) {
-	// The REPL splits a line at its spaces and doesn't read quotes:
-	// --at HH:MM works, a quoted "yesterday 17:30" is an error that
-	// logs nothing, and the next command's entry is logged now.
+	// The REPL reads quotes as the shell does, so every --at form
+	// works there: HH:MM, a quoted "yesterday 17:30", and --at='…'.
+	// The next command's entry is logged now: --at doesn't carry over.
 	e, loc := timelogEnv(t)
 	now := atNow(t, loc)
 	today, yesterday := now.Format("2006-01-02"), now.AddDate(0, 0, -1).Format("2006-01-02")
-	r := e.mustRunWithInput("/log add --at 0:01 first\n/log end --at \"yesterday 17:30\"\n/log add second\nq\n", "repl")
+	r := e.mustRunWithInput("/log add --at 0:01 first\n/log end --at \"yesterday 17:30\"\n"+
+		"/log add --at='yesterday 9:00' filing\n/log add second\nq\n", "repl")
 	assertContains(t, "stdout", r.stdout, "Logging entry: first (at 00:01 today)\n")
+	assertContains(t, "stdout", r.stdout, "Logging entry: @end (at 17:30 yesterday)\n")
+	assertContains(t, "stdout", r.stdout, "Logging entry: filing (at 09:00 yesterday)\n")
 	assertContains(t, "stdout", r.stdout, "Logging entry: second\n")
-	assertEqual(t, "stderr", r.stderr, "unknown command \"17:30\\\"\" for \"htt log end\"\n")
-	first, err := time.ParseInLocation("2006-01-02 15:04", today+" 00:01", loc)
-	if err != nil {
-		t.Fatal(err)
+	assertEqual(t, "stderr", r.stderr, "")
+	at := func(day, clock string) time.Time {
+		t.Helper()
+		when, err := time.ParseInLocation("2006-01-02 15:04", day+" "+clock, loc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return when
 	}
+	first := at(today, "00:01")
 	lines := strings.Split(e.readData(timelogFile(today)), "\n")
 	if len(lines) != 3 || lines[0] != "first "+stamp(first) || !strings.HasPrefix(lines[1], "second ts:") || lines[1] == "second "+stamp(first) {
 		t.Errorf("today's log = %q, want first at 00:01, then second now", lines)
 	}
-	if e.dataExists(timelogFile(yesterday)) {
-		t.Errorf("the quoted --at wrote yesterday's log")
-	}
+	assertEqual(t, "yesterday's log", e.readData(timelogFile(yesterday)),
+		"filing "+stamp(at(yesterday, "09:00"))+"\n@end "+stamp(at(yesterday, "17:30"))+"\n")
+}
+
+func TestRepl_QuotesGroupWordsAndApostrophesStay(t *testing.T) {
+	// Quotes in a REPL line group words and are dropped, as in the
+	// shell; an apostrophe inside a word is kept as typed.
+	e := newEnv(t)
+	e.mustRunWithInput("add \"buy milk\" for Sam's party\nq\n", "repl")
+	assertEqual(t, "todo.txt", e.readData("todo.txt"), today()+" buy milk for Sam's party\n")
 }
 
 func TestLogAt_HelpNamesTheForms(t *testing.T) {

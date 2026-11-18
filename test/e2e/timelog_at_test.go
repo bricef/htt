@@ -302,6 +302,7 @@ func TestLogAt_TheDayTheClocksChange(t *testing.T) {
 	// confirmation shows it. In London, 01:30 on the day the clocks go
 	// forward is 02:30; in Santiago, whose clocks go forward at
 	// midnight, 00:30 is 23:30 the day before, and is logged there.
+	skipOnWindowsForTZ(t)
 	cases := []struct {
 		zone, at, confirm, file, entry string
 	}{

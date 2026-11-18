@@ -587,7 +587,11 @@ func TestEditorFinished_NonZeroExitReportsAndStillReloads(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err := editorErr(t, exec.Command("sh", "-c", "exit 3"))
+	exit3 := exec.Command("sh", "-c", "exit 3")
+	if runtime.GOOS == "windows" {
+		exit3 = exec.Command("cmd", "/c", "exit 3")
+	}
+	err := editorErr(t, exit3)
 	result, cmd := m.Update(editorFinishedMsg{editor: editor.Editor{Var: "EDITOR", Value: "vi"}, err: err})
 	if isQuit(cmd) {
 		t.Fatalf("an editor error should not quit the TUI")
@@ -623,6 +627,9 @@ func TestEditorFinished_UnreadableFileStillQuits(t *testing.T) {
 	// save over the user's edits, so a failed reload quits as before.
 	if os.Geteuid() == 0 {
 		t.Skip("root reads files regardless of mode")
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no mode that makes a file unreadable")
 	}
 	m, path := seedFileModel(t, "todo", "first")
 	m, buf := withLogBuffer(m)

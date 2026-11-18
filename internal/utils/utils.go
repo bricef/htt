@@ -8,7 +8,7 @@ import (
 	"log"
 	"math"
 	"os"
-	"path"
+	"path/filepath"
 	"regexp/syntax"
 	"strings"
 	"time"
@@ -83,14 +83,14 @@ func (l *LineScanner) Scan() bool {
 	return ok
 }
 
-func ReadLines(filepath string) []string {
+func ReadLines(path string) []string {
 	// short circuit on file missing
-	_, err := os.Stat(filepath)
+	_, err := os.Stat(path)
 	if err != nil {
 		return []string{}
 	}
 
-	f, err := os.OpenFile(filepath, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
 	DieOnError("Could not open file while reading lines: ", err)
 
 	var lines []string
@@ -104,9 +104,13 @@ func ReadLines(filepath string) []string {
 
 }
 
+// EnsurePath makes the directory filename is in, and any above it.
 func EnsurePath(filename string) {
-	err := os.MkdirAll(path.Dir(filename), 0700)
-	DieOnError("Could not ensure path "+path.Dir(filename)+": ", err)
+	// filepath, not path: path splits only at /, so on Windows it found
+	// no directory in C:\Users\…\config.yaml and made nothing.
+	dir := filepath.Dir(filename)
+	err := os.MkdirAll(dir, 0700)
+	DieOnError("Could not ensure path "+dir+": ", err)
 }
 
 func StringSliceIndex(slice []string, item string) (int, error) {
@@ -118,17 +122,17 @@ func StringSliceIndex(slice []string, item string) (int, error) {
 	return 0, errors.New("could not find item in slice")
 }
 
-// EditFilePath opens filepath in the user's editor on this terminal
+// EditFilePath opens path in the user's editor on this terminal
 // and waits for the editor to exit; internal/editor picks the editor
 // and builds its command, as git does. It returns an error when neither
 // $VISUAL nor $EDITOR names an editor, or the editor can't start or
 // exits with an error.
-func EditFilePath(filepath string) error {
+func EditFilePath(path string) error {
 	ed, err := editor.Choose(os.Getenv)
 	if err != nil {
 		return err
 	}
-	proc, err := ed.Command(filepath)
+	proc, err := ed.Command(path)
 	if err != nil {
 		return fmt.Errorf("start editor: %w", err)
 	}

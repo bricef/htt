@@ -10,6 +10,7 @@ import (
 
 	"github.com/bricef/htt/internal/vars"
 	"github.com/chzyer/readline"
+	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
 )
 
@@ -62,12 +63,22 @@ func init() {
 // line; the view is drawn after the command, so it shows the
 // command's effect. An empty line just redraws the view.
 func runRepl() error {
-	rl, err := readline.NewEx(&readline.Config{
+	config := &readline.Config{
 		Prompt:          replPrompt(),
 		HistoryFile:     replHistoryPath(),
 		InterruptPrompt: "^C",
 		EOFPrompt:       "exit",
-	})
+	}
+	if !isatty.IsTerminal(os.Stdin.Fd()) {
+		// Lines from a pipe or a file: read them as they are, with no
+		// prompt or echo. readline does this by itself on Unix. On
+		// Windows it reads key presses from the console and takes
+		// stdin to be one, so a pipe ended the REPL before its first
+		// line.
+		config.Stdin = readline.NewCancelableStdin(os.Stdin)
+		config.FuncIsTerminal = func() bool { return false }
+	}
+	rl, err := readline.NewEx(config)
 	if err != nil {
 		return fmt.Errorf("init readline: %w", err)
 	}

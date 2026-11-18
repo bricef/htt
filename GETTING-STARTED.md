@@ -17,6 +17,9 @@ $ go install github.com/bricef/htt/cmd/htt@latest
 $ htt --help
 ```
 
+Without one, download a binary for Linux, macOS or Windows, as the
+README's [Installation](README.md#installation) section says.
+
 The first run creates `~/.config/htt/config.yaml` with defaults. Your
 task files live under `~/.htt/data/`.
 
@@ -728,6 +731,12 @@ header. You can edit them by hand; `htt` rewrites a file only when a
 command changes it, keeping the previous version as `.bak`. Anything
 else in the data directory, such as a `.git/` if you keep it under
 version control, htt leaves alone.
+
+On Windows, `~` is your user folder, such as `C:\Users\you`: the config
+is `C:\Users\you\.config\htt\config.yaml`, and the task files are in
+`C:\Users\you\.htt\data\`. The update check's file is in your user
+cache directory: `~/.cache/htt/`, as above, on Linux,
+`~/Library/Caches/htt/` on macOS and `%LOCALAPPDATA%\htt\` on Windows.
 
 `htt config where-data` prints the data directory if you ever forget
 where it lives.

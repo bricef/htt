@@ -1,7 +1,8 @@
 # CI runs the same checks as a local `just test && just vet && just check`
 # (the justfile stays the source of truth for them), plus a tidy-module
-# check and govulncheck. It runs on every push to any branch, so a
-# Dependabot branch is checked before its PR is merged.
+# check, govulncheck, and a build, vet and test on Windows. It runs on
+# every push to any branch, so a Dependabot branch is checked before its
+# PR is merged.
 #
 # The weekly vulnerability scan is a separate workflow, weekly.yml: in
 # a public repository GitHub disables a workflow with a schedule after
@@ -61,6 +62,31 @@ jobs:
 
       - name: Shell scripts
         run: shellcheck scripts/*.sh
+
+  # Windows, which nobody builds on locally. It runs go itself rather
+  # than the just recipes, which need a Unix shell; the lint and the
+  # scans above don't depend on the platform.
+  windows:
+    name: Build, vet and test on Windows
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./... -count=1
 
   vulncheck:
     name: govulncheck

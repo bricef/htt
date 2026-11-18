@@ -5,6 +5,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -508,6 +509,23 @@ func TestFirstRun_SaysItCreatedTheConfigOnStderr(t *testing.T) {
 	}
 }
 
+func TestFirstRun_MakesTheConfigDirectory(t *testing.T) {
+	// Where htt has never run, there's no config directory either. htt
+	// found the directory to make with path.Dir, which splits only at /,
+	// so on Windows it made none and couldn't write the config file.
+	e := newEnv(t)
+	if err := os.RemoveAll(filepath.Join(e.home, ".config")); err != nil {
+		t.Fatal(err)
+	}
+
+	r := e.mustRun("todo", "add", "first task")
+	assertEqual(t, "stdout", r.stdout, "Added: "+today()+" first task\n")
+	if _, err := os.Stat(filepath.Join(e.home, ".config", "htt", "config.yaml")); err != nil {
+		t.Errorf("the first run should create the config file: %v", err)
+	}
+	assertEqual(t, "todo.txt", e.readData("todo.txt"), today()+" first task\n")
+}
+
 func TestUpdateCheck_NoNetworkWithoutATerminal(t *testing.T) {
 	// The e2e harness runs htt without a terminal, as a script would.
 	// Route any HTTPS through a local "proxy" that only counts
@@ -544,7 +562,7 @@ func TestUpdateCheck_NoNetworkWithoutATerminal(t *testing.T) {
 	if n := attempts.Load(); n != 0 {
 		t.Errorf("htt opened %d connection(s) without a terminal; want none", n)
 	}
-	if _, err := os.Stat(filepath.Join(e.home, ".cache", "htt", "update-check.json")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(e.cacheDir(), "htt", "update-check.json")); !os.IsNotExist(err) {
 		t.Errorf("no check should have been recorded (stat err = %v)", err)
 	}
 }
@@ -600,6 +618,20 @@ func TestRepl_HistoryPersistsAcrossSessions(t *testing.T) {
 		t.Fatalf("no REPL history next to config.yaml: %v", err)
 	}
 	assertInOrder(t, "repl-history", string(b), "add first task\n", "add second task\n")
+}
+
+func TestRepl_PipedInputIsReadAsItIs(t *testing.T) {
+	// Lines from a pipe are read with no prompt or echo, so the only
+	// prompt in the output is the one htt prints above a command's
+	// output. readline does this by itself on Unix only. On Windows it
+	// took stdin for the console: it read nothing from a pipe, and its
+	// terminal mode draws the prompt again for every character read.
+	e := newEnv(t)
+	r := e.mustRunWithInput("add buy milk\nq\n", "repl")
+	if n := strings.Count(r.stdout, "htt(todo)> "); n != 1 {
+		t.Errorf("want the prompt once, above the add's output; got it %d times:\n%q", n, r.stdout)
+	}
+	assertEqual(t, "todo.txt", e.readData("todo.txt"), today()+" buy milk\n")
 }
 
 // replScreens splits REPL output at each clear-screen sequence: the
@@ -660,6 +692,15 @@ func TestEditCommands_EditorProblemsFailLikeTodoEdit(t *testing.T) {
 		{"todo", "edit-archive"},
 		{"log", "edit"},
 	}
+	// Windows has no false, so its failing editor is cmd's exit there.
+	// And an unset TERM isn't dumb on Windows, whose consoles leave it
+	// unset, so $VISUAL runs, and fails to start.
+	fails, failsWithArgs := "false", "false --wait"
+	unsetTerm := "❌ $EDITOR is not set ($VISUAL isn't used when TERM is dumb or unset)\n"
+	if runtime.GOOS == "windows" {
+		fails, failsWithArgs = "cmd /c exit 1", "cmd /c exit 1 --wait"
+		unsetTerm = "❌ start editor: exec: \"no-such-visual-editor\": executable file not found in %PATH%\n"
+	}
 	cases := []struct {
 		name   string
 		env    []string // the editor variables set; nil sets none
@@ -670,10 +711,10 @@ func TestEditCommands_EditorProblemsFailLikeTodoEdit(t *testing.T) {
 		// Not a real editor: if VISUAL ran, it would fail at once
 		// rather than wait for a terminal.
 		{"only VISUAL on a dumb terminal", []string{"TERM=dumb", "VISUAL=no-such-visual-editor"}, "❌ $EDITOR is not set ($VISUAL isn't used when TERM is dumb or unset)\n"},
-		// As git does, an unset TERM is a dumb one.
-		{"only VISUAL, TERM unset", []string{"VISUAL=no-such-visual-editor"}, "❌ $EDITOR is not set ($VISUAL isn't used when TERM is dumb or unset)\n"},
-		{"editor fails", []string{"EDITOR=false"}, "❌ run editor: exit status 1\n"},
-		{"editor with arguments fails", []string{"EDITOR=false --wait"}, "❌ run editor: exit status 1\n"},
+		// As git does, an unset TERM is a dumb one (but on Windows).
+		{"only VISUAL, TERM unset", []string{"VISUAL=no-such-visual-editor"}, unsetTerm},
+		{"editor fails", []string{"EDITOR=" + fails}, "❌ run editor: exit status 1\n"},
+		{"editor with arguments fails", []string{"EDITOR=" + failsWithArgs}, "❌ run editor: exit status 1\n"},
 	}
 	for _, tc := range cases {
 		for _, args := range commands {
@@ -692,6 +733,7 @@ func TestEditCommands_EditorProblemsFailLikeTodoEdit(t *testing.T) {
 }
 
 func TestEditCommands_SaveWhatTheEditorWrites(t *testing.T) {
+	skipOnWindowsForShellEditor(t)
 	e := newEnv(t)
 	editor := filepath.Join(e.home, "editor.sh")
 	if err := os.WriteFile(editor, []byte("#!/bin/sh\necho 'edited by the editor' > \"$1\"\n"), 0o755); err != nil {
@@ -843,6 +885,7 @@ func TestRepl_DateWarningsOncePerSession(t *testing.T) {
 // the task was written to; the task is written all the same, and stdout
 // and the exit code are the command's.
 func TestDates_TypedTasksWarnAsTheyAreWritten(t *testing.T) {
+	skipOnWindowsForShellEditor(t)
 	e := newEnv(t)
 	// Saving drops the blank line: the warning names the line as saved.
 	e.writeData("todo.txt", "fine task\n\nother task\n")

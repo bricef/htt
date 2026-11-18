@@ -90,12 +90,16 @@ GitHub Actions workflow that builds the binaries (see
 ## Binaries
 
 [`release-binaries.yml`](../.github/workflows/release-binaries.yml)
-runs when a release is published. It builds, for Linux and macOS on
-amd64 and arm64:
+runs when a release is published. It builds, for Linux, macOS and
+Windows on amd64 and arm64:
 
-- `htt_vX.Y.Z_<os>_<arch>.tar.gz`, holding `htt`, `README.md` and
-  `LICENSE` (releases before the MIT licence was added, v0.3.0 and
-  earlier, have no `LICENSE`);
+- `htt_vX.Y.Z_<os>_<arch>.tar.gz` for Linux and macOS, holding `htt`,
+  `README.md` and `LICENSE` (releases before the MIT licence was
+  added, v0.3.0 and earlier, have no `LICENSE`);
+- `htt_vX.Y.Z_windows_<arch>.zip` for Windows, holding `htt.exe`,
+  `README.md` and `LICENSE`, a zip as Go's own Windows downloads are.
+  Releases up to v0.4.0 have none: they don't build for Windows
+  (goterm v1.0.3 used `unix.EOPNOTSUPP` on every platform);
 - `htt_vX.Y.Z_SHA256SUMS`, the SHA-256 of each archive;
 
 then makes a signed build-provenance attestation for the archives and
@@ -105,8 +109,9 @@ third-party code, holds no token that can write to the repository or
 sign attestations.
 
 The build is [`scripts/dist.sh`](../scripts/dist.sh), and `just dist
-vX.Y.Z` runs it locally, into `dist/`. It builds the tagged commit,
-whatever is checked out, from a fresh clone of the tag
+vX.Y.Z` runs it locally, into `dist/` (the zips need `zip`; macOS has
+it, and on Debian or Ubuntu it's `apt install zip`). It builds the
+tagged commit, whatever is checked out, from a fresh clone of the tag
 (`CGO_ENABLED=0`, `-trimpath`, stripped). The version matters:
 `htt --version` prints the one Go stamped into the binary, and the
 update check is off in a build without one. Go stamps the tag's
@@ -122,12 +127,6 @@ tag=vX.Y.Z`, from `main`), waits for that run, and makes the same
 checks as `just release`. Use it when a release's binaries failed, or
 to give an older release binaries. The workflow has to be on `main`
 for this to work.
-
-There's no Windows build: htt doesn't build for Windows, because
-goterm v1.0.3 uses `unix.EOPNOTSUPP` on every platform (goterm
-v1.0.4 fixes it). Once htt builds there, adding `windows/amd64` and
-`windows/arm64` to the platforms in `scripts/dist.sh` is all it takes;
-their archives are zips.
 
 ## Tags are permanent
 

@@ -19,11 +19,12 @@
 set -euo pipefail
 
 module=github.com/bricef/htt
-# Windows is missing because htt doesn't build there yet: goterm v1.0.3
-# uses unix.EOPNOTSUPP on every platform (fixed in goterm v1.0.4). Once
-# it builds, add windows/amd64 and windows/arm64; their archives are
-# zips.
-platforms="linux/amd64 linux/arm64 darwin/amd64 darwin/arm64"
+unix_platforms="linux/amd64 linux/arm64 darwin/amd64 darwin/arm64"
+# A Windows archive is a zip holding htt.exe, as Go's own are; the
+# others are tarballs holding htt. Releases up to v0.4.0 have no Windows
+# build: they use goterm v1.0.3, which doesn't build there.
+windows_platforms="windows/amd64 windows/arm64"
+last_without_windows=v0.4.0
 
 usage() {
 	echo "usage: dist.sh VERSION OUTDIR | dist.sh --assets VERSION" >&2
@@ -45,9 +46,16 @@ archive_name() { # VERSION OS ARCH
 sums_name() { # VERSION
 	echo "htt_$1_SHA256SUMS"
 }
+platforms_of() { # VERSION: the platforms its release is built for
+	if [[ $(printf '%s\n%s\n' "$last_without_windows" "$1" | sort -V | tail -1) == "$last_without_windows" ]]; then
+		echo "$unix_platforms"
+	else
+		echo "$unix_platforms $windows_platforms"
+	fi
+}
 assets() { # VERSION: every file a release carries, archives first
 	local p
-	for p in $platforms; do
+	for p in $(platforms_of "$1"); do
 		archive_name "$1" "${p%/*}" "${p#*/}"
 	done
 	sums_name "$1"
@@ -82,6 +90,7 @@ fi
 [[ $# == 2 ]] || usage
 version=$1
 check_version "$version"
+platforms=$(platforms_of "$version")
 if [[ " $platforms" == *" windows/"* ]] && ! command -v zip >/dev/null; then
 	fail "the Windows archives need zip; install it (apt install zip)"
 fi

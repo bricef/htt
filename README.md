@@ -30,9 +30,9 @@ it — and the reference for every command.
 ### Download a binary
 
 Every [release](https://github.com/bricef/htt/releases) from v0.3.0
-on has a ready-to-run `htt` for Linux and macOS, so you don't need Go.
-Pick the archive for your machine (`uname -sm` tells you which you
-have):
+on has a ready-to-run `htt` for Linux and macOS, and every release
+after v0.4.0 has one for Windows, so you don't need Go. Pick the
+archive for your machine (`uname -sm` tells you which you have):
 
 | Machine | `uname -sm` | Archive |
 | --- | --- | --- |
@@ -41,7 +41,9 @@ have):
 | Mac with Apple silicon | `Darwin arm64` | `htt_vX.Y.Z_darwin_arm64.tar.gz` |
 | Mac with an Intel processor | `Darwin x86_64` | `htt_vX.Y.Z_darwin_amd64.tar.gz` |
 
-There's no Windows build yet.
+On Windows, pick `htt_vX.Y.Z_windows_amd64.zip` for an Intel or AMD
+processor, or `htt_vX.Y.Z_windows_arm64.zip` for an ARM one. Settings
+› System › About says which you have, under "System type".
 
 Download it and the checksums file, `htt_vX.Y.Z_SHA256SUMS`, from the
 release page, or with [gh](https://cli.github.com/) (v0.3.0 on an
@@ -57,6 +59,13 @@ Check the archive against the checksums file. It should say `OK`:
 ```shell
 grep htt_v0.3.0_darwin_arm64.tar.gz htt_v0.3.0_SHA256SUMS | shasum -a 256 -c   # macOS
 grep htt_v0.3.0_linux_amd64.tar.gz htt_v0.3.0_SHA256SUMS | sha256sum -c        # Linux
+```
+
+On Windows, `Get-FileHash` in PowerShell prints the zip's SHA-256. It
+should match the zip's line in the checksums file (in capitals):
+
+```powershell
+Get-FileHash htt_vX.Y.Z_windows_amd64.zip
 ```
 
 Each archive also has a signed build-provenance attestation, which
@@ -75,6 +84,19 @@ mv htt ~/.local/bin/
 htt --version
 ```
 
+On Windows, unpack the zip and put `htt.exe` in a folder on your
+`PATH`. In PowerShell, to unpack it into `%LOCALAPPDATA%\Programs\htt`
+and add that folder to your `PATH`:
+
+```powershell
+Expand-Archive htt_vX.Y.Z_windows_amd64.zip "$env:LOCALAPPDATA\Programs\htt"
+$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+[Environment]::SetEnvironmentVariable("Path", "$userPath;$env:LOCALAPPDATA\Programs\htt", "User")
+```
+
+Terminals opened after that have the new `PATH`. In a new one,
+`htt --version` says which version you have.
+
 On macOS, a file downloaded with a web browser is quarantined, and
 macOS won't run a quarantined program that isn't signed by an Apple
 developer, which htt isn't: it says Apple can't verify that "htt" is
@@ -87,7 +109,8 @@ xattr -d com.apple.quarantine ~/.local/bin/htt
 (Downloads made with `gh` or `curl` aren't quarantined.)
 
 To update, download the new release the same way; the update notice
-links to it.
+links to it. On Windows, `Expand-Archive -Force` replaces the old
+`htt.exe`.
 
 ### With Go
 
@@ -98,7 +121,8 @@ go install github.com/bricef/htt/cmd/htt@latest
 ```
 
 Make sure `$(go env GOBIN)` (or `$(go env GOPATH)/bin` if `GOBIN` is
-unset) is on your `PATH`.
+unset) is on your `PATH`. On Windows, this needs a release after
+v0.4.0: v0.4.0 and earlier don't build there.
 
 htt needs Go 1.26.11 or newer, because earlier releases have
 standard-library vulnerabilities its network code can reach. With an
@@ -207,8 +231,8 @@ htt checks whether a newer release exists, so you hear about fixes.
   background, and a command waits at most a second for it, only on the
   day's checking run.
 - **What it stores:** `update-check.json` in your user cache directory
-  (`~/.cache/htt/` on Linux): when it last checked, and the latest
-  release it saw.
+  (`~/.cache/htt/` on Linux, `%LOCALAPPDATA%\htt\` on Windows): when
+  it last checked, and the latest release it saw.
 - **Turning it off:** set `check_for_updates: false` in your config
   file (`~/.config/htt/config.yaml`).
 
@@ -269,7 +293,8 @@ the release; `just dist vX.Y.Z` builds the same archives locally.
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the
 same recipes on every push to any branch: `go mod tidy -diff`,
 `just test`, `just vet` and `just check` (golangci-lint v2.15.0),
-plus govulncheck. A separate workflow,
+plus govulncheck, and it builds, vets and tests htt on Windows. A
+separate workflow,
 [`weekly.yml`](.github/workflows/weekly.yml), runs govulncheck on
 Mondays, so a vulnerability published while htt is quiet still shows
 up. GitHub pauses a scheduled workflow after 60 days without activity

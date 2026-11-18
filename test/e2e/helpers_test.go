@@ -29,7 +29,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	binaryPath = filepath.Join(tmp, "htt")
+	binaryPath = filepath.Join(tmp, exe("htt"))
 
 	_, thisFile, _, _ := runtime.Caller(0)
 	repoRoot := filepath.Join(filepath.Dir(thisFile), "..", "..")
@@ -46,6 +46,34 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 	_ = os.RemoveAll(tmp)
 	os.Exit(code)
+}
+
+// exe is the file name of a program called name on this platform:
+// Windows runs a program only if its file name ends in .exe.
+func exe(name string) string {
+	if runtime.GOOS == "windows" {
+		return name + ".exe"
+	}
+	return name
+}
+
+// skipOnWindowsForTZ skips a test that sets the time zone htt runs in
+// with TZ. Go reads TZ on Unix only; on Windows, htt runs in the
+// system's time zone whatever TZ says.
+func skipOnWindowsForTZ(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("sets htt's time zone with TZ, which Go ignores on Windows")
+	}
+}
+
+// skipOnWindowsForShellEditor skips a test whose $EDITOR is a shell
+// script, which Windows can't run.
+func skipOnWindowsForShellEditor(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("$EDITOR is a shell script, which Windows can't run")
+	}
 }
 
 type env struct {
@@ -75,6 +103,30 @@ func newEnv(t *testing.T) *env {
 	}
 }
 
+// homeEnv is the environment that makes the env's home htt's home.
+// htt finds it in HOME on every platform. On Windows, Go's own
+// os.UserHomeDir reads USERPROFILE, and os.UserCacheDir LOCALAPPDATA.
+func (e *env) homeEnv() []string {
+	home := []string{"HOME=" + e.home}
+	if runtime.GOOS == "windows" {
+		home = append(home, "USERPROFILE="+e.home, "LOCALAPPDATA="+e.cacheDir())
+	}
+	return home
+}
+
+// cacheDir is where htt keeps its cache, os.UserCacheDir, in the env's
+// home.
+func (e *env) cacheDir() string {
+	switch runtime.GOOS {
+	case "windows":
+		return filepath.Join(e.home, "AppData", "Local")
+	case "darwin":
+		return filepath.Join(e.home, "Library", "Caches")
+	default:
+		return filepath.Join(e.home, ".cache")
+	}
+}
+
 type runResult struct {
 	stdout   string
 	stderr   string
@@ -92,10 +144,7 @@ func (e *env) runWithInput(input string, args ...string) runResult {
 	e.t.Helper()
 	args = append([]string{"--no-color"}, args...)
 	cmd := exec.Command(binaryPath, args...)
-	cmd.Env = append([]string{
-		"HOME=" + e.home,
-		"PATH=" + os.Getenv("PATH"),
-	}, e.extraEnv...)
+	cmd.Env = append(append(e.homeEnv(), "PATH="+os.Getenv("PATH")), e.extraEnv...)
 	if input != "" {
 		cmd.Stdin = strings.NewReader(input)
 	}

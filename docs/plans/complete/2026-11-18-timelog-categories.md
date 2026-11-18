@@ -85,7 +85,8 @@ Not built, needing a decision:
   status looks at today only, and today's open entry is in progress,
   never flagged. Flagging a past day would mean status looking back
   (to yesterday? the last day with entries?), which nothing decides,
-  so only the report flags unended days.
+  so only the report flags unended days. Decided: the last day with
+  entries (see Amendments).
 
 What building showed about the open questions:
 
@@ -101,7 +102,8 @@ What building showed about the open questions:
   but `htt log edit` is still the only fix.
 
 Amendments: Brice's decisions of 2026-11-18, after the merge, on two
-of the open questions above.
+of the open questions above and on decision 4's status flag, left
+unbuilt.
 
 - **Uncategorised time has a line of its own in the report.** An
   entry no category's tags match is uncategorised: the report shows
@@ -133,6 +135,16 @@ of the open questions above.
   categories`), keep the exit code, and show the entry as before,
   without its category. They warn only when they show an entry, since
   no other line has a category to lose.
+- **Status flags the last day logged when it has no `@end`.**
+  `log status` and `htt status` look at the most recent day before
+  today whose log has entries, at most 14 days back, and when it is
+  unended add a line after the status, on stdout, with the exit code
+  unchanged: `2026-11-17 has no @end (counted to 24:00): end it with
+  htt log end --at "2026-11-17 HH:MM"`. Only that day: an older
+  unended day is the report's to flag. `log active` doesn't, staying
+  one line for a shell prompt. The line reads no categories, so a bad
+  `timelog` config doesn't change it. Built after `--at`
+  (2026-11-18-timelog-at.md), which gives the fix it names.
 
 ## Motivation
 

@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // TimelogRepository abstracts per-day timelog persistence. Storage
 // implementations satisfy this interface; the domain package owns the
@@ -38,6 +41,32 @@ type TimelogRepository interface {
 	// repository without files. Pure path builder, like
 	// CurrentLogPath; the CLI names it in messages about an entry.
 	LogPath(date time.Time) string
+}
+
+// LastLogBefore is the log of the most recent of the n days before
+// now's that has entries: yesterday's, or failing that the day
+// before's, and so on; nil when none of them has an entry. It loads
+// each day through r.Day until one has entries, and none further back.
+//
+// now's location is the local zone, as for Timelog.Timesheet: the days
+// are calendar days there, each one back by its date, as a log's file
+// is named, not 24 hours back (a day the clocks change is 23 or 25
+// hours long).
+func LastLogBefore(r TimelogRepository, now time.Time, n int) (*Timelog, error) {
+	y, m, d := now.Date()
+	for back := 1; back <= n; back++ {
+		// Noon on the day: where the clocks go forward at midnight, that
+		// midnight doesn't exist, and time.Date puts it on the day before.
+		day := time.Date(y, m, d-back, 12, 0, 0, 0, now.Location())
+		l, err := r.Day(day)
+		if err != nil {
+			return nil, fmt.Errorf("load the timelog for %s: %w", day.Format("2006-01-02"), err)
+		}
+		if !l.IsEmpty() {
+			return l, nil
+		}
+	}
+	return nil, nil
 }
 
 // TimelogTimestampLabel is the annotation key Timelog.Append and

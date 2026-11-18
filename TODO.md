@@ -12,9 +12,6 @@ Scoped work lives in [GitHub Issues](https://github.com/bricef/htt/issues).
 
 Each confirmed against `main` on 2026-11-03.
 
-- **`@end` isn't a sentinel.** After `htt log end`, `htt log status`
-  reports "Currently working on: @end". Fixing it needs an open/closed
-  model for entries (see the wishlist).
 - **`:` in the TUI keymap does nothing yet** (command mode).
 - **htt doesn't build for Windows** (confirmed 2026-11-17), so there's
   no Windows binary and `go install` fails there too: goterm v1.0.3
@@ -35,7 +32,6 @@ Each confirmed against `main` on 2026-11-03.
   - [ ] More `show` views: multi-key sort, negated filters, created-date
         ranges, saved views
 - Time log
-  - [ ] Open/closed entries, so `@end` (and a pause) mean something
   - [ ] `log@`: log an entry at a given time
   - [ ] Interval output
   - [ ] Review jrnl for inspiration
@@ -71,6 +67,17 @@ Each confirmed against `main` on 2026-11-03.
 
 ## Done
 
+- [x] Time log categories, breaks and day ends (2026-11-18):
+      `timelog.categories` sorts entries by tag (exact, first match
+      wins) and `work: false` keeps a category such as breaks out of
+      worked time; `@end` ends the day, the gap after it counting as
+      nothing, and a day without one runs to 24:00 and is flagged.
+      `htt report` gives each day's worked time and time per category,
+      with totals, today's open entry counting until now; `log status`
+      and `log active` say "Not working (day ended at HH:MM)" after
+      `@end`. Was the known issue "`@end` isn't a sentinel" and the
+      wishlist's "open/closed entries, so `@end` (and a pause) mean
+      something"
 - [x] `just release-check` (and `just release`) warns when GitHub has
       paused the weekly scan (2026-11-18), with the command that turns
       it back on; a warning only, and a failed lookup says so and

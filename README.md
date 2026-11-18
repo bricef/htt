@@ -9,9 +9,10 @@ also edit by hand.
 - **Todo lists** in todo.txt format, split into contexts (`work`,
   `home`, …), with priorities, natural-language due dates
   (`--due "next Friday"`), search, and sorted or filtered views.
-- **A time log**: a timestamped record of what you worked on each day.
+- **A time log**: a timestamped record of what you worked on each day,
+  with breaks, day ends and categories by tag.
 - **Reports**: what you completed, added and deleted, and how long you
-  worked, over any period.
+  worked, per category, over any period.
 - **Three ways in**: one-shot commands, a todo-mode shell (`htt repl`)
   and a full-screen TUI (`htt interactive`) with search, in-place
   editing with a live preview and tag completion, task lines coloured

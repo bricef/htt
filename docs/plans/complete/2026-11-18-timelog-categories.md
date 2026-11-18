@@ -1,7 +1,101 @@
 # Time log: categories, breaks and day ends
 
 **Date:** 2026-11-18
-**Status:** In progress
+**Status:** Complete (2026-11-18)
+
+## Outcome
+
+Shipped as planned, with Brice's two clarifications (decisions 7 and
+8). Choices made while building:
+
+- **The model is `Timelog.Timesheet(categoriser, now)`** in the
+  domain: a day's `Interval`s (entry, category, start, end), a status
+  (`empty`, `ended`, `in progress`, `unended`), the final `@end`'s
+  time, `Worked`, `ByCategory` and `Current`. `now` pins the clock and
+  its zone is the local one, so tests fix both. `Latest`, `Duration`
+  and `Spans` are gone; the CLI reads the timesheet instead.
+- **An `@end` is an entry whose text is exactly `@end`** (annotations,
+  a priority and dates aside), as `log end` writes it. An entry that
+  only carries the tag among other words ("fix the @end bug +htt", as
+  `workon` could log from a task) is ordinary, so it can't end a day
+  by accident.
+- **Entries are read in time order** (a stable sort, so entries
+  logged in the same second keep file order and the earlier ones run
+  for no time): a hand-edited file out of order still adds up.
+- **Intervals are clamped to their day.** An entry stamped before the
+  day's local midnight (a hand edit, or a change of time zone since)
+  counts from midnight; one stamped after the day counts nothing; and
+  today nothing counts after now. The day is the log's date in the
+  local zone, 23 or 25 hours long when the clocks change.
+- **Config checks.** Names and tags compare exactly, like the tags
+  themselves (decision 7), so `Break` and `break` are two categories.
+  A tag needs its sigil and no spaces (an entry's tags always carry
+  their sigil, so a bare word could never match), and can be in one
+  category only (a second listing could never match; listing it twice
+  in one category is harmless). `work` must be `true` or `false` and
+  defaults to `true`. Unknown keys, in the `timelog` section or a
+  category, are errors, and so is a map where the list goes (the error
+  says order matters). An empty tag left by an unquoted `#` says to
+  quote it. Errors name the key, then the category by its position
+  counting from 1 and its name: `config: timelog.categories:
+  category 3 (admin): no tags; list the tags that put an entry in it`.
+- **Only `htt report` reads the categories.** `log status`,
+  `log active`, `htt status` and the commands that write entries
+  don't, so a bad `timelog` config stops the report (before it prints
+  anything) and nothing else, as a bad theme stops only
+  `htt interactive`.
+- **A fresh config gets `timelog: default_category: working`**, as it
+  gets `tui.theme`, so `htt config yaml` shows the setting; the domain
+  falls back on `working` anyway.
+- **The report's time section** keeps its heading and
+  `formatReportDuration`: a line per day, `2026-11-04  15h 0m worked
+  (no @end: counted to 24:00)` or `… (in progress)` for today, then a
+  line per category with time, names lined up on the left and
+  durations on the right across the section; then `Total: … worked`
+  and the categories' totals in the same layout. Categories come in
+  the config's order, the default last unless it is one of them.
+  Categories and days with no time are left out, except today in
+  progress. Days are walked a calendar day at a time in the local
+  zone: the old 24-hour step would have listed the day the clocks go
+  back twice now that days are local.
+- **`log status` and `log active`** keep their own wording when
+  working ("Currently working on: …", "Working on: …") and when
+  nothing is logged, and both say "Not working (day ended at 17:00)"
+  after an `@end`. Status lost a trailing space. Neither names the
+  category: that is an open question (below), though "What changes
+  for users" assumed they would.
+
+- **Tests** as planned: table tests per rule, an oracle over 3000
+  generated days in five zones (clock changes included) that counts
+  each minute on its own, a first-match property with near-miss tags,
+  config tests through viper, and e2e tests with htt run in
+  Asia/Kolkata. Breaking each core rule in turn (26 mutations: @end
+  making an interval, the 24:00 and until-now rules, UTC or 24-hour
+  days, sorting, clamping, work: false in worked time, first match,
+  exact matching, each config check, the default category's rules,
+  status after @end, the report's day walk) made at least one test
+  fail every time.
+
+Not built, needing a decision:
+
+- **Decision 4 says `log status` says a day has no `@end`,** but
+  status looks at today only, and today's open entry is in progress,
+  never flagged. Flagging a past day would mean status looking back
+  (to yesterday? the last day with entries?), which nothing decides,
+  so only the report flags unended days.
+
+What building showed about the open questions:
+
+- **The category in `log status`** matters most on a break: it says
+  "Currently working on: @lunch (20m)". Naming the category, or
+  saying "On a break", would read better.
+- **"Uncategorised"**: with exact matching, a misspelt or
+  differently-cased tag (`+HTT`) silently lands in `working`. Listing
+  the default category's time separately, or the tags that fell
+  through, would catch that.
+- **`--at`**: a forgotten `log end` now counts the day's last entry
+  until midnight (a 15-hour day in the report). The report flags it,
+  but `htt log edit` is still the only fix.
 
 ## Motivation
 

@@ -25,7 +25,9 @@ are on a line of their own, uncategorised, which says the category
 the time counts as (timelog.default_category, working unless set) and
 so whether it is worked. An entry runs until the next one; @end ends
 the day, and a day without one counts its last entry until midnight
-and is flagged. Today's last entry counts until now, in progress.
+and is flagged, with the command that ends it:
+htt log end --at "YYYY-MM-DD HH:MM", the time you stopped. Today's
+last entry counts until now, in progress.
 
 --since takes a date (YYYY-MM-DD) or a duration counted back from now
 in days, weeks or hours (7d, 2w, 24h).
@@ -342,6 +344,7 @@ type archivedTask struct {
 //	    htt             4h 0m
 //	    uncategorised   3h 0m  (counted as working)
 //	  2026-11-03  15h 0m worked (no @end: counted to 24:00)
+//	              end the day with htt log end --at "2026-11-03 HH:MM"
 //	    uncategorised  15h 0m  (counted as working)
 //	  Total: 22h 0m worked
 //	    break           1h 0m
@@ -349,7 +352,9 @@ type archivedTask struct {
 //	    uncategorised  18h 0m  (counted as working)
 //
 // A day without an @end counts its last entry to midnight, and says
-// so; today's last entry counts until now (until), in progress. A
+// so, with the command that ends it on a line of its own (the day's
+// line would be too long for a terminal with it); today's last entry
+// counts until now (until), in progress. A
 // category's line is the time its tags matched; the time of entries no
 // category matched is on the uncategorised line, which names the
 // default category it counts as (whose work setting decides whether it
@@ -435,6 +440,7 @@ func reportTimeLogged(since, until time.Time, categories *domain.Categoriser) er
 	}
 
 	for _, d := range days {
+		date := d.date.Format("2006-01-02")
 		note := ""
 		switch d.sheet.Status {
 		case domain.DayUnended:
@@ -442,7 +448,11 @@ func reportTimeLogged(since, until time.Time, categories *domain.Categoriser) er
 		case domain.DayInProgress:
 			note = " (in progress)"
 		}
-		fmt.Printf("  %s  %*s worked%s\n", d.date.Format("2006-01-02"), dayWidth, formatReportDuration(d.sheet.Worked()), note)
+		fmt.Printf("  %s  %*s worked%s\n", date, dayWidth, formatReportDuration(d.sheet.Worked()), note)
+		if d.sheet.Status == domain.DayUnended {
+			// Under the day's time, how to end it.
+			fmt.Printf("  %*s  end the day with htt log end --at %q\n", len(date), "", date+" HH:MM")
+		}
 		printCategories(d.byName, d.uncat)
 	}
 	fmt.Printf("  Total: %s worked\n", formatReportDuration(worked))

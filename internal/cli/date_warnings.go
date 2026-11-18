@@ -52,7 +52,8 @@ func (r warningRepository) Contexts() ([]*domain.Context, error) {
 // command loads warns about the entries with dates htt can't read, in
 // the same form and with the same once-per-run record. An entry's ts:
 // timestamp is htt's own, not a date Task.DateWarnings reads, so it
-// never warns. Timelog.Append saves through the wrapped repository.
+// never warns. Timelog.Append and AppendAt save through the wrapped
+// repository.
 type warningTimelogRepository struct{ domain.TimelogRepository }
 
 func (r warningTimelogRepository) Today() (*domain.Timelog, error) {

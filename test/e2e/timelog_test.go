@@ -97,7 +97,8 @@ func TestReport_TimeByCategoryPerDay(t *testing.T) {
 	// after it counts as nothing, and there's no break.
 	e.writeTimelog(loc, "2026-11-03",
 		"09:00 @start", "09:00 writing the report", "12:00 @end", "13:00 writing the report", "17:00 @end")
-	// No @end: the last entry runs to 24:00, and the day is flagged.
+	// No @end: the last entry runs to 24:00, and the day is flagged,
+	// with the command that ends it.
 	e.writeTimelog(loc, "2026-11-04",
 		"09:00 @start", "09:30 review the PR +htt", "13:00 mail @email")
 
@@ -111,6 +112,7 @@ func TestReport_TimeByCategoryPerDay(t *testing.T) {
   2026-11-03   7h 0m worked
     uncategorised    7h 0m  (counted as working)
   2026-11-04  15h 0m worked (no @end: counted to 24:00)
+              end the day with htt log end --at "2026-11-04 HH:MM"
     htt             3h 30m
     admin           11h 0m
     uncategorised      30m  (counted as working)

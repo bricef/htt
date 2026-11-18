@@ -1,11 +1,13 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/bricef/htt/internal/dates"
 	"github.com/bricef/htt/internal/domain"
 	"github.com/bricef/htt/internal/utils"
 	"github.com/spf13/cobra"
@@ -18,27 +20,111 @@ var LogCommand = &cobra.Command{
 	Aliases: []string{"l"},
 }
 
-// appendToday is the small helper every "write a timelog entry"
-// command shares (log add, start and end, and workon): load today's
-// Timelog, append the task, and confirm the entry, without the ts:
-// annotation Append gives it. It returns the Timelog, which now holds
-// the task.
-func appendToday(task *domain.Task) (*domain.Timelog, error) {
-	tl, err := timelogRepo().Today()
+// atFlag is the --at of a command that writes an entry: the time to log
+// it at, if given. An --at given empty is given, so it is refused like
+// any other time htt can't read, rather than logging now.
+type atFlag struct {
+	value string
+	given bool
+}
+
+func (f *atFlag) String() string { return f.value }
+func (f *atFlag) Type() string   { return "time" }
+func (f *atFlag) Set(s string) error {
+	f.value, f.given = s, true
+	return nil
+}
+
+// logAt is the --at of the commands that write an entry (log add,
+// start and end, and workon). They share it, since only one runs at a
+// time; resetReplFlags clears it between the REPL's commands.
+var logAt atFlag
+
+// atFlagUsage is --at's line in each command's flags, short enough for
+// a terminal: the help (atHelp) says the rest.
+const atFlagUsage = `log it at HH:MM (today), "yesterday HH:MM" or "YYYY-MM-DD HH:MM"`
+
+// atHelp ends the help of each command that writes an entry.
+const atHelp = `--at logs the entry at an earlier time instead of now: HH:MM (or
+H:MM) today, "yesterday HH:MM", or "YYYY-MM-DD HH:MM", on the 24-hour
+clock in your time zone. The entry goes into that day's log, in time
+order, and the confirmation says when. A time later than now is
+refused, and nothing is logged.`
+
+// logEntry is the small helper every "write a timelog entry" command
+// shares (log add, start and end, and workon), flag is their --at:
+// without it, load today's Timelog and append the task; with it, load
+// the day of the time it names (dates.ParseAt) and put the task in its
+// place there (Timelog.AppendAt), refusing a time later than now. Then
+// confirm the entry, without the ts: annotation it was given, and, with
+// --at, when it was logged: "Logging entry: @end (at 17:30
+// yesterday)". It returns the Timelog, which now holds the task.
+func logEntry(task *domain.Task, flag atFlag) (*domain.Timelog, error) {
+	if !flag.given {
+		tl, err := timelogRepo().Today()
+		if err != nil {
+			return nil, fmt.Errorf("load today's timelog: %w", err)
+		}
+		if err := tl.Append(task); err != nil {
+			return nil, fmt.Errorf("append log entry: %w", err)
+		}
+		fmt.Printf("Logging entry: %v\n",
+			task.RemoveAnnotation(domain.TimelogTimestampLabel).ColorString())
+		return tl, nil
+	}
+
+	at, now := flag.value, time.Now()
+	when, err := dates.ParseAt(at, now)
 	if err != nil {
-		return nil, fmt.Errorf("load today's timelog: %w", err)
+		return nil, fmt.Errorf("--at: %w", err)
 	}
-	if err := tl.Append(task); err != nil {
-		return nil, fmt.Errorf("append log entry: %w", err)
+	tl, err := timelogRepo().Day(when)
+	if err != nil {
+		return nil, fmt.Errorf("load the timelog for %s: %w", when.Format("2006-01-02"), err)
 	}
-	fmt.Printf("Logging entry: %v\n",
-		task.RemoveAnnotation(domain.TimelogTimestampLabel).ColorString())
+	if err := tl.AppendAt(task, when, now); err != nil {
+		if errors.Is(err, domain.ErrFutureEntry) {
+			return nil, fmt.Errorf("--at %q is later than now (%s): nothing logged", at, now.Format("15:04"))
+		}
+		return nil, fmt.Errorf("log entry at %s: %w", when.Format("2006-01-02 15:04"), err)
+	}
+	fmt.Printf("Logging entry: %v (at %s)\n",
+		task.RemoveAnnotation(domain.TimelogTimestampLabel).ColorString(), describeAt(when, now))
 	return tl, nil
 }
 
+// describeAt says when an entry logged at at runs from, for the
+// confirmation: "17:30 today", "17:30 yesterday" or "17:30 on
+// 2026-11-10", by at's date on the local calendar, whichever form --at
+// named it in.
+func describeAt(at, now time.Time) string {
+	clock := at.Format("15:04")
+	day := func(t time.Time) time.Time { // the date alone, for calendar sums
+		y, m, d := t.Date()
+		return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+	}
+	date, today := day(at), day(now)
+	switch {
+	case date.Equal(today):
+		return clock + " today"
+	case date.Equal(today.AddDate(0, 0, -1)):
+		return clock + " yesterday"
+	}
+	return clock + " on " + at.Format("2006-01-02")
+}
+
 var Add = &cobra.Command{
-	Use:     "add [entry]",
-	Short:   "Log an entry to the time log.",
+	Use:   "add [entry]",
+	Short: "Log an entry to the time log.",
+	Long: `Log what you're doing from now on: the entry runs until the next
+one.
+
+` + atHelp + `
+
+Examples:
+  htt log add reviewing the auth PR +htt
+  htt log add --at 14:00 call with Sam
+  htt log add --at "yesterday 12:30" @lunch`,
 	Args:    cobra.MinimumNArgs(1),
 	Aliases: []string{"+"},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -46,7 +132,7 @@ var Add = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("parse log entry: %w", err)
 		}
-		tl, err := appendToday(task)
+		tl, err := logEntry(task, logAt)
 		if err != nil {
 			return err
 		}
@@ -135,13 +221,20 @@ work, such as a break.
 var Start = &cobra.Command{
 	Use:   "start",
 	Short: "Start the timelog for the day.",
-	Args:  cobra.NoArgs,
+	Long: `Log a @start entry. It is an ordinary entry: the time from it to the
+next entry is uncategorised unless a category has the @start tag.
+
+` + atHelp + `
+
+Example, for a day you started at 9:30 and are only now logging:
+  htt log start --at 9:30`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		task, err := domain.NewTask("@start")
 		if err != nil {
 			return fmt.Errorf("build start entry: %w", err)
 		}
-		_, err = appendToday(task)
+		_, err = logEntry(task, logAt)
 		return err
 	},
 }
@@ -154,18 +247,23 @@ there. An entry logged after it starts again, and the time between
 them counts as nothing.
 
 A day without an @end counts its last entry until midnight, and
-htt report flags it.
+htt report flags it. To end it after the fact, log the @end at the
+time you stopped, after the day's last entry:
+  htt log end --at "yesterday 17:30"
+  htt log end --at "2026-11-17 17:30"
 
 For a break, log an entry rather than ending the day, such as
 htt log add @lunch, and give it a category that doesn't count as work
-(see timelog.categories in GETTING-STARTED.md).`,
+(see timelog.categories in GETTING-STARTED.md).
+
+` + atHelp,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		task, err := domain.NewTask("@end")
 		if err != nil {
 			return fmt.Errorf("build end entry: %w", err)
 		}
-		_, err = appendToday(task)
+		_, err = logEntry(task, logAt)
 		return err
 	},
 }
@@ -241,6 +339,10 @@ func init() {
 	LogCommand.AddCommand(Active)
 	LogCommand.AddCommand(Start)
 	LogCommand.AddCommand(End)
+
+	for _, cmd := range []*cobra.Command{Add, Start, End} {
+		cmd.Flags().Var(&logAt, "at", atFlagUsage)
+	}
 
 	RootCmd.AddCommand(LogCommand)
 }

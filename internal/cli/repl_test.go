@@ -7,7 +7,9 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/bricef/htt/internal/domain"
 	"github.com/bricef/htt/internal/vars"
 	"github.com/spf13/viper"
 )
@@ -121,6 +123,7 @@ func TestResetReplFlags_ClearsBleedingState(t *testing.T) {
 	// poisoning the next dispatch.
 	addDue = "Friday"
 	addToDue = "tomorrow"
+	logAt = atFlag{value: "9:30", given: true}
 	reportSince = "yesterday"
 	showSortKey = "-due"
 	showFilters = []string{"overdue"}
@@ -134,6 +137,9 @@ func TestResetReplFlags_ClearsBleedingState(t *testing.T) {
 	}
 	if addToDue != "" {
 		t.Errorf("addToDue = %q, want empty", addToDue)
+	}
+	if logAt != (atFlag{}) {
+		t.Errorf("logAt = %+v, want it not given", logAt)
 	}
 	if reportSince != "7d" {
 		t.Errorf("reportSince = %q, want 7d", reportSince)
@@ -171,6 +177,46 @@ func TestRepl_ShowFiltersDoNotBleedAcrossCycles(t *testing.T) {
 	if want := []string{"no-due"}; !slices.Equal(showFilters, want) {
 		t.Errorf("showFilters after second cycle = %v, want %v", showFilters, want)
 	}
+}
+
+// TestRepl_AtDoesNotBleedAcrossCycles runs two log adds the way the
+// REPL loop does: the --at given to the first isn't the second's, which
+// logs now, after it.
+func TestRepl_AtDoesNotBleedAcrossCycles(t *testing.T) {
+	withMemoryRepo(t)
+	tlRepo := withMemoryTimelogRepo(t)
+	now := time.Now()
+	midnight := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+	if now.Sub(midnight) < time.Minute || midnight.AddDate(0, 0, 1).Sub(now) < time.Minute {
+		t.Skip("too close to midnight")
+	}
+
+	for _, line := range []string{"/log add --at 0:00 first", "/log add second"} {
+		_, args := classifyReplInput(line)
+		resetReplFlags()
+		RootCmd.SetArgs(args)
+		if err := RootCmd.Execute(); err != nil {
+			t.Fatalf("%q: Execute: %v", line, err)
+		}
+	}
+
+	tl, err := tlRepo.Today()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stamp := func(at time.Time) string { return at.UTC().Format(time.RFC3339) }
+	if len(tl.Entries) != 2 || tl.Entries[0].Raw != "first ts:"+stamp(midnight) ||
+		!strings.HasPrefix(tl.Entries[1].Raw, "second ts:") || tl.Entries[1].Raw == "second ts:"+stamp(midnight) {
+		t.Errorf("entries = %q, want first at midnight (%s), then second now", rawsOf(tl.Entries), stamp(midnight))
+	}
+}
+
+func rawsOf(tasks []*domain.Task) []string {
+	raws := make([]string, len(tasks))
+	for i, task := range tasks {
+		raws[i] = task.Raw
+	}
+	return raws
 }
 
 func TestReplHistoryPath_IsInTheConfigDirectory(t *testing.T) {

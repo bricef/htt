@@ -149,8 +149,7 @@ const (
 //   - empty / whitespace-only      → (none, nil)
 //   - "quit" / "exit" / "q"        → (exit, nil)
 //   - "/help" (with any trailers)  → (help, nil)
-//   - "/<rest>"                    → (dispatch, replWords(rest))
-//                                    or (none, nil) if rest is empty
+//   - "/<rest>"                    → (dispatch, replWords(rest)), or (none, nil) if rest is empty
 //   - "<anything>"                 → (dispatch, ["todo", ...replWords(line)])
 func classifyReplInput(line string) (replInputKind, []string) {
 	s := strings.TrimSpace(line)

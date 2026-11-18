@@ -128,7 +128,8 @@ func NewTask(raw string) (*Task, error) {
 // are separated by single spaces.
 //
 // Field order matches what the parser grammar in parser.go accepts:
-//   [x] [(P)] [<completedOn>] [<createdOn>] body
+//
+//	[x] [(P)] [<completedOn>] [<createdOn>] body
 //
 // Notably priority comes BEFORE the dates, not after — that's the
 // todo.txt convention and what NewTask round-trips. A previous

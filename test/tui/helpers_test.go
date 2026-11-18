@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	tuipkg "github.com/bricef/htt/internal/tui"
 	"github.com/bricef/htt/internal/storage"
+	tuipkg "github.com/bricef/htt/internal/tui"
 	"github.com/bricef/htt/internal/vars"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/viper"

@@ -8,8 +8,8 @@ import (
 )
 
 var status = &cobra.Command{
-	Use:     "status",
-	Short:   "Show the status of the tasklist and time log.",
+	Use:   "status",
+	Short: "Show the status of the tasklist and time log.",
 	Long: `Show where the time log stands, as htt log status does, then the
 contexts you can switch to, the current context and its tasks.
 

@@ -181,4 +181,3 @@ func TestAnnotate_RejectsInvalidKey(t *testing.T) {
 		t.Errorf("Annotate(@bad,value) err = %v, want ErrInvalidAnnotationKey", err)
 	}
 }
-

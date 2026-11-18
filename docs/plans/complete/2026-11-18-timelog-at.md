@@ -98,6 +98,18 @@ Decided after the merge (Brice, 2026-11-18):
   change meaning or fail, where the shell would wait for a closing
   quote. Lines without quotes split as before (`replWords` in
   internal/cli/repl_words.go).
+- **`--at` takes ISO 8601 too** (Brice asked for it): the extended
+  form `YYYY-MM-DDTHH:MM`, then `:SS` (a fraction of a second is
+  dropped, as the log's `ts:` has none) and a zone (`Z`, `±HH:MM` or
+  `±HHMM`), each optional. Without a zone it's local time, as ISO 8601
+  reads it, and as the `"YYYY-MM-DD HH:MM"` form on a day the clocks
+  change; with one it's that instant, in whichever local day it falls,
+  so a `ts:` copied from the log works and a repeated 01:30 can be
+  told apart. Seconds are kept when given, which overrides decision
+  2's "seconds zero" for this form only, and the confirmation then
+  shows them (`at 10:30:15 yesterday`). Not taken: the basic form
+  (`20261110T0930`), an hour-only zone (`+05`), a lowercase `t` or
+  `z`, and `H:MM` after the `T`.
 
 Found while building, not fixed (it predates `--at`, and is in
 TODO.md's known issues): where the clocks go forward at midnight, as

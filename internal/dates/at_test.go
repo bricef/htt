@@ -82,6 +82,88 @@ func TestParseAt_YesterdayIsTheCalendarDayBefore(t *testing.T) {
 	}
 }
 
+// ISO 8601 dates and times: without a zone, local time, as ISO 8601
+// reads them; with one (Z or an offset), that instant, wherever it
+// falls in the local day. Seconds count; fractions of one don't.
+func TestParseAt_ISO8601(t *testing.T) {
+	kolkata := mustZone(t, "Asia/Kolkata") // +05:30
+	now := time.Date(2026, 11, 18, 15, 42, 30, 0, kolkata)
+	at := func(d, hh, mm, ss int) time.Time {
+		return time.Date(2026, 11, d, hh, mm, ss, 0, kolkata)
+	}
+	cases := []struct {
+		input string
+		want  time.Time
+	}{
+		{"2026-11-10T09:30", at(10, 9, 30, 0)},
+		{"2026-11-10T00:00", at(10, 0, 0, 0)},
+		{"2026-11-10T23:59", at(10, 23, 59, 0)},
+		{"2026-11-10T09:30:15", at(10, 9, 30, 15)},
+		{"2026-11-10T09:30:59", at(10, 9, 30, 59)},
+		{"2026-11-10T09:30:15.999", at(10, 9, 30, 15)},
+		{"  2026-11-10T09:30\t", at(10, 9, 30, 0)},
+		{"2026-11-10T04:00Z", at(10, 9, 30, 0)},
+		{"2026-11-10T04:00:00Z", at(10, 9, 30, 0)},
+		{"2026-11-10T04:00:00.000Z", at(10, 9, 30, 0)}, // JavaScript's toISOString
+		{"2026-11-18T04:00:00Z", at(18, 9, 30, 0)},     // a ts: from the log
+		{"2026-11-10T09:30+05:30", at(10, 9, 30, 0)},
+		{"2026-11-10T09:30:00+05:30", at(10, 9, 30, 0)},
+		{"2026-11-10T09:30:00+0530", at(10, 9, 30, 0)}, // date +%FT%T%z
+		{"2026-11-09T23:00-05:00", at(10, 9, 30, 0)},   // another day there
+		{"2026-11-10T12:00-00:00", at(10, 17, 30, 0)},
+		{"2026-11-10T23:30+00:00", at(11, 5, 0, 0)}, // the next day here
+		{"2026-11-20T09:00", at(20, 9, 0, 0)},       // the future too
+	}
+	for _, c := range cases {
+		t.Run(c.input, func(t *testing.T) {
+			got, err := ParseAt(c.input, now)
+			if err != nil {
+				t.Fatalf("ParseAt(%q): %v", c.input, err)
+			}
+			if !got.Equal(c.want) || got.Location() != kolkata {
+				t.Errorf("ParseAt(%q) = %v, want %v", c.input, got, c.want)
+			}
+		})
+	}
+	leap, err := ParseAt("2024-02-29T12:00", now)
+	if err != nil || !leap.Equal(time.Date(2024, 2, 29, 12, 0, 0, 0, kolkata)) {
+		t.Errorf("ParseAt(2024-02-29T12:00) = %v, %v", leap, err)
+	}
+}
+
+// Without a zone an ISO time is read as the "YYYY-MM-DD HH:MM" form
+// is, time.Date's way on a day the clocks change; a zone says which of
+// a time that happens twice is meant.
+func TestParseAt_ISO8601WhenTheClocksChange(t *testing.T) {
+	london := mustZone(t, "Europe/London")
+	now := time.Date(2026, 11, 18, 12, 0, 0, 0, london)
+	for _, local := range []string{"2026-03-29T01:30", "2026-10-25T01:30"} {
+		iso, err := ParseAt(local, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		spaced, err := ParseAt(strings.Replace(local, "T", " ", 1), now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !iso.Equal(spaced) {
+			t.Errorf("ParseAt(%q) = %v, but the spaced form gives %v", local, iso, spaced)
+		}
+	}
+	for input, want := range map[string]string{
+		"2026-10-25T01:30+01:00": "2026-10-25T00:30:00Z", // the first 01:30, BST
+		"2026-10-25T01:30+00:00": "2026-10-25T01:30:00Z", // the second, GMT
+	} {
+		got, err := ParseAt(input, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.UTC().Format(time.RFC3339) != want || got.Location() != london {
+			t.Errorf("ParseAt(%q) = %v, want %s in London", input, got, want)
+		}
+	}
+}
+
 func TestParseAt_RejectedForms(t *testing.T) {
 	now := time.Date(2026, 11, 18, 15, 42, 30, 0, mustZone(t, "Asia/Kolkata"))
 	for _, input := range []string{
@@ -92,10 +174,19 @@ func TestParseAt_RejectedForms(t *testing.T) {
 		"2026-11-10", "yesterday", "today", "tomorrow",
 		"today 09:30", "tomorrow 09:30", "Yesterday 17:30", "yesterday 9.30",
 		"09:30 yesterday", "yesterday 17:30 extra", "17:30 2026-11-10",
-		"2026-11-10T09:30", "2026-11-10 09:30 extra", "2026-11-10  09:30x",
+		"2026-11-10 09:30 extra", "2026-11-10  09:30x",
 		"2026-13-01 09:00", "2026-02-30 09:00", "2026-5-3 09:00", "26-11-10 09:00",
 		"2026/11/10 09:00", "2026-11-10 24:00", "+026-11-10 09:00", "-026-11-10 09:00",
 		"１２:３０", // full-width digits
+		// ISO 8601, malformed: two-digit hours, the T, real times and
+		// zones, nothing after.
+		"2026-11-10T", "2026-11-10T09", "2026-11-10T9:30", "2026-11-10T09:5",
+		"2026-11-10t09:30", "2026-11-10T09:30z", "2026-11-10 T09:30", "2026-11-10T 09:30",
+		"2026-11-10T24:00", "2026-11-10T09:60", "2026-11-10T09:30:60", "2026-11-10T09:30:5",
+		"2026-11-10T09:30:15.", "2026-11-10T09:30.5", "2026-11-10T0930", "20261110T0930",
+		"2026-02-30T09:00", "2026-11-10T09:30+05", "2026-11-10T09:30+5:30", "2026-11-10T09:30+24:00",
+		"2026-11-10T09:30+05:60", "2026-11-10T09:30 +05:30", "2026-11-10T09:30Z extra",
+		"yesterday 2026-11-10T09:30", "2026-11-10T09:30ZZ", "2026-11-10T09:30+05:30Z",
 	} {
 		t.Run(input, func(t *testing.T) {
 			got, err := ParseAt(input, now)
@@ -103,7 +194,7 @@ func TestParseAt_RejectedForms(t *testing.T) {
 				t.Fatalf("ParseAt(%q) = %v, want an error", input, got)
 			}
 			// The error says which forms work.
-			for _, form := range []string{"HH:MM", `"yesterday HH:MM"`, `"YYYY-MM-DD HH:MM"`, "24-hour"} {
+			for _, form := range []string{"HH:MM", `"yesterday HH:MM"`, `"YYYY-MM-DD HH:MM"`, "YYYY-MM-DDTHH:MM", "24-hour"} {
 				if !strings.Contains(err.Error(), form) {
 					t.Errorf("ParseAt(%q) error %q doesn't mention %s", input, err, form)
 				}

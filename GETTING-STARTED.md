@@ -455,9 +455,15 @@ at instead of now:
 
 - `--at 9:30` (or `09:30`): today at that time;
 - `--at "yesterday 17:30"`: yesterday at that time;
-- `--at "2026-05-10 08:15"`: that day at that time.
+- `--at "2026-05-10 08:15"`: that day at that time;
+- `--at 2026-05-10T08:15`, ISO 8601, with seconds (`08:15:30`) if you
+  like: that day at that time. With a zone (`Z`, `+05:30`) it's that
+  instant, so a `ts:` copied from `htt log show` works (`--at
+  2026-05-15T10:00:00Z`), and on the day the clocks go back it says
+  which 01:30 you mean.
 
-Times are on the 24-hour clock, in your time zone. The entry goes into
+Times are on the 24-hour clock, in your time zone unless an ISO time
+gives one, and the confirmation shows them in yours. The entry goes into
 that day's log, in its place in time, so `htt log show` still reads in
 order, and the confirmation says when:
 
@@ -487,7 +493,7 @@ nothing is logged; so is anything else htt can't read as a time:
 $ htt log add --at 23:59 reading
 ❌ --at "23:59" is later than now (17:42): nothing logged
 $ htt log add --at 9.30 reading
-❌ --at: "9.30" isn't a time htt can read (use HH:MM for today, "yesterday HH:MM" or "YYYY-MM-DD HH:MM", on the 24-hour clock)
+❌ --at: "9.30" isn't a time htt can read (use HH:MM for today, "yesterday HH:MM" or "YYYY-MM-DD HH:MM", on the 24-hour clock, or ISO 8601's YYYY-MM-DDTHH:MM, with :SS and a zone (Z, +05:30) if you like)
 ```
 
 The usual case is a forgotten `log end`. The day runs to midnight, and

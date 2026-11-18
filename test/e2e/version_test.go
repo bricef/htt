@@ -18,7 +18,7 @@ func buildHtt(t *testing.T, flags ...string) string {
 	t.Helper()
 	_, thisFile, _, _ := runtime.Caller(0)
 	repoRoot := filepath.Join(filepath.Dir(thisFile), "..", "..")
-	bin := filepath.Join(t.TempDir(), "htt")
+	bin := filepath.Join(t.TempDir(), exe("htt"))
 	args := append([]string{"build", "-buildvcs=false", "-o", bin}, flags...)
 	cmd := exec.Command("go", append(args, "./cmd/htt")...)
 	cmd.Dir = repoRoot
@@ -32,7 +32,7 @@ func versionOf(t *testing.T, bin string) string {
 	t.Helper()
 	e := newEnv(t) // a home with a config file, so only the version prints
 	cmd := exec.Command(bin, "--version")
-	cmd.Env = append(cmd.Environ(), "HOME="+e.home)
+	cmd.Env = append(cmd.Environ(), e.homeEnv()...)
 	out, err := cmd.Output()
 	if err != nil {
 		t.Fatalf("%s --version: %v", bin, err)

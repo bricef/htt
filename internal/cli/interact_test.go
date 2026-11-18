@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -130,7 +131,8 @@ func TestTUILogger_AppendsToAPrivateFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat: %v", err)
 	}
-	if perm := info.Mode().Perm(); perm != 0o600 {
+	// Windows has no permission bits to set: a file is read-only or not.
+	if perm := info.Mode().Perm(); perm != 0o600 && runtime.GOOS != "windows" {
 		t.Errorf("log file mode = %o, want 600", perm)
 	}
 }

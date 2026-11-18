@@ -16,6 +16,7 @@ const timelogZone = "Asia/Kolkata"
 
 func timelogEnv(t *testing.T) (*env, *time.Location) {
 	t.Helper()
+	skipOnWindowsForTZ(t)
 	loc, err := time.LoadLocation(timelogZone)
 	if err != nil {
 		t.Fatal(err)
@@ -142,6 +143,7 @@ func TestReport_TimeWithoutCategoriesIsAllWorking(t *testing.T) {
 func TestReport_TheDayTheClocksGoBackIsOneDay(t *testing.T) {
 	// In London, 2026-10-25 lasts 25 hours: a report stepping 24 hours
 	// from its midnight lands on the same date again.
+	skipOnWindowsForTZ(t)
 	e := newEnv(t)
 	e.extraEnv = append(e.extraEnv, "TZ=Europe/London")
 	loc, err := time.LoadLocation("Europe/London")

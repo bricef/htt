@@ -38,7 +38,10 @@ Shipped as planned, with Brice's two clarifications (decisions 7 and
   says order matters). An empty tag left by an unquoted `#` says to
   quote it. Errors name the key, then the category by its position
   counting from 1 and its name: `config: timelog.categories:
-  category 3 (admin): no tags; list the tags that put an entry in it`.
+  category 3 (admin): no tags, and it isn't the default category, …`.
+  A category without tags is allowed when it's the default (amended at
+  review: Brice said the default may be "some other defined category",
+  and one that exists only to be the default has nothing to match).
 - **Only `htt report` reads the categories.** `log status`,
   `log active`, `htt status` and the commands that write entries
   don't, so a bad `timelog` config stops the report (before it prints

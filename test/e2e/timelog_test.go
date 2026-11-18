@@ -191,7 +191,7 @@ func TestReport_BadTimelogConfigFailsNamingTheKey(t *testing.T) {
 	e.writeTimelog(loc, "2026-11-02", "09:00 work", "17:00 @end")
 	cases := []struct{ config, want string }{
 		{"timelog:\n  categories:\n    - name: admin\n",
-			"config: timelog.categories: category 1 (admin): no tags; list the tags that put an entry in it"},
+			"config: timelog.categories: category 1 (admin): no tags, and it isn't the default category, so no entry can be in it; list its tags, or make it the default category"},
 		{"timelog:\n  default_category: misc\n",
 			`config: timelog.default_category: "misc" isn't a category (want one of: working)`},
 	}

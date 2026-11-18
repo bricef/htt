@@ -468,6 +468,10 @@ timelog:
   category.
 - `htt workon` logs the task's text, tags included, so a task's
   `+project` picks its category.
+- A category that exists only to be the default needs no tags: give
+  it a name (and `work: false` if its time shouldn't count) and name
+  it in `default_category`. Any other category needs at least one tag,
+  or nothing could ever be in it.
 
 **Quote the tags**: in YAML an unquoted `#` starts a comment and an
 unquoted `@` can't start a value. A config htt can't use stops
@@ -475,7 +479,7 @@ unquoted `@` can't start a value. A config htt can't use stops
 
 ```
 $ htt report
-❌ config: timelog.categories: category 3 (admin): no tags; list the tags that put an entry in it
+❌ config: timelog.categories: category 3 (admin): no tags, and it isn't the default category, so no entry can be in it; list its tags, or make it the default category
 ```
 
 The log files themselves don't change: categories are read from the

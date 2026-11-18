@@ -60,6 +60,9 @@ func categoriserFromConfig(v *viper.Viper) (*domain.Categoriser, error) {
 	if err != nil {
 		return nil, fmt.Errorf("config: %s: %w", vars.ConfigKeyTimelogDefaultCategory, err)
 	}
+	if err := c.Check(); err != nil {
+		return nil, fmt.Errorf("config: %s: %w", vars.ConfigKeyTimelogCategories, err)
+	}
 	return c, nil
 }
 

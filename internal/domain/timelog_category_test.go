@@ -166,8 +166,6 @@ func TestNewCategoriser_Errors(t *testing.T) {
 			{Name: "htt", Tags: []string{"+htt"}},
 			{Name: "break", Tags: []string{"@b"}},
 		}, `category 3 (break): the name is already category 1's`},
-		{"no tags", []Category{{Name: "htt"}}, "category 1 (htt): no tags"},
-		{"empty tag list", []Category{{Name: "htt", Tags: []string{}}}, "category 1 (htt): no tags"},
 		{"bare word", []Category{{Name: "htt", Tags: []string{"htt"}}}, `category 1 (htt): "htt" isn't a tag (want +project, @context or #tag)`},
 		{"sigil alone", []Category{{Name: "htt", Tags: []string{"+"}}}, `"+" isn't a tag`},
 		{"empty tag", []Category{{Name: "htt", Tags: []string{""}}}, `"" isn't a tag`},
@@ -187,6 +185,42 @@ func TestNewCategoriser_Errors(t *testing.T) {
 				t.Errorf("error = %q, want it to contain %q", err, tc.want)
 			}
 		})
+	}
+}
+
+func TestCategoriser_Check_ACategoryWithoutTagsMustBeTheDefault(t *testing.T) {
+	tagless := []Category{
+		{Name: "break", Tags: []string{"@lunch"}},
+		{Name: "other"},
+	}
+	c, err := NewCategoriser(tagless)
+	if err != nil {
+		t.Fatalf("NewCategoriser: %v", err)
+	}
+	// With working as the default, nothing can reach "other".
+	want := "category 2 (other): no tags, and it isn't the default category"
+	if err := c.Check(); err == nil || !strings.Contains(err.Error(), want) {
+		t.Errorf("Check() = %v, want an error containing %q", err, want)
+	}
+	// As the default, it's where unmatched entries go.
+	d, err := c.WithDefault("other")
+	if err != nil {
+		t.Fatalf("WithDefault(other): %v", err)
+	}
+	if err := d.Check(); err != nil {
+		t.Errorf("Check() with other as the default: %v", err)
+	}
+	// So is a tagless working, the built-in default's name.
+	w, err := NewCategoriser([]Category{{Name: "working", Work: false}})
+	if err != nil {
+		t.Fatalf("NewCategoriser: %v", err)
+	}
+	if err := w.Check(); err != nil {
+		t.Errorf("Check() with a tagless working: %v", err)
+	}
+	var none *Categoriser
+	if err := none.Check(); err != nil {
+		t.Errorf("Check() on no categoriser: %v", err)
 	}
 }
 

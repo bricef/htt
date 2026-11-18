@@ -94,6 +94,38 @@ func TestTimelogConfig_NoConfigIsWorking(t *testing.T) {
 	}
 }
 
+func TestTimelogConfig_ACategoryWithoutTagsCanBeTheDefault(t *testing.T) {
+	// A category that exists only to be the default needs no tags: every
+	// entry no other category matches goes to it.
+	yaml := `
+timelog:
+  categories:
+    - name: break
+      tags: ["@lunch"]
+      work: false
+    - name: other
+      work: false
+  default_category: other
+`
+	c, err := categoriserFromConfig(configFrom(t, yaml))
+	if err != nil {
+		t.Fatalf("categoriserFromConfig: %v", err)
+	}
+	if got := categoryOf(t, c, "reading the news"); got.Name != "other" || got.Work {
+		t.Errorf("unmatched -> %s (work %v), want other (work false)", got.Name, got.Work)
+	}
+	if got := categoryOf(t, c, "@lunch"); got.Name != "break" {
+		t.Errorf("@lunch -> %s, want break", got.Name)
+	}
+
+	// Without tags and not the default, nothing could ever be in it.
+	_, err = categoriserFromConfig(configFrom(t, strings.Replace(yaml, "default_category: other", "default_category: working", 1)))
+	want := "config: timelog.categories: category 2 (other): no tags, and it isn't the default category, so no entry can be in it; list its tags, or make it the default category"
+	if err == nil || err.Error() != want {
+		t.Errorf("err = %v, want %q", err, want)
+	}
+}
+
 func TestTimelogConfig_DefaultCategory(t *testing.T) {
 	categories := `
 timelog:
@@ -173,10 +205,10 @@ func TestTimelogConfig_Errors(t *testing.T) {
 			"config: timelog.categories: category 1: name: want text, got [a]"},
 		{"duplicate names", "timelog:\n  categories:\n    - name: break\n      tags: [\"@lunch\"]\n    - name: break\n      tags: [\"@nap\"]\n",
 			"config: timelog.categories: category 2 (break): the name is already category 1's"},
-		{"no tags", "timelog:\n  categories:\n    - name: break\n",
-			"config: timelog.categories: category 1 (break): no tags; list the tags that put an entry in it"},
-		{"empty tags", "timelog:\n  categories:\n    - name: break\n      tags: []\n",
-			"config: timelog.categories: category 1 (break): no tags"},
+		{"no tags, not the default", "timelog:\n  categories:\n    - name: break\n",
+			"config: timelog.categories: category 1 (break): no tags, and it isn't the default category, so no entry can be in it; list its tags, or make it the default category"},
+		{"empty tags, not the default", "timelog:\n  categories:\n    - name: break\n      tags: []\n",
+			"config: timelog.categories: category 1 (break): no tags, and it isn't the default category"},
 		{"tags as text", "timelog:\n  categories:\n    - name: break\n      tags: \"@lunch\"\n",
 			`config: timelog.categories: category 1 (break): tags: want a list, such as ["@lunch"], got "@lunch"`},
 		// Unquoted, YAML reads #deep as a comment and the item is empty.

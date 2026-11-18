@@ -64,9 +64,9 @@ func NewCategoriser(categories []Category) (*Categoriser, error) {
 			return nil, fmt.Errorf("%s: the name is already category %d's", label, other)
 		}
 		names[name] = pos
-		if len(cat.Tags) == 0 {
-			return nil, fmt.Errorf("%s: no tags; list the tags that put an entry in it", label)
-		}
+		// A category may have no tags if it's the default, which entries
+		// reach by matching nothing; Check, once the default is set,
+		// refuses one that isn't.
 		var tags []string
 		for _, tag := range cat.Tags {
 			if !isTag(tag) {
@@ -123,6 +123,23 @@ func (c *Categoriser) WithDefault(name string) (*Categoriser, error) {
 	}
 	return nil, fmt.Errorf("%q isn't a category (want one of: %s)", name,
 		strings.Join(categoryNamesOf(d.withBuiltin()), ", "))
+}
+
+// Check reports a category no entry could ever be in: one with no tags
+// that isn't the default category either. Call it once the default is
+// set (WithDefault); a category without tags is fine as the default,
+// since entries reach it by matching nothing.
+func (c *Categoriser) Check() error {
+	if c == nil {
+		return nil
+	}
+	for i, cat := range c.categories {
+		if len(cat.Tags) == 0 && cat.Name != c.fallback.Name {
+			return fmt.Errorf("category %d (%s): no tags, and it isn't the default category, so no entry can be in it; list its tags, or make it the default category",
+				i+1, cat.Name)
+		}
+	}
+	return nil
 }
 
 // Categorise returns entry's category: the first of c's categories

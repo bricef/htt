@@ -42,14 +42,17 @@ var logAt atFlag
 
 // atFlagUsage is --at's line in each command's flags, short enough for
 // a terminal: the help (atHelp) says the rest.
-const atFlagUsage = `log it at HH:MM (today), "yesterday HH:MM" or "YYYY-MM-DD HH:MM"`
+const atFlagUsage = `log it at HH:MM (today), "yesterday HH:MM", "YYYY-MM-DD HH:MM" or YYYY-MM-DDTHH:MM`
 
 // atHelp ends the help of each command that writes an entry.
 const atHelp = `--at logs the entry at an earlier time instead of now: HH:MM (or
 H:MM) today, "yesterday HH:MM", or "YYYY-MM-DD HH:MM", on the 24-hour
-clock in your time zone. The entry goes into that day's log, in time
-order, and the confirmation says when. A time later than now is
-refused, and nothing is logged.`
+clock in your time zone. It also takes an ISO 8601 date and time,
+YYYY-MM-DDTHH:MM, with seconds (:SS) if you like: in your time zone,
+or with a zone (Z, +05:30) at that instant, so a ts: copied from htt
+log show works. The entry goes into that day's log, in time order,
+and the confirmation says when. A time later than now is refused,
+and nothing is logged.`
 
 // logEntry is the small helper every "write a timelog entry" command
 // shares (log add, start and end, and workon), flag is their --at:
@@ -99,6 +102,9 @@ func logEntry(task *domain.Task, flag atFlag) (*domain.Timelog, error) {
 // named it in.
 func describeAt(at, now time.Time) string {
 	clock := at.Format("15:04")
+	if at.Second() != 0 { // only an ISO --at gives seconds
+		clock = at.Format("15:04:05")
+	}
 	day := func(t time.Time) time.Time { // the date alone, for calendar sums
 		y, m, d := t.Date()
 		return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)

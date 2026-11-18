@@ -38,6 +38,30 @@ func timelogFile(date string) string {
 	return filepath.Join("timelogs", date+".log")
 }
 
+func TestLogAt_ISO8601(t *testing.T) {
+	// --at takes ISO 8601: local time without a zone, that instant
+	// with one (so a ts: copied from the log works), and seconds when
+	// given, which the confirmation then shows. timelogZone is +05:30.
+	e, loc := timelogEnv(t)
+	now := atNow(t, loc)
+	d := now.AddDate(0, 0, -1)
+	day := d.Format("2006-01-02")
+	at := func(hh, mm, ss int) time.Time {
+		return time.Date(d.Year(), d.Month(), d.Day(), hh, mm, ss, 0, loc)
+	}
+	nine, copied, late := at(9, 0, 0), at(10, 30, 15), at(22, 30, 0)
+	for _, c := range []struct{ at, entry, confirm string }{
+		{day + "T09:00", "local", "Logging entry: local (at 09:00 yesterday)\n"},
+		{copied.UTC().Format(time.RFC3339), "copied", "Logging entry: copied (at 10:30:15 yesterday)\n"},
+		{day + "T12:00-05:00", "offset", "Logging entry: offset (at 22:30 yesterday)\n"},
+	} {
+		r := e.mustRun("log", "add", "--at", c.at, c.entry)
+		assertEqual(t, "--at "+c.at, r.stdout, c.confirm)
+	}
+	assertEqual(t, "yesterday's log", e.readData(timelogFile(day)),
+		"local "+stamp(nine)+"\ncopied "+stamp(copied)+"\noffset "+stamp(late)+"\n")
+}
+
 func TestLogAt_FixesAForgottenEnd(t *testing.T) {
 	// The day was never ended: it runs to midnight, and the report
 	// says how to end it. log end --at ends it after the fact.
@@ -214,7 +238,8 @@ func TestLogAt_LaterThanNowIsRefused(t *testing.T) {
 	before := e.readData(timelogFile(today))
 
 	soon := now.Add(5 * time.Minute).Format("15:04") // atNow keeps it today
-	for _, at := range []string{soon, "23:59", tomorrow + " 09:00", "2099-01-01 00:00"} {
+	soonUTC := now.Add(5 * time.Minute).UTC().Format(time.RFC3339)
+	for _, at := range []string{soon, "23:59", tomorrow + " 09:00", "2099-01-01 00:00", tomorrow + "T09:00", soonUTC} {
 		for _, args := range [][]string{
 			{"log", "start"}, {"log", "add", "something"}, {"log", "end"}, {"workon", "0"},
 		} {
@@ -251,7 +276,8 @@ func TestLogAt_ATimeHttCantReadIsAnError(t *testing.T) {
 		}
 		assertEqual(t, label+": stdout", r.stdout, "")
 		assertEqual(t, label+": stderr", r.stderr, fmt.Sprintf("❌ --at: %q isn't a time htt can read "+
-			`(use HH:MM for today, "yesterday HH:MM" or "YYYY-MM-DD HH:MM", on the 24-hour clock)`+"\n", at))
+			`(use HH:MM for today, "yesterday HH:MM" or "YYYY-MM-DD HH:MM", on the 24-hour clock, `+
+			`or ISO 8601's YYYY-MM-DDTHH:MM, with :SS and a zone (Z, +05:30) if you like)`+"\n", at))
 	}
 	if e.dataExists("timelogs") {
 		t.Errorf("a bad --at wrote a time log")
@@ -336,8 +362,9 @@ func TestLogAt_HelpNamesTheForms(t *testing.T) {
 	for _, args := range [][]string{{"log", "start"}, {"log", "add"}, {"log", "end"}, {"workon"}} {
 		out := e.mustRun(append(args, "--help")...).stdout
 		label := "htt " + strings.Join(args, " ") + " --help"
-		assertContains(t, label, out, `--at time   log it at HH:MM (today), "yesterday HH:MM" or "YYYY-MM-DD HH:MM"`+"\n")
-		assertContains(t, label, out, "A time later than now is\nrefused, and nothing is logged.")
+		assertContains(t, label, out, `--at time   log it at HH:MM (today), "yesterday HH:MM", "YYYY-MM-DD HH:MM" or YYYY-MM-DDTHH:MM`+"\n")
+		assertContains(t, label, out, "so a ts: copied from htt\nlog show works.")
+		assertContains(t, label, out, "A time later than now is refused,\nand nothing is logged.")
 	}
 	assertContains(t, "htt log end --help", e.mustRun("log", "end", "--help").stdout, `htt log end --at "yesterday 17:30"`)
 }

@@ -80,7 +80,9 @@ Each confirmed against `main` on 2026-11-03.
       entry into that day's log in time order and says when in the
       confirmation; a time later than now is refused. `htt report`'s
       flag on a day without an `@end` gives the `htt log end --at` that
-      ends it. Was the wishlist's `log@`
+      ends it. Was the wishlist's `log@`. ISO 8601 times too
+      (`2026-11-17T17:30`, seconds and a zone optional), so a `ts:`
+      copied from the log works
 - [x] Time log categories, breaks and day ends (2026-11-18):
       `timelog.categories` sorts entries by tag (exact, first match
       wins) and `work: false` keeps a category such as breaks out of

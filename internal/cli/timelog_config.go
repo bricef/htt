@@ -11,6 +11,12 @@ import (
 	"github.com/spf13/viper"
 )
 
+// timelogCategoriser builds the time log's categories from the config
+// in effect.
+func timelogCategoriser() (*domain.Categoriser, error) {
+	return categoriserFromConfig(viper.GetViper())
+}
+
 // categoriserFromConfig reads timelog.categories and
 // timelog.default_category from v. A config that isn't valid is an
 // error naming the key and what is wrong with it. The domain holds no

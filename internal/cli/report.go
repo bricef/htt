@@ -18,6 +18,12 @@ var Report = &cobra.Command{
 	Long: `Show what happened since a given date or duration: tasks
 completed, tasks added, tasks deleted, and time logged per day.
 
+Time logged gives each day's worked time and its time per category
+(timelog.categories in the config), then the totals. An entry runs
+until the next one; @end ends the day, and a day without one counts
+its last entry until midnight and is flagged. Today's last entry
+counts until now, in progress.
+
 --since takes a date (YYYY-MM-DD) or a duration counted back from now
 in days, weeks or hours (7d, 2w, 24h).
 
@@ -31,6 +37,10 @@ Examples:
 		since, err := parseSince(reportSince)
 		if err != nil {
 			return fmt.Errorf("parse --since: %w", err)
+		}
+		categories, err := timelogCategoriser()
+		if err != nil {
+			return err
 		}
 		now := time.Now()
 
@@ -50,7 +60,7 @@ Examples:
 			return err
 		}
 		fmt.Println()
-		return reportTimeLogged(since, now)
+		return reportTimeLogged(since, now, categories)
 	},
 }
 
@@ -318,57 +328,106 @@ type archivedTask struct {
 	deletedOn time.Time
 }
 
-// reportTimeLogged walks every calendar day in [since, until], loads
-// its timelog, and prints the sum of Spans per day plus a grand
-// total. Days without entries are skipped.
+// reportTimeLogged walks every calendar day in [since, until], reads
+// its time log as a timesheet (see domain.Timelog.Timesheet), and
+// prints each day's worked time and its time per category, then the
+// totals over the period:
 //
-// The trailing-active entry is excluded by design (Spans only counts
-// closed intervals). htt log status remains the way to see what's
-// running right now.
-func reportTimeLogged(since, until time.Time) error {
+//	Time logged
+//	  2026-11-02   7h 0m worked
+//	    break     1h 0m
+//	    working   7h 0m
+//	  2026-11-03  15h 0m worked (no @end: counted to 24:00)
+//	    working  15h 0m
+//	  Total: 22h 0m worked
+//	    break     1h 0m
+//	    working  22h 0m
+//
+// A day without an @end counts its last entry to midnight, and says
+// so; today's last entry counts until now (until), in progress. Days
+// with no time logged are left out, and so are categories with none.
+// Categories are listed in the config's order, the default last.
+func reportTimeLogged(since, until time.Time, categories *domain.Categoriser) error {
 	fmt.Println("Time logged")
 
-	type dayTotal struct {
-		date     time.Time
-		duration time.Duration
+	type dayTime struct {
+		date   time.Time
+		sheet  *domain.Timesheet
+		byName map[string]time.Duration
 	}
-	perDay := []dayTotal{}
-	var total time.Duration
+	var days []dayTime
+	totals := map[string]time.Duration{}
+	var worked time.Duration
 
-	day := time.Date(since.Year(), since.Month(), since.Day(), 0, 0, 0, 0, since.Location())
-	end := time.Date(until.Year(), until.Month(), until.Day(), 0, 0, 0, 0, until.Location())
-	for !day.After(end) {
+	// Days by their dates in the local zone, a calendar day at a time
+	// (a day the clocks change isn't 24 hours long).
+	day := time.Date(since.Year(), since.Month(), since.Day(), 0, 0, 0, 0, time.Local)
+	last := time.Date(until.Year(), until.Month(), until.Day(), 0, 0, 0, 0, time.Local)
+	for ; !day.After(last); day = day.AddDate(0, 0, 1) {
 		tl, err := timelogRepo().Day(day)
 		if err != nil {
 			return fmt.Errorf("load timelog %s: %w", day.Format("2006-01-02"), err)
 		}
-		day = day.Add(24 * time.Hour)
 		if tl.IsEmpty() {
 			continue
 		}
-		spans, err := tl.Spans()
+		sheet, err := tl.Timesheet(categories, until)
 		if err != nil {
-			return fmt.Errorf("spans for %s: %w", tl.Date.Format("2006-01-02"), err)
+			return fmt.Errorf("read timelog %s: %w", day.Format("2006-01-02"), err)
 		}
-		var d time.Duration
-		for _, span := range spans {
-			d += span.Duration
+		byName := sheet.ByCategory()
+		var logged time.Duration
+		for name, d := range byName {
+			logged += d
+			totals[name] += d
 		}
-		if d == 0 {
+		if logged == 0 && sheet.Status != domain.DayInProgress {
 			continue
 		}
-		perDay = append(perDay, dayTotal{date: tl.Date, duration: d})
-		total += d
+		days = append(days, dayTime{date: day, sheet: sheet, byName: byName})
+		worked += sheet.Worked()
 	}
 
-	if len(perDay) == 0 {
+	if len(days) == 0 {
 		fmt.Println("  (no time logged)")
 		return nil
 	}
-	for _, dt := range perDay {
-		fmt.Printf("  %s  %s\n", dt.date.Format("2006-01-02"), formatReportDuration(dt.duration))
+
+	// Columns: category names, and durations lined up on the right.
+	nameWidth, durWidth, dayWidth := 0, 0, 0
+	for _, cat := range categories.Categories() {
+		if totals[cat.Name] > 0 {
+			nameWidth = max(nameWidth, len(cat.Name))
+			durWidth = max(durWidth, len(formatReportDuration(totals[cat.Name])))
+		}
 	}
-	fmt.Printf("  Total: %s (excluding currently-active entry)\n", formatReportDuration(total))
+	for _, d := range days {
+		dayWidth = max(dayWidth, len(formatReportDuration(d.sheet.Worked())))
+		for _, dur := range d.byName {
+			durWidth = max(durWidth, len(formatReportDuration(dur)))
+		}
+	}
+	printCategories := func(byName map[string]time.Duration) {
+		for _, cat := range categories.Categories() {
+			if d := byName[cat.Name]; d > 0 {
+				fmt.Printf("    %-*s  %*s\n", nameWidth, cat.Name, durWidth, formatReportDuration(d))
+			}
+		}
+	}
+
+	for _, d := range days {
+		note := ""
+		switch d.sheet.Status {
+		case domain.DayUnended:
+			note = " (no @end: counted to 24:00)"
+		case domain.DayInProgress:
+			note = " (in progress)"
+		}
+		fmt.Printf("  %s  %*s worked%s\n", d.date.Format("2006-01-02"), dayWidth, formatReportDuration(d.sheet.Worked()), note)
+		printCategories(d.byName)
+	}
+	fmt.Printf("  Total: %s worked\n", formatReportDuration(worked))
+	printCategories(totals)
 	return nil
 }
 

@@ -38,12 +38,13 @@ func (r *FileTimelogRepository) logDir() string {
 	return filepath.Join(r.dataDir, vars.DefaultTimelogDirName)
 }
 
-func (r *FileTimelogRepository) logPath(date time.Time) string {
+// LogPath is the file that holds date's timelog.
+func (r *FileTimelogRepository) LogPath(date time.Time) string {
 	return filepath.Join(r.logDir(), date.Format("2006-01-02")+timelogFileExt)
 }
 
 func (r *FileTimelogRepository) CurrentLogPath() string {
-	return r.logPath(time.Now())
+	return r.LogPath(time.Now())
 }
 
 func (r *FileTimelogRepository) Today() (*domain.Timelog, error) {
@@ -53,12 +54,12 @@ func (r *FileTimelogRepository) Today() (*domain.Timelog, error) {
 func (r *FileTimelogRepository) Day(date time.Time) (*domain.Timelog, error) {
 	l := domain.NewTimelog(r, date)
 
-	f, err := os.Open(r.logPath(date))
+	f, err := os.Open(r.LogPath(date))
 	if err != nil {
 		if os.IsNotExist(err) {
 			return l, nil
 		}
-		return nil, fmt.Errorf("open %s: %w", r.logPath(date), err)
+		return nil, fmt.Errorf("open %s: %w", r.LogPath(date), err)
 	}
 	defer func() { _ = f.Close() }()
 
@@ -72,7 +73,7 @@ func (r *FileTimelogRepository) Day(date time.Time) (*domain.Timelog, error) {
 		}
 		task, err := domain.NewTask(line)
 		if err != nil {
-			return nil, fmt.Errorf("parse %s:%d: %w", r.logPath(date), lineNo, err)
+			return nil, fmt.Errorf("parse %s:%d: %w", r.LogPath(date), lineNo, err)
 		}
 		// Line is the entry's index in l.Entries, as for todo tasks,
 		// not its file line.
@@ -81,7 +82,7 @@ func (r *FileTimelogRepository) Day(date time.Time) (*domain.Timelog, error) {
 		lineNo++
 	}
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("scan %s: %w", r.logPath(date), err)
+		return nil, fmt.Errorf("scan %s: %w", r.LogPath(date), err)
 	}
 	return l, nil
 }
@@ -95,7 +96,7 @@ func (r *FileTimelogRepository) Save(l *domain.Timelog) error {
 		return fmt.Errorf("ensure timelog dir: %w", err)
 	}
 
-	path := r.logPath(l.Date)
+	path := r.LogPath(l.Date)
 	if _, err := os.Stat(path); err == nil {
 		if err := os.Rename(path, path+".bak"); err != nil {
 			return fmt.Errorf("backup existing timelog: %w", err)
@@ -110,10 +111,11 @@ func (r *FileTimelogRepository) Save(l *domain.Timelog) error {
 	}
 	defer func() { _ = f.Close() }()
 
-	for _, entry := range l.Entries {
+	for i, entry := range l.Entries {
 		if _, err := fmt.Fprintln(f, entry.Raw); err != nil {
 			return fmt.Errorf("write entry: %w", err)
 		}
+		entry.FileLine = i + 1 // where it is now, for messages about it
 	}
 	return nil
 }

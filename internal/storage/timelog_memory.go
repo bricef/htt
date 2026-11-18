@@ -67,6 +67,11 @@ func (r *MemoryTimelogRepository) CurrentLogPath() string {
 	return ""
 }
 
+// LogPath returns "" too, for the same reason.
+func (r *MemoryTimelogRepository) LogPath(time.Time) string {
+	return ""
+}
+
 // timelogKey maps a time.Time to its YYYY-MM-DD calendar-day string.
 // The file impl uses the same format for its on-disk filename.
 func timelogKey(t time.Time) string {

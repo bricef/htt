@@ -31,6 +31,11 @@ type TimelogRepository interface {
 	// hand a path to $EDITOR; not intended for programmatic reads or
 	// writes (those go through Today / Day / Save / Timelog.Append).
 	CurrentLogPath() string
+
+	// LogPath returns the on-disk path for date's log file, "" for a
+	// repository without files. Pure path builder, like
+	// CurrentLogPath; the CLI names it in messages about an entry.
+	LogPath(date time.Time) string
 }
 
 // TimelogTimestampLabel is the annotation key Timelog.Append sets on

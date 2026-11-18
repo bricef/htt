@@ -19,18 +19,19 @@ var LogCommand = &cobra.Command{
 // appendToday is the small helper every "write a timelog entry"
 // command shares (log add, start and end, and workon): load today's
 // Timelog, append the task, and confirm the entry, without the ts:
-// annotation Append gives it.
-func appendToday(task *domain.Task) error {
+// annotation Append gives it. It returns the Timelog, which now holds
+// the task.
+func appendToday(task *domain.Task) (*domain.Timelog, error) {
 	tl, err := timelogRepo().Today()
 	if err != nil {
-		return fmt.Errorf("load today's timelog: %w", err)
+		return nil, fmt.Errorf("load today's timelog: %w", err)
 	}
 	if err := tl.Append(task); err != nil {
-		return fmt.Errorf("append log entry: %w", err)
+		return nil, fmt.Errorf("append log entry: %w", err)
 	}
 	fmt.Printf("Logging entry: %v\n",
 		task.RemoveAnnotation(domain.TimelogTimestampLabel).ColorString())
-	return nil
+	return tl, nil
 }
 
 var Add = &cobra.Command{
@@ -43,7 +44,12 @@ var Add = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("parse log entry: %w", err)
 		}
-		return appendToday(task)
+		tl, err := appendToday(task)
+		if err != nil {
+			return err
+		}
+		warnTypedEntry(tl, task)
+		return nil
 	},
 }
 
@@ -126,7 +132,8 @@ var Start = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("build start entry: %w", err)
 		}
-		return appendToday(task)
+		_, err = appendToday(task)
+		return err
 	},
 }
 
@@ -139,7 +146,8 @@ var End = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("build end entry: %w", err)
 		}
-		return appendToday(task)
+		_, err = appendToday(task)
+		return err
 	},
 }
 

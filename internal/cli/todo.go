@@ -61,6 +61,7 @@ how the user typed it.`,
 			return fmt.Errorf("add task: %w", err)
 		}
 		fmt.Printf("Added: %v\n", task.ConsoleString())
+		warnTypedTask(ctx, task)
 		return nil
 	},
 }
@@ -87,6 +88,7 @@ var addTo = &cobra.Command{
 			return fmt.Errorf("add task to %s: %w", args[0], err)
 		}
 		fmt.Printf("Added: %v to %v\n", task.ConsoleString(), ctx.ConsoleString())
+		warnTypedTask(ctx, task)
 		return nil
 	},
 }
@@ -162,6 +164,7 @@ var edit = &cobra.Command{
 		}
 		fmt.Printf("Before: %s\n", oldTask.ConsoleString())
 		fmt.Printf("After:  %s\n", newTask.ConsoleString())
+		warnTypedTask(ctx, newTask)
 		return nil
 	},
 }
@@ -349,6 +352,7 @@ var replace = &cobra.Command{
 		}
 		fmt.Printf("Before: %s\n", old.ConsoleString())
 		fmt.Printf("After: %s\n", neu.ConsoleString())
+		warnTypedTask(ctx, neu)
 		return nil
 	},
 }

@@ -157,8 +157,10 @@ as messages naming the word: a date-shaped word that is impossible
 `NewTask` already parsed. The CLI and the TUI both show these (see
 [CLI wiring](#cli-wiring) and [TUI](#tui)); neither refuses the line.
 `Task.Line` is the task's index in its context; `Task.FileLine`, set
-by `FileRepository`, is its line in the file (they differ once the
-file has a blank line), for messages that point into the file.
+by `FileRepository` as it reads or saves a task (and by
+`FileTimelogRepository` as it saves an entry), is its line in the file
+(they differ once the file has a blank line), for messages that point
+into the file.
 
 ### `Timelog`
 
@@ -243,6 +245,13 @@ on completion, the archive on deletion, a move's target), go through
 the wrapped repository and don't warn, and the archive never warns.
 `htt interactive` hands the TUI `baseRepo()`: the TUI owns the
 terminal and shows the warnings on its status line.
+
+Commands that write a task the user typed (`todo add`, `add-to`,
+`replace`, `edit`, and `log add` for a time-log entry) warn about it
+once it's saved, through `warnTypedTask` / `warnTypedEntry`, rather
+than leaving it to the next load: saving set its `FileLine`, so the
+warning names the line it went to. These share the once-per-run
+record, so the REPL's reload after the command doesn't repeat them.
 
 ## TUI
 

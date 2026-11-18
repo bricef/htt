@@ -828,3 +828,66 @@ func TestRepl_DateWarningsOncePerSession(t *testing.T) {
 	r := e.mustRunWithInput("show\n/report\nshow\nq\n", "repl")
 	assertEqual(t, "stderr", r.stderr, badDateWarnings(filepath.Join(e.dataDir, "todo.txt"), 3, 4, 5))
 }
+
+// A task typed with a date htt can't read warns as it's written, not
+// only when a later command reads the file. The warning names the line
+// the task was written to; the task is written all the same, and stdout
+// and the exit code are the command's.
+func TestDates_TypedTasksWarnAsTheyAreWritten(t *testing.T) {
+	e := newEnv(t)
+	// Saving drops the blank line: the warning names the line as saved.
+	e.writeData("todo.txt", "fine task\n\nother task\n")
+	todo := filepath.Join(e.dataDir, "todo.txt")
+	d := today()
+
+	r := e.mustRun("todo", "add", "pay", "rent", "2026-13-45")
+	assertEqual(t, "add: stderr", r.stderr, "warning: "+todo+":3: 2026-13-45 isn't a real date, so it's text\n")
+	assertEqual(t, "add: stdout", r.stdout, "Added: "+d+" pay rent 2026-13-45\n")
+	assertEqual(t, "todo.txt", e.readData("todo.txt"), "fine task\nother task\n"+d+" pay rent 2026-13-45\n")
+
+	r = e.mustRun("todo", "add-to", "work", "meet on 2026-5-3")
+	assertEqual(t, "add-to: stderr", r.stderr, "warning: "+filepath.Join(e.dataDir, "work.txt")+
+		":1: 2026-5-3 isn't written YYYY-MM-DD (2026-05-03), so it's text\n")
+	assertEqual(t, "work.txt", e.readData("work.txt"), d+" meet on 2026-5-3\n")
+
+	// replace reads the list, which warns about line 3 (this is a new
+	// run), then warns about the replacement.
+	r = e.mustRun("todo", "replace", "0", "call", "due:friday")
+	assertEqual(t, "replace: stderr", r.stderr,
+		"warning: "+todo+":3: 2026-13-45 isn't a real date, so it's text\n"+
+			"warning: "+todo+":1: due:friday isn't a YYYY-MM-DD date, so the task has no due date\n")
+	assertEqual(t, "replace: stdout", r.stdout, "Before: fine task\nAfter: call due:friday\n")
+
+	editor := filepath.Join(e.home, "editor.sh")
+	if err := os.WriteFile(editor, []byte("#!/bin/sh\necho 'other task on 2026-02-30' > \"$1\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	e.extraEnv = []string{"EDITOR=" + editor}
+	r = e.mustRun("todo", "edit", "1")
+	assertEqual(t, "edit: stderr", r.stderr,
+		"warning: "+todo+":1: due:friday isn't a YYYY-MM-DD date, so the task has no due date\n"+
+			"warning: "+todo+":3: 2026-13-45 isn't a real date, so it's text\n"+
+			"warning: "+todo+":2: 2026-02-30 isn't a real date, so it's text\n")
+	assertEqual(t, "edit: stdout", r.stdout, "Before: other task\nAfter:  other task on 2026-02-30\n")
+	assertEqual(t, "todo.txt after edit", e.readData("todo.txt"),
+		"call due:friday\nother task on 2026-02-30\n"+d+" pay rent 2026-13-45\n")
+
+	r = e.mustRun("log", "add", "read", "the", "2026-5-3", "minutes")
+	assertEqual(t, "log add: stderr", r.stderr, "warning: "+filepath.Join(e.dataDir, "timelogs", d+".log")+
+		":1: 2026-5-3 isn't written YYYY-MM-DD (2026-05-03), so it's text\n")
+	assertEqual(t, "log add: stdout", r.stdout, "Logging entry: read the 2026-5-3 minutes\n")
+
+	// Fine dates say nothing.
+	r = e.mustRun("todo", "add-to", "home", "renew passport due:2026-12-01")
+	assertEqual(t, "a fine task: stderr", r.stderr, "")
+}
+
+func TestRepl_ATypedTaskWarnsOnce(t *testing.T) {
+	// The REPL reloads the list after every command: the line warned
+	// about as it was added doesn't warn again.
+	e := newEnv(t)
+	r := e.mustRunWithInput("add pay rent 2026-13-45\nshow\nq\n", "repl")
+	assertEqual(t, "stderr", r.stderr,
+		"warning: "+filepath.Join(e.dataDir, "todo.txt")+":1: 2026-13-45 isn't a real date, so it's text\n")
+	assertEqual(t, "todo.txt", e.readData("todo.txt"), today()+" pay rent 2026-13-45\n")
+}

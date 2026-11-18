@@ -121,6 +121,30 @@ func TestFileRepository_Save_ByteExactOutput(t *testing.T) {
 	}
 }
 
+func TestFileRepository_Save_SetsFileLine(t *testing.T) {
+	// A task saved is on the line Save wrote it to, so a warning about
+	// a task just added can name it.
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "todo.txt"), []byte("first\n\nsecond\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	r := NewFileRepository(dir, dir)
+	ctx, err := r.Context("todo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	added := mustTask(t, "third")
+	ctx.Tasks = append(ctx.Tasks, added)
+	if err := r.Save(ctx); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	for i, task := range ctx.Tasks {
+		if task.FileLine != i+1 {
+			t.Errorf("%q: FileLine = %d after saving, want %d", task.Raw, task.FileLine, i+1)
+		}
+	}
+}
+
 func TestFileRepository_Context_SkipsBlankLines(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "todo.txt")

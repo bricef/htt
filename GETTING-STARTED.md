@@ -300,10 +300,21 @@ A warning never changes what a command prints on stdout or its exit
 status. Commands warn about the lists they read, once per line each
 time they run: the current context for the `todo` commands, `status`
 and `workon`, every list and `done.txt` for `htt report`, and once a
-session in the REPL. Completing, deleting or moving a task doesn't
-warn about the list it goes to, and the archive never warns: its
-tasks are deleted, and nothing reads their dates. The TUI says it on
-its status line instead.
+session in the REPL. A task you type with such a date warns as it's
+written, naming the line it went to: `todo add`, `add-to`, `replace`
+and `edit`, and `log add` for the time log. It's written all the
+same:
+
+```
+$ htt todo add pay rent 2026-13-45
+Added: 2026-05-15 pay rent 2026-13-45
+warning: /home/you/.htt/data/todo.txt:4: 2026-13-45 isn't a real date, so it's text
+```
+
+Completing, deleting or moving a task doesn't warn about the list it
+goes to, and the archive never warns: its tasks are deleted, and
+nothing reads their dates. The TUI says it on its status line
+instead.
 
 ## Sorting and filtering
 

@@ -77,6 +77,38 @@ func TestFileTimelogRepository_Save_ByteExactOutput(t *testing.T) {
 	}
 }
 
+func TestFileTimelogRepository_Save_SetsFileLine(t *testing.T) {
+	// An entry saved is on the line Save wrote it to, so a warning
+	// about an entry just logged can name it.
+	dir := t.TempDir()
+	r := NewFileTimelogRepository(dir)
+	date := time.Date(2026, 5, 15, 0, 0, 0, 0, time.UTC)
+	l := &domain.Timelog{Date: date, Entries: []*domain.Task{
+		mustTask(t, "first ts:2026-05-15T09:00:00Z"),
+		mustTask(t, "second ts:2026-05-15T10:00:00Z"),
+	}}
+	if err := r.Save(l); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	for i, entry := range l.Entries {
+		if entry.FileLine != i+1 {
+			t.Errorf("%q: FileLine = %d after saving, want %d", entry.Raw, entry.FileLine, i+1)
+		}
+	}
+}
+
+func TestFileTimelogRepository_LogPath_IsTheDaysFile(t *testing.T) {
+	dir := t.TempDir()
+	r := NewFileTimelogRepository(dir)
+	got := r.LogPath(time.Date(2026, 5, 15, 13, 0, 0, 0, time.Local))
+	if want := filepath.Join(dir, vars.DefaultTimelogDirName, "2026-05-15.log"); got != want {
+		t.Errorf("LogPath = %q, want %q", got, want)
+	}
+	if got := NewMemoryTimelogRepository().LogPath(time.Now()); got != "" {
+		t.Errorf("MemoryTimelogRepository.LogPath = %q, want \"\" (no files)", got)
+	}
+}
+
 func TestFileTimelogRepository_Save_CreatesBakBackup(t *testing.T) {
 	// Parallels TestFileRepository_Save_CreatesBakBackup. Save renames
 	// the existing file to .bak before writing, giving one slot of

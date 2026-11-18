@@ -71,6 +71,10 @@ Each confirmed against `main` on 2026-11-03.
 
 ## Done
 
+- [x] A task typed with a date htt can't read warns as it's written
+      (2026-11-18): `todo add`, `add-to`, `replace`, `edit` and
+      `log add` name the line it went to on stderr, instead of leaving
+      it to the next command that reads the file
 - [x] The update notice suits every install (2026-11-18): it gives the
       release page to download from as well as `go install`, and the
       TUI's one-line form fits an 80-column status line

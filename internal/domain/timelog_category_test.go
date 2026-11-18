@@ -56,6 +56,96 @@ func TestCategoriser_FirstMatchingCategoryWins(t *testing.T) {
 	}
 }
 
+func TestCategoriser_MatchSaysWhetherACategoryMatched(t *testing.T) {
+	// Match gives the category and whether one of its tags matched; an
+	// entry that matched none is in the default category, unmatched.
+	plain := mustCategoriser(t, testCategories())
+	onBreak, err := plain.WithDefault("break")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The default defined in the list with tags of its own: its tags
+	// match like any category's, first match winning, and it is still
+	// where unmatched entries go.
+	deskLast := mustCategoriser(t, []Category{
+		{Name: "htt", Tags: []string{"+htt"}, Work: true},
+		{Name: "working", Tags: []string{"@desk"}, Work: false},
+	})
+	deskFirst := mustCategoriser(t, []Category{
+		{Name: "working", Tags: []string{"@desk"}, Work: true},
+		{Name: "htt", Tags: []string{"+htt"}, Work: true},
+	})
+	idle, err := mustCategoriser(t, []Category{
+		{Name: "htt", Tags: []string{"+htt"}, Work: true},
+		{Name: "idle", Work: false},
+	}).WithDefault("idle")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var none *Categoriser
+
+	cases := []struct {
+		name    string
+		c       *Categoriser
+		entry   string
+		want    string
+		work    bool
+		matched bool
+	}{
+		{"a category's tag", plain, "@lunch", "break", false, true},
+		{"first match wins", plain, "+htt @lunch", "break", false, true},
+		{"first match wins, whatever the tags' order", plain, "@email +htt", "htt", true, true},
+		{"no tag: the built-in default", plain, "reading the news", "working", true, false},
+		{"a near miss is no match", plain, "+HTT", "working", true, false},
+		{"@start is ordinary", plain, "@start", "working", true, false},
+		{"another default: unmatched", onBreak, "reading", "break", false, false},
+		{"another default: its own tag", onBreak, "@lunch", "break", false, true},
+		{"the default's own tag", deskLast, "filing @desk", "working", false, true},
+		{"unmatched, in the list's working", deskLast, "reading", "working", false, false},
+		{"an earlier category beats the default's tag", deskLast, "@desk +htt", "htt", true, true},
+		{"the default listed first wins over a later tag", deskFirst, "+htt @desk", "working", true, true},
+		{"a tagless default is never matched", idle, "reading", "idle", false, false},
+		{"no categoriser", none, "+htt", "working", true, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, matched := tc.c.Match(mustTask(t, tc.entry))
+			if got.Name != tc.want || got.Work != tc.work || matched != tc.matched {
+				t.Errorf("Match(%q) = %s (work %v), matched %v; want %s (work %v), matched %v",
+					tc.entry, got.Name, got.Work, matched, tc.want, tc.work, tc.matched)
+			}
+			if cat := tc.c.Categorise(mustTask(t, tc.entry)); cat.Name != got.Name || cat.Work != got.Work {
+				t.Errorf("Categorise(%q) = %+v, Match gave %+v", tc.entry, cat, got)
+			}
+		})
+	}
+}
+
+func TestCategoriser_Default(t *testing.T) {
+	plain := mustCategoriser(t, testCategories())
+	onBreak, err := plain.WithDefault("break")
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed := mustCategoriser(t, []Category{{Name: "working", Tags: []string{"@desk"}, Work: false}})
+	var none *Categoriser
+	for _, tc := range []struct {
+		name string
+		c    *Categoriser
+		want string
+		work bool
+	}{
+		{"no categoriser", none, "working", true},
+		{"the built-in working", plain, "working", true},
+		{"a category named in WithDefault", onBreak, "break", false},
+		{"the list's working", listed, "working", false},
+	} {
+		if got := tc.c.Default(); got.Name != tc.want || got.Work != tc.work {
+			t.Errorf("%s: Default() = %+v, want %s (work %v)", tc.name, got, tc.want, tc.work)
+		}
+	}
+}
+
 func TestCategoriser_MatchingIsExact(t *testing.T) {
 	// A configured tag matches only the identical tag in the entry:
 	// same characters, same case. No prefix, partial, fuzzy or
@@ -161,6 +251,10 @@ func TestNewCategoriser_Errors(t *testing.T) {
 	}{
 		{"empty name", []Category{{Name: "", Tags: []string{"@a"}}}, "category 1: no name"},
 		{"blank name", []Category{{Name: "  ", Tags: []string{"@a"}}}, "category 1: no name"},
+		// The report and status call unmatched time "uncategorised"; a
+		// category of that name would print a second line with it.
+		{"reserved name", []Category{{Name: "uncategorised", Tags: []string{"@misc"}}},
+			`category 1 (uncategorised): the name is reserved for time no category's tags match; pick another`},
 		{"duplicate name", []Category{
 			{Name: "break", Tags: []string{"@a"}},
 			{Name: "htt", Tags: []string{"+htt"}},
@@ -316,10 +410,11 @@ func TestCategoriser_WithDefault_UndefinedNameIsAnError(t *testing.T) {
 	}
 }
 
-// TestCategoriser_FirstMatchProperty checks Categorise against the rule
-// read straight off the entry's words, over generated category lists
-// and entries: the result is the first category with a tag that is one
-// of the entry's words, verbatim, or the default when there is none.
+// TestCategoriser_FirstMatchProperty checks Match against the rule read
+// straight off the entry's words, over generated category lists,
+// defaults and entries: the result is the first category with a tag
+// that is one of the entry's words, verbatim, matched; or the default
+// when there is none, unmatched.
 func TestCategoriser_FirstMatchProperty(t *testing.T) {
 	// Tags, and near misses that must never match them.
 	pool := []string{"+htt", "+admin", "@lunch", "@break", "@email", "#deep", "+home", "@phone"}
@@ -341,6 +436,14 @@ func TestCategoriser_FirstMatchProperty(t *testing.T) {
 			tags = tags[n:]
 		}
 		c := mustCategoriser(t, categories)
+		def := Category{Name: DefaultCategoryName, Work: true}
+		if r.IntN(3) == 0 { // one of the categories as the default
+			def = categories[r.IntN(len(categories))]
+			var err error
+			if c, err = c.WithDefault(def.Name); err != nil {
+				t.Fatal(err)
+			}
+		}
 
 		// An entry: a few words, tags and near misses in any order.
 		words := []string{"doing"}
@@ -354,19 +457,20 @@ func TestCategoriser_FirstMatchProperty(t *testing.T) {
 		r.Shuffle(len(words), func(a, b int) { words[a], words[b] = words[b], words[a] })
 		text := strings.Join(words, " ")
 
-		want := Category{Name: DefaultCategoryName, Work: true}
+		want, wantMatched := def, false
 	search:
 		for _, cat := range categories {
 			for _, tag := range cat.Tags {
 				if slices.Contains(words, tag) {
-					want = cat
+					want, wantMatched = cat, true
 					break search
 				}
 			}
 		}
-		got := c.Categorise(mustTask(t, text))
-		if got.Name != want.Name || got.Work != want.Work {
-			t.Fatalf("case %d: categories %+v\nCategorise(%q) = %+v, want %+v", i, categories, text, got, want)
+		got, matched := c.Match(mustTask(t, text))
+		if got.Name != want.Name || got.Work != want.Work || matched != wantMatched {
+			t.Fatalf("case %d: categories %+v, default %s\nMatch(%q) = %+v, matched %v; want %+v, matched %v",
+				i, categories, def.Name, text, got, matched, want, wantMatched)
 		}
 	}
 }

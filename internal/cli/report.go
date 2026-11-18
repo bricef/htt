@@ -19,10 +19,13 @@ var Report = &cobra.Command{
 completed, tasks added, tasks deleted, and time logged per day.
 
 Time logged gives each day's worked time and its time per category
-(timelog.categories in the config), then the totals. An entry runs
-until the next one; @end ends the day, and a day without one counts
-its last entry until midnight and is flagged. Today's last entry
-counts until now, in progress.
+(timelog.categories in the config), then the totals. A category's
+line holds the entries its tags matched. Entries no category matched
+are on a line of their own, uncategorised, which says the category
+the time counts as (timelog.default_category, working unless set) and
+so whether it is worked. An entry runs until the next one; @end ends
+the day, and a day without one counts its last entry until midnight
+and is flagged. Today's last entry counts until now, in progress.
 
 --since takes a date (YYYY-MM-DD) or a duration counted back from now
 in days, weeks or hours (7d, 2w, 24h).
@@ -335,18 +338,24 @@ type archivedTask struct {
 //
 //	Time logged
 //	  2026-11-02   7h 0m worked
-//	    break     1h 0m
-//	    working   7h 0m
+//	    break           1h 0m
+//	    htt             4h 0m
+//	    uncategorised   3h 0m  (counted as working)
 //	  2026-11-03  15h 0m worked (no @end: counted to 24:00)
-//	    working  15h 0m
+//	    uncategorised  15h 0m  (counted as working)
 //	  Total: 22h 0m worked
-//	    break     1h 0m
-//	    working  22h 0m
+//	    break           1h 0m
+//	    htt             4h 0m
+//	    uncategorised  18h 0m  (counted as working)
 //
 // A day without an @end counts its last entry to midnight, and says
-// so; today's last entry counts until now (until), in progress. Days
-// with no time logged are left out, and so are categories with none.
-// Categories are listed in the config's order, the default last.
+// so; today's last entry counts until now (until), in progress. A
+// category's line is the time its tags matched; the time of entries no
+// category matched is on the uncategorised line, which names the
+// default category it counts as (whose work setting decides whether it
+// is worked). Days with no time logged are left out, and so are lines
+// with none. Categories are listed in the config's order, then
+// uncategorised.
 func reportTimeLogged(since, until time.Time, categories *domain.Categoriser) error {
 	fmt.Println("Time logged")
 
@@ -354,10 +363,11 @@ func reportTimeLogged(since, until time.Time, categories *domain.Categoriser) er
 		date   time.Time
 		sheet  *domain.Timesheet
 		byName map[string]time.Duration
+		uncat  time.Duration
 	}
 	var days []dayTime
 	totals := map[string]time.Duration{}
-	var worked time.Duration
+	var worked, totalUncat time.Duration
 
 	// Days by their dates in the local zone, a calendar day at a time
 	// (a day the clocks change isn't 24 hours long).
@@ -375,16 +385,17 @@ func reportTimeLogged(since, until time.Time, categories *domain.Categoriser) er
 		if err != nil {
 			return fmt.Errorf("read timelog %s: %w", day.Format("2006-01-02"), err)
 		}
-		byName := sheet.ByCategory()
-		var logged time.Duration
+		byName, uncat := sheet.ByCategory(), sheet.Uncategorised()
+		logged := uncat
 		for name, d := range byName {
 			logged += d
 			totals[name] += d
 		}
+		totalUncat += uncat
 		if logged == 0 && sheet.Status != domain.DayInProgress {
 			continue
 		}
-		days = append(days, dayTime{date: day, sheet: sheet, byName: byName})
+		days = append(days, dayTime{date: day, sheet: sheet, byName: byName, uncat: uncat})
 		worked += sheet.Worked()
 	}
 
@@ -401,17 +412,25 @@ func reportTimeLogged(since, until time.Time, categories *domain.Categoriser) er
 			durWidth = max(durWidth, len(formatReportDuration(totals[cat.Name])))
 		}
 	}
+	if totalUncat > 0 {
+		nameWidth = max(nameWidth, len(uncategorisedLabel))
+		durWidth = max(durWidth, len(formatReportDuration(totalUncat)))
+	}
 	for _, d := range days {
 		dayWidth = max(dayWidth, len(formatReportDuration(d.sheet.Worked())))
 		for _, dur := range d.byName {
 			durWidth = max(durWidth, len(formatReportDuration(dur)))
 		}
 	}
-	printCategories := func(byName map[string]time.Duration) {
+	printCategories := func(byName map[string]time.Duration, uncat time.Duration) {
 		for _, cat := range categories.Categories() {
 			if d := byName[cat.Name]; d > 0 {
 				fmt.Printf("    %-*s  %*s\n", nameWidth, cat.Name, durWidth, formatReportDuration(d))
 			}
+		}
+		if uncat > 0 {
+			fmt.Printf("    %-*s  %*s  (counted as %s)\n", nameWidth, uncategorisedLabel, durWidth,
+				formatReportDuration(uncat), categories.Default().Name)
 		}
 	}
 
@@ -424,10 +443,10 @@ func reportTimeLogged(since, until time.Time, categories *domain.Categoriser) er
 			note = " (in progress)"
 		}
 		fmt.Printf("  %s  %*s worked%s\n", d.date.Format("2006-01-02"), dayWidth, formatReportDuration(d.sheet.Worked()), note)
-		printCategories(d.byName)
+		printCategories(d.byName, d.uncat)
 	}
 	fmt.Printf("  Total: %s worked\n", formatReportDuration(worked))
-	printCategories(totals)
+	printCategories(totals, totalUncat)
 	return nil
 }
 

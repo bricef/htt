@@ -3,6 +3,7 @@ package domain
 import (
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -49,7 +50,8 @@ func dayLog(t *testing.T, loc *time.Location, date string, lines ...string) *Tim
 }
 
 // describe writes an interval as "HH:MM-HH:MM category: entry" in the
-// sheet's zone, with 24:00 for the end of the day.
+// sheet's zone, with 24:00 for the end of the day; an interval no
+// category matched is "uncategorised (default): entry".
 func describe(s *Timesheet, iv Interval) string {
 	clock := func(at time.Time) string {
 		if at.Equal(s.End) {
@@ -58,7 +60,11 @@ func describe(s *Timesheet, iv Interval) string {
 		return at.In(s.Start.Location()).Format("15:04")
 	}
 	text, _, _ := strings.Cut(iv.Entry.Raw, " "+TimelogTimestampLabel+":")
-	return fmt.Sprintf("%s-%s %s: %s", clock(iv.Start), clock(iv.End), iv.Category.Name, text)
+	category := iv.Category.Name
+	if iv.Uncategorised {
+		category = "uncategorised (" + category + ")"
+	}
+	return fmt.Sprintf("%s-%s %s: %s", clock(iv.Start), clock(iv.End), category, text)
 }
 
 func TestTimesheet_Rules(t *testing.T) {
@@ -75,7 +81,8 @@ func TestTimesheet_Rules(t *testing.T) {
 		now     string // "" is three days later: date is a past day
 		want    []string
 		worked  time.Duration
-		byCat   map[string]time.Duration
+		byCat   map[string]time.Duration // the time each category's tags matched
+		uncat   time.Duration            // the time no category matched
 		status  DayStatus
 		endedAt string // HH:MM, for DayEnded
 	}{
@@ -84,13 +91,13 @@ func TestTimesheet_Rules(t *testing.T) {
 			loc:  utc, date: "2026-11-02",
 			entries: []string{"09:00 @start", "09:00 work +htt", "12:00 @lunch", "13:00 work +htt", "17:00 @end"},
 			want: []string{
-				"09:00-09:00 working: @start",
+				"09:00-09:00 uncategorised (working): @start",
 				"09:00-12:00 htt: work +htt",
 				"12:00-13:00 break: @lunch",
 				"13:00-17:00 htt: work +htt",
 			},
 			worked: 7 * time.Hour,
-			byCat:  map[string]time.Duration{"working": 0, "htt": 7 * time.Hour, "break": time.Hour},
+			byCat:  map[string]time.Duration{"htt": 7 * time.Hour, "break": time.Hour},
 			status: DayEnded, endedAt: "17:00",
 		},
 		{
@@ -98,21 +105,23 @@ func TestTimesheet_Rules(t *testing.T) {
 			loc:  utc, date: "2026-11-02",
 			entries: []string{"09:00 @start", "09:00 work", "12:00 @end", "13:00 work", "17:00 @end"},
 			want: []string{
-				"09:00-09:00 working: @start",
-				"09:00-12:00 working: work",
-				"13:00-17:00 working: work",
+				"09:00-09:00 uncategorised (working): @start",
+				"09:00-12:00 uncategorised (working): work",
+				"13:00-17:00 uncategorised (working): work",
 			},
 			worked: 7 * time.Hour,
-			byCat:  map[string]time.Duration{"working": 7 * time.Hour},
+			byCat:  map[string]time.Duration{},
+			uncat:  7 * time.Hour,
 			status: DayEnded, endedAt: "17:00",
 		},
 		{
 			name: "@start is an ordinary entry, in the default category",
 			loc:  utc, date: "2026-11-02",
 			entries: []string{"08:30 @start", "09:00 mail @email", "10:00 @end"},
-			want:    []string{"08:30-09:00 working: @start", "09:00-10:00 admin: mail @email"},
+			want:    []string{"08:30-09:00 uncategorised (working): @start", "09:00-10:00 admin: mail @email"},
 			worked:  90 * time.Minute,
-			byCat:   map[string]time.Duration{"working": 30 * time.Minute, "admin": time.Hour},
+			byCat:   map[string]time.Duration{"admin": time.Hour},
+			uncat:   30 * time.Minute,
 			status:  DayEnded, endedAt: "10:00",
 		},
 		{
@@ -120,57 +129,63 @@ func TestTimesheet_Rules(t *testing.T) {
 			loc:  utc, date: "2026-11-02",
 			entries: []string{"09:00 work", "12:00 @lunch", "13:00 work"},
 			want: []string{
-				"09:00-12:00 working: work",
+				"09:00-12:00 uncategorised (working): work",
 				"12:00-13:00 break: @lunch",
-				"13:00-24:00 working: work",
+				"13:00-24:00 uncategorised (working): work",
 			},
 			worked: 14 * time.Hour,
-			byCat:  map[string]time.Duration{"working": 14 * time.Hour, "break": time.Hour},
+			byCat:  map[string]time.Duration{"break": time.Hour},
+			uncat:  14 * time.Hour,
 			status: DayUnended,
 		},
 		{
 			name: "an @end mid-day doesn't stop the day being unended",
 			loc:  utc, date: "2026-11-02",
 			entries: []string{"09:00 work", "12:00 @end", "23:00 late +htt"},
-			want:    []string{"09:00-12:00 working: work", "23:00-24:00 htt: late +htt"},
+			want:    []string{"09:00-12:00 uncategorised (working): work", "23:00-24:00 htt: late +htt"},
 			worked:  4 * time.Hour,
-			byCat:   map[string]time.Duration{"working": 3 * time.Hour, "htt": time.Hour},
+			byCat:   map[string]time.Duration{"htt": time.Hour},
+			uncat:   3 * time.Hour,
 			status:  DayUnended,
 		},
 		{
 			name: "today's open entry runs until now, in progress",
 			loc:  utc, date: "2026-11-02", now: "2026-11-02 11:30",
 			entries: []string{"09:00 @start", "09:15 work +htt"},
-			want:    []string{"09:00-09:15 working: @start", "09:15-11:30 htt: work +htt"},
+			want:    []string{"09:00-09:15 uncategorised (working): @start", "09:15-11:30 htt: work +htt"},
 			worked:  150 * time.Minute,
-			byCat:   map[string]time.Duration{"working": 15 * time.Minute, "htt": 135 * time.Minute},
+			byCat:   map[string]time.Duration{"htt": 135 * time.Minute},
+			uncat:   15 * time.Minute,
 			status:  DayInProgress,
 		},
 		{
 			name: "today on a break: in progress, not worked",
 			loc:  utc, date: "2026-11-02", now: "2026-11-02 12:20",
 			entries: []string{"09:00 work", "12:00 @lunch"},
-			want:    []string{"09:00-12:00 working: work", "12:00-12:20 break: @lunch"},
+			want:    []string{"09:00-12:00 uncategorised (working): work", "12:00-12:20 break: @lunch"},
 			worked:  3 * time.Hour,
-			byCat:   map[string]time.Duration{"working": 3 * time.Hour, "break": 20 * time.Minute},
+			byCat:   map[string]time.Duration{"break": 20 * time.Minute},
+			uncat:   3 * time.Hour,
 			status:  DayInProgress,
 		},
 		{
 			name: "today after @end: ended, nothing runs",
 			loc:  utc, date: "2026-11-02", now: "2026-11-02 18:00",
 			entries: []string{"09:00 work", "17:00 @end"},
-			want:    []string{"09:00-17:00 working: work"},
+			want:    []string{"09:00-17:00 uncategorised (working): work"},
 			worked:  8 * time.Hour,
-			byCat:   map[string]time.Duration{"working": 8 * time.Hour},
+			byCat:   map[string]time.Duration{},
+			uncat:   8 * time.Hour,
 			status:  DayEnded, endedAt: "17:00",
 		},
 		{
 			name: "today, back after an @end: in progress again",
 			loc:  utc, date: "2026-11-02", now: "2026-11-02 14:00",
 			entries: []string{"09:00 work", "12:00 @end", "13:00 work"},
-			want:    []string{"09:00-12:00 working: work", "13:00-14:00 working: work"},
+			want:    []string{"09:00-12:00 uncategorised (working): work", "13:00-14:00 uncategorised (working): work"},
 			worked:  4 * time.Hour,
-			byCat:   map[string]time.Duration{"working": 4 * time.Hour},
+			byCat:   map[string]time.Duration{},
+			uncat:   4 * time.Hour,
 			status:  DayInProgress,
 		},
 		{
@@ -190,9 +205,10 @@ func TestTimesheet_Rules(t *testing.T) {
 			name: "only an entry that is just @end ends the day",
 			loc:  utc, date: "2026-11-02",
 			entries: []string{"09:00 fix the @end handling +htt", "10:00 @end of the sprint", "11:00 @end"},
-			want:    []string{"09:00-10:00 htt: fix the @end handling +htt", "10:00-11:00 working: @end of the sprint"},
+			want:    []string{"09:00-10:00 htt: fix the @end handling +htt", "10:00-11:00 uncategorised (working): @end of the sprint"},
 			worked:  2 * time.Hour,
-			byCat:   map[string]time.Duration{"htt": time.Hour, "working": time.Hour},
+			byCat:   map[string]time.Duration{"htt": time.Hour},
+			uncat:   time.Hour,
 			status:  DayEnded, endedAt: "11:00",
 		},
 		{
@@ -208,18 +224,20 @@ func TestTimesheet_Rules(t *testing.T) {
 			name: "clocks go forward: the day has 23 hours",
 			loc:  london, date: "2026-03-29",
 			entries: []string{"00:00 all day"},
-			want:    []string{"00:00-24:00 working: all day"},
+			want:    []string{"00:00-24:00 uncategorised (working): all day"},
 			worked:  23 * time.Hour,
-			byCat:   map[string]time.Duration{"working": 23 * time.Hour},
+			byCat:   map[string]time.Duration{},
+			uncat:   23 * time.Hour,
 			status:  DayUnended,
 		},
 		{
 			name: "clocks go back: the day has 25 hours",
 			loc:  london, date: "2026-10-25",
 			entries: []string{"00:00 all day"},
-			want:    []string{"00:00-24:00 working: all day"},
+			want:    []string{"00:00-24:00 uncategorised (working): all day"},
 			worked:  25 * time.Hour,
-			byCat:   map[string]time.Duration{"working": 25 * time.Hour},
+			byCat:   map[string]time.Duration{},
+			uncat:   25 * time.Hour,
 			status:  DayUnended,
 		},
 		{
@@ -229,10 +247,11 @@ func TestTimesheet_Rules(t *testing.T) {
 			want: []string{
 				"09:00-12:00 htt: work +htt",
 				"12:00-13:00 break: @lunch",
-				"13:00-17:00 working: work",
+				"13:00-17:00 uncategorised (working): work",
 			},
 			worked: 7 * time.Hour,
-			byCat:  map[string]time.Duration{"htt": 3 * time.Hour, "break": time.Hour, "working": 4 * time.Hour},
+			byCat:  map[string]time.Duration{"htt": 3 * time.Hour, "break": time.Hour},
+			uncat:  4 * time.Hour,
 			status: DayEnded, endedAt: "17:00",
 		},
 		{
@@ -241,11 +260,12 @@ func TestTimesheet_Rules(t *testing.T) {
 			entries: []string{"2026-11-01 23:00 night +htt", "01:00 @end", "09:00 work", "2026-11-03 01:00 tomorrow"},
 			want: []string{
 				"00:00-01:00 htt: night +htt",
-				"09:00-24:00 working: work",
-				"24:00-24:00 working: tomorrow",
+				"09:00-24:00 uncategorised (working): work",
+				"24:00-24:00 uncategorised (working): tomorrow",
 			},
 			worked: 16 * time.Hour,
-			byCat:  map[string]time.Duration{"htt": time.Hour, "working": 15 * time.Hour},
+			byCat:  map[string]time.Duration{"htt": time.Hour},
+			uncat:  15 * time.Hour,
 			status: DayUnended,
 		},
 	}
@@ -273,6 +293,9 @@ func TestTimesheet_Rules(t *testing.T) {
 			}
 			if byCat := s.ByCategory(); !maps.Equal(byCat, tc.byCat) {
 				t.Errorf("ByCategory() = %v, want %v", byCat, tc.byCat)
+			}
+			if s.Uncategorised() != tc.uncat {
+				t.Errorf("Uncategorised() = %v, want %v", s.Uncategorised(), tc.uncat)
 			}
 			if s.Status != tc.status {
 				t.Errorf("Status = %v, want %v", s.Status, tc.status)
@@ -328,13 +351,139 @@ func TestTimesheet_TheDateIsTheLogsOwn(t *testing.T) {
 }
 
 func TestTimesheet_NilCategoriserPutsEverythingInWorking(t *testing.T) {
+	// With no categories nothing matches: every interval is
+	// uncategorised, in the built-in working, and counts as work.
 	l := dayLog(t, time.UTC, "2026-11-02", "09:00 work", "12:00 @lunch", "13:00 +htt", "17:00 @end")
 	s, err := l.Timesheet(nil, localTime(t, time.UTC, "2026-11-05 09:00"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := map[string]time.Duration{"working": 8 * time.Hour}; !maps.Equal(s.ByCategory(), want) {
-		t.Errorf("ByCategory() = %v, want %v", s.ByCategory(), want)
+	if got := s.ByCategory(); len(got) != 0 {
+		t.Errorf("ByCategory() = %v, want nothing: no category matched", got)
+	}
+	if s.Uncategorised() != 8*time.Hour || s.Worked() != 8*time.Hour {
+		t.Errorf("Uncategorised() = %v, Worked() = %v, want 8h each", s.Uncategorised(), s.Worked())
+	}
+	for _, iv := range s.Intervals {
+		if !iv.Uncategorised || iv.Category.Name != DefaultCategoryName || !iv.Category.Work {
+			t.Errorf("interval %s: want uncategorised, in working, counting as work", describe(s, iv))
+		}
+	}
+}
+
+func TestTimesheet_UncategorisedTimeFollowsTheDefault(t *testing.T) {
+	// The same day under each kind of default category. Time no
+	// category matched is uncategorised, never in a category's own
+	// time, and counts as worked when the default counts as work. The
+	// default's own time is only what its tags matched.
+	day := []string{"09:00 review +htt", "11:00 filing @desk", "12:00 @lunch", "13:00 reading the news", "16:00 @end"}
+	breakAndHtt := []Category{
+		{Name: "break", Tags: []string{"@lunch"}, Work: false},
+		{Name: "htt", Tags: []string{"+htt"}, Work: true},
+	}
+	withWorking := func(work bool) []Category {
+		return append(slices.Clone(breakAndHtt), Category{Name: "working", Tags: []string{"@desk"}, Work: work})
+	}
+	withDefault := func(categories []Category, name string) *Categoriser {
+		c, err := mustCategoriser(t, categories).WithDefault(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+
+	cases := []struct {
+		name   string
+		c      *Categoriser
+		want   []string
+		byCat  map[string]time.Duration
+		uncat  time.Duration
+		worked time.Duration
+	}{
+		{
+			name: "the built-in working: uncategorised time is worked",
+			c:    mustCategoriser(t, breakAndHtt),
+			want: []string{
+				"09:00-11:00 htt: review +htt",
+				"11:00-12:00 uncategorised (working): filing @desk",
+				"12:00-13:00 break: @lunch",
+				"13:00-16:00 uncategorised (working): reading the news",
+			},
+			byCat: map[string]time.Duration{"htt": 2 * time.Hour, "break": time.Hour},
+			uncat: 4 * time.Hour, worked: 6 * time.Hour,
+		},
+		{
+			name: "working defined with tags: its line holds its matches only",
+			c:    mustCategoriser(t, withWorking(true)),
+			want: []string{
+				"09:00-11:00 htt: review +htt",
+				"11:00-12:00 working: filing @desk",
+				"12:00-13:00 break: @lunch",
+				"13:00-16:00 uncategorised (working): reading the news",
+			},
+			byCat: map[string]time.Duration{"htt": 2 * time.Hour, "working": time.Hour, "break": time.Hour},
+			uncat: 3 * time.Hour, worked: 6 * time.Hour,
+		},
+		{
+			name: "working defined with tags and work: false: neither its time nor uncategorised time is worked",
+			c:    mustCategoriser(t, withWorking(false)),
+			want: []string{
+				"09:00-11:00 htt: review +htt",
+				"11:00-12:00 working: filing @desk",
+				"12:00-13:00 break: @lunch",
+				"13:00-16:00 uncategorised (working): reading the news",
+			},
+			byCat: map[string]time.Duration{"htt": 2 * time.Hour, "working": time.Hour, "break": time.Hour},
+			uncat: 3 * time.Hour, worked: 2 * time.Hour,
+		},
+		{
+			name: "a defined category that isn't work: uncategorised time isn't worked",
+			c:    withDefault(breakAndHtt, "break"),
+			want: []string{
+				"09:00-11:00 htt: review +htt",
+				"11:00-12:00 uncategorised (break): filing @desk",
+				"12:00-13:00 break: @lunch",
+				"13:00-16:00 uncategorised (break): reading the news",
+			},
+			byCat: map[string]time.Duration{"htt": 2 * time.Hour, "break": time.Hour},
+			uncat: 4 * time.Hour, worked: 2 * time.Hour,
+		},
+		{
+			name: "a tagless default has no time of its own",
+			c:    withDefault(append(slices.Clone(breakAndHtt), Category{Name: "idle", Work: false}), "idle"),
+			want: []string{
+				"09:00-11:00 htt: review +htt",
+				"11:00-12:00 uncategorised (idle): filing @desk",
+				"12:00-13:00 break: @lunch",
+				"13:00-16:00 uncategorised (idle): reading the news",
+			},
+			byCat: map[string]time.Duration{"htt": 2 * time.Hour, "break": time.Hour},
+			uncat: 4 * time.Hour, worked: 2 * time.Hour,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, err := dayLog(t, time.UTC, "2026-11-02", day...).Timesheet(tc.c, localTime(t, time.UTC, "2026-11-05 09:00"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got []string
+			for _, iv := range s.Intervals {
+				got = append(got, describe(s, iv))
+			}
+			if strings.Join(got, "\n") != strings.Join(tc.want, "\n") {
+				t.Errorf("intervals:\n got: %q\nwant: %q", got, tc.want)
+			}
+			if byCat := s.ByCategory(); !maps.Equal(byCat, tc.byCat) {
+				t.Errorf("ByCategory() = %v, want %v", byCat, tc.byCat)
+			}
+			if s.Uncategorised() != tc.uncat {
+				t.Errorf("Uncategorised() = %v, want %v", s.Uncategorised(), tc.uncat)
+			}
+			if s.Worked() != tc.worked {
+				t.Errorf("Worked() = %v, want %v", s.Worked(), tc.worked)
+			}
+		})
 	}
 }
 

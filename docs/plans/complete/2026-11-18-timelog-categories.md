@@ -100,6 +100,40 @@ What building showed about the open questions:
   until midnight (a 15-hour day in the report). The report flags it,
   but `htt log edit` is still the only fix.
 
+Amendments: Brice's decisions of 2026-11-18, after the merge, on two
+of the open questions above.
+
+- **Uncategorised time has a line of its own in the report.** An
+  entry no category's tags match is uncategorised: the report shows
+  its time per day and in the totals on an `uncategorised` line, never
+  folded into a named category's, so an unmapped or misspelt tag
+  stands out. Whether it counts as worked still follows the default
+  category (decision 8), and the line names it:
+  `uncategorised  3h 0m  (counted as working)`, lined up with the
+  categories' lines, after them. A category's line holds only the
+  entries its tags matched, the default's included, so the built-in
+  `working`, which has no tags, never has a line. The domain records
+  it: `Categoriser.Match` says whether a category matched, each
+  `Interval` carries `Uncategorised`, `ByCategory` is matched time
+  only and `Timesheet.Uncategorised` the rest; `Worked` is unchanged.
+  The name is reserved (`domain.UncategorisedName`): a category called
+  `uncategorised` is a config error, since it would print a second
+  line of that name (decided at review).
+- **Status names the category.** `log status`, `log active` and
+  `htt status` read the categories, so "Only `htt report` reads the
+  categories" above no longer holds. The running entry gets its
+  category and how long it has run:
+  `Currently working on: review the PR +htt (htt, 1h0m)` (`Working on:
+  …` from `log active`); `Not working: @lunch (break, 12m)` from both
+  when the category doesn't count as work; and `uncategorised` when no
+  category matched, working or not as the default category says. The
+  lines after an `@end` and on a day with nothing logged don't change.
+  A bad `timelog` config doesn't stop them: they warn on stderr
+  (`warning: config: timelog.…: …; showing entries without their
+  categories`), keep the exit code, and show the entry as before,
+  without its category. They warn only when they show an entry, since
+  no other line has a category to lose.
+
 ## Motivation
 
 The time log is one file per day; each entry means "from now on I'm
@@ -240,5 +274,7 @@ Clarified by Brice during the build (2026-11-18):
   24:00 rule, a forgotten `@end` is otherwise fixed only by editing the
   file.
 - Should `log status` name the category, or only the report?
+  Decided: it does (see Amendments in Outcome).
 - Should the report list time in the default category separately as
-  "uncategorised" too, so unmapped tags are noticed?
+  "uncategorised" too, so unmapped tags are noticed? Decided: yes (see
+  Amendments in Outcome).

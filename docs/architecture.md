@@ -173,19 +173,26 @@ entry runs to local midnight (`DayUnended`) unless it is an `@end`
 (`DayEnded`), or, today, until now (`DayInProgress`). Intervals never
 leave their day. `Timesheet` takes `now`, and `now`'s zone is the
 local one, so tests pin both. `htt report` sums the sheets (`Worked`,
-`ByCategory`); `htt log status` reads `Status`, `EndedAt` and
-`Current`.
+`ByCategory`, `Uncategorised`); `htt log status` reads `Status`,
+`EndedAt` and `Current`, whose `Category` (its name, and whether it
+is work) and `Uncategorised` it shows.
 
-Each interval has a `Category` from a `Categoriser`
+Each interval has a `Category` from a `Categoriser`'s `Match`
 (`timelog_category.go`): the first category with one of the entry's
-tags, matched exactly, or the default category (`working`, or the one
-`WithDefault` names, whose `Work` applies). `Work: false` keeps a
-category, such as breaks, out of worked time. The domain holds no
-config: `cli` reads `timelog.categories` and
-`timelog.default_category` (`timelog_config.go`) and builds the
+tags, matched exactly; or, when none has one, the default category
+(`working`, or the one `WithDefault` names, whose `Work` applies), and
+the interval is `Uncategorised`. `ByCategory` is the time categories'
+tags matched, the default's own tags included, and `Uncategorised` the
+rest, so the report can show unmatched time on its own line instead of
+under the default's name; `Worked` counts it when the default counts
+as work. `Work: false` keeps a category, such as breaks, out of worked
+time. The domain holds no config: `cli` reads `timelog.categories`
+and `timelog.default_category` (`timelog_config.go`) and builds the
 categoriser, as it builds the TUI's theme. `NewCategoriser` and
 `WithDefault` check the categories, and `cli` names the config key in
-the error.
+the error. A bad config stops `htt report` before it prints; `htt log
+status`, `log active` and `htt status` warn on stderr and show the
+entry without categories (`Timesheet` with a nil categoriser).
 
 ## Repositories
 

@@ -388,7 +388,9 @@ Logging entry: 2026-05-15 review PR for the new auth flow
 
 `htt log show` (alias `s`) prints today's log. `htt log status`
 (alias `htt log ?`) and `htt log active` both report the entry you're
-on and how long it has been running:
+on, its category and how long it has been running. Until you set up
+[categories](#categories), or when none of them matches the entry, it
+is `uncategorised`:
 
 ```
 $ htt log show
@@ -397,9 +399,9 @@ reviewing the auth PR ts:2026-05-15T09:00:12Z
 2026-05-15 review PR for the new auth flow ts:2026-05-15T10:32:08Z
 
 $ htt log status
-Currently working on: 2026-05-15 review PR for the new auth flow (12m)
+Currently working on: 2026-05-15 review PR for the new auth flow (uncategorised, 12m)
 $ htt log active
-Working on: 2026-05-15 review PR for the new auth flow (12m)
+Working on: 2026-05-15 review PR for the new auth flow (uncategorised, 12m)
 ```
 
 ### Breaks and the end of the day
@@ -413,7 +415,13 @@ Logging entry: @lunch
 
 Give it a category that doesn't count as work (see
 [Categories](#categories)) and reports leave it out of the time you
-worked, while still showing it.
+worked, while still showing it, and `htt log status` and
+`htt log active` say you're not working:
+
+```
+$ htt log status
+Not working: @lunch (break, 12m)
+```
 
 `htt log end` ends the day: the entry before it stops there, and
 `htt log status` says so:
@@ -460,11 +468,18 @@ timelog:
 - Tags match **exactly** as written: `@break` matches `@break coffee`,
   but not `@Break`, `@breakfast` or `@break-time`.
 - A category counts as work unless it says `work: false`.
-- Entries no category matches go to the **default category**:
-  `working`, which counts as work, unless `default_category` names one
-  of your categories, whose `work` then decides.
+- Entries no category matches are **uncategorised**: `htt report`
+  lists their time on a line of its own, so a tag you haven't mapped,
+  or one spelt differently (`+HTT`), stands out, and `htt log status`
+  names them `uncategorised` too. (So no category can be called
+  `uncategorised`: the config says so.) Whether that time
+  counts as work follows the **default category**: `working`, which
+  counts as work, unless `default_category` names one of your
+  categories, whose `work` then decides. The default category's own
+  line in the report holds only the entries its tags matched, so the
+  built-in `working`, which has no tags, never has one.
 - `@start` is an ordinary entry: the time between `htt log start` and
-  your first real entry is `working`, unless you give `@start` a
+  your first real entry is uncategorised, unless you give `@start` a
   category.
 - `htt workon` logs the task's text, tags included, so a task's
   `+project` picks its category.
@@ -480,6 +495,16 @@ unquoted `@` can't start a value. A config htt can't use stops
 ```
 $ htt report
 ❌ config: timelog.categories: category 3 (admin): no tags, and it isn't the default category, so no entry can be in it; list its tags, or make it the default category
+```
+
+`htt log status`, `htt log active` and `htt status` carry on: they
+warn on stderr, and show the entry without its category until you fix
+the config:
+
+```
+$ htt log status
+warning: config: timelog.categories: category 3 (admin): no tags, and it isn't the default category, so no entry can be in it; list its tags, or make it the default category; showing entries without their categories
+Currently working on: review the PR +htt (1h0m)
 ```
 
 The log files themselves don't change: categories are read from the
@@ -512,30 +537,37 @@ Deleted (0)
 
 Time logged
   2026-05-13  14h 15m worked (no @end: counted to 24:00)
-    break       45m
-    htt      6h 10m
-    admin     8h 0m
-    working      5m
+    break             45m
+    htt            6h 10m
+    admin           8h 0m
+    uncategorised      5m  (counted as working)
   2026-05-14    7h 0m worked
-    break     1h 0m
-    htt      4h 50m
-    admin    1h 30m
-    working     40m
+    break           1h 0m
+    htt            4h 50m
+    admin          1h 30m
+    uncategorised     40m  (counted as working)
   2026-05-15   1h 44m worked (in progress)
-    working  1h 44m
+    uncategorised  1h 44m  (counted as working)
   Total: 22h 59m worked
-    break    1h 45m
-    htt      11h 0m
-    admin    9h 30m
-    working  2h 29m
+    break          1h 45m
+    htt            11h 0m
+    admin          9h 30m
+    uncategorised  2h 29m  (counted as working)
 ```
 
 Time logged gives each day's worked time, then its time in each
-category, breaks included, and the same totals for the period. A day
-without an `@end` is counted to midnight and flagged; today's last
-entry counts until now, in progress. A task added and completed in
-the period counts under both Added and Completed, by the context it
-was in; a deleted task is listed only under Deleted.
+category, breaks included, and the same totals for the period. The
+`uncategorised` line is the time of entries no category matched,
+never folded into a category's line, and says which category it
+counts as: the default category, whose `work` decides whether it is
+worked (here `working`, so it is). If time shows up there that you
+meant to categorise, look for a tag missing from your categories, or
+spelt differently. A day without an `@end` is counted to midnight and
+flagged; today's last entry counts until now, in progress.
+
+A task added and completed in the period counts under both Added and
+Completed, by the context it was in; a deleted task is listed only
+under Deleted.
 
 ## The rollup
 
@@ -545,7 +577,7 @@ It's the natural "where am I?" command.
 
 ```
 $ htt status
-Currently working on: 2026-05-15 review PR for the new auth flow (24m)
+Currently working on: 2026-05-15 review PR for the new auth flow (uncategorised, 24m)
 Available Contexts: home todo work
 Current Context: work
 

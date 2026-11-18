@@ -51,7 +51,7 @@ func generateDay(t *testing.T, r *rand.Rand, zones []*time.Location) genDay {
 		g.now = end.Add(time.Duration(1+r.IntN(5*24*60)) * time.Minute)
 	}
 
-	words := []string{"work", "+htt", "+admin", "@lunch", "@break", "@email", "#deep", "@Break", "@breakfast", "fix the @end bug"}
+	words := []string{"work", "+htt", "+admin", "@lunch", "@break", "@email", "@desk", "#deep", "@Break", "@breakfast", "fix the @end bug"}
 	var stamps []time.Time
 	for range r.IntN(10) {
 		at := start.Add(time.Duration(r.IntN(minutes)) * time.Minute)
@@ -98,16 +98,26 @@ func generateDay(t *testing.T, r *rand.Rand, zones []*time.Location) genDay {
 // intervals themselves must be in order, not overlap, stay within the
 // day (and, today, before now), and cover exactly the time from each
 // stretch's first entry to its close: the @end after it, or the end of
-// the day (24:00 on a past day, now today).
+// the day (24:00 on a past day, now today). The minutes of entries no
+// category matched are uncategorised, not in the default category's
+// own time; they count as worked when the default counts as work. Each
+// day is read with one of three defaults: the built-in working, a
+// category that isn't work, and a working of the list's, with a tag.
 func TestTimesheet_Oracle(t *testing.T) {
 	var zones []*time.Location
 	for _, name := range []string{"UTC", "Europe/London", "America/New_York", "Asia/Kolkata", "Australia/Lord_Howe"} {
 		zones = append(zones, mustZone(t, name))
 	}
-	categories := mustCategoriser(t, testCategories())
+	plain := mustCategoriser(t, testCategories())
+	onBreak, err := plain.WithDefault("break")
+	if err != nil {
+		t.Fatal(err)
+	}
+	desk := mustCategoriser(t, append(testCategories(), Category{Name: "working", Tags: []string{"@desk"}, Work: false}))
 	r := rand.New(rand.NewPCG(20261118, 7))
 	for i := range 3000 {
 		g := generateDay(t, r, zones)
+		categories := []*Categoriser{plain, onBreak, desk}[i%3]
 		s, err := g.log.Timesheet(categories, g.now)
 		if err != nil {
 			t.Fatalf("case %d: Timesheet: %v", i, err)
@@ -135,6 +145,7 @@ type stampedEntry struct {
 	at    time.Time
 	index int // in the file
 	cat   Category
+	match bool // a category's tag matched, rather than the default taking it
 	end   bool // IsDayEnd
 }
 
@@ -143,7 +154,8 @@ func checkSheet(g genDay, s *Timesheet, c *Categoriser) string {
 	var entries []stampedEntry
 	for i, e := range g.log.Entries {
 		at, _ := entryTimestamp(e)
-		entries = append(entries, stampedEntry{e, at, i, c.Categorise(e), IsDayEnd(e)})
+		cat, matched := c.Match(e)
+		entries = append(entries, stampedEntry{e, at, i, cat, matched, IsDayEnd(e)})
 	}
 	hi := g.end
 	if g.today {
@@ -152,7 +164,7 @@ func checkSheet(g genDay, s *Timesheet, c *Categoriser) string {
 
 	// The oracle, minute by minute.
 	want := map[string]time.Duration{}
-	var wantWorked time.Duration
+	var wantUncategorised, wantWorked time.Duration
 	for m := g.start; m.Before(hi); m = m.Add(time.Minute) {
 		var owner *stampedEntry
 		for k := range entries {
@@ -165,7 +177,11 @@ func checkSheet(g genDay, s *Timesheet, c *Categoriser) string {
 			continue
 		}
 		cat := owner.cat
-		want[cat.Name] += time.Minute
+		if owner.match {
+			want[cat.Name] += time.Minute
+		} else {
+			wantUncategorised += time.Minute
+		}
 		if cat.Work {
 			wantWorked += time.Minute
 		}
@@ -178,6 +194,9 @@ func checkSheet(g genDay, s *Timesheet, c *Categoriser) string {
 	}
 	if !maps.Equal(got, want) {
 		return fmt.Sprintf("ByCategory() = %v, oracle %v", got, want)
+	}
+	if s.Uncategorised() != wantUncategorised {
+		return fmt.Sprintf("Uncategorised() = %v, oracle %v", s.Uncategorised(), wantUncategorised)
 	}
 	if s.Worked() != wantWorked {
 		return fmt.Sprintf("Worked() = %v, oracle %v", s.Worked(), wantWorked)
@@ -201,8 +220,9 @@ func checkSheet(g genDay, s *Timesheet, c *Categoriser) string {
 		if k > 0 && iv.Start.Before(s.Intervals[k-1].End) {
 			return fmt.Sprintf("interval %d starts before interval %d ends", k, k-1)
 		}
-		if iv.Category.Name != c.Categorise(iv.Entry).Name {
-			return fmt.Sprintf("interval %d is in %s, its entry in %s", k, iv.Category.Name, c.Categorise(iv.Entry).Name)
+		if cat, matched := c.Match(iv.Entry); iv.Category.Name != cat.Name || iv.Uncategorised == matched {
+			return fmt.Sprintf("interval %d is in %s (uncategorised %v), its entry in %s (matched %v)",
+				k, iv.Category.Name, iv.Uncategorised, cat.Name, matched)
 		}
 	}
 

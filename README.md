@@ -84,8 +84,8 @@ xattr -d com.apple.quarantine ~/.local/bin/htt
 
 (Downloads made with `gh` or `curl` aren't quarantined.)
 
-To update, download the new release the same way. The update notice
-suggests `go install`, which only applies to an install made with Go.
+To update, download the new release the same way; the update notice
+links to it.
 
 ### With Go
 
@@ -187,7 +187,18 @@ htt checks whether a newer release exists, so you hear about fixes.
   builds without a version (`htt --version` says "unknown").
 - **What you see:** if the release is newer than yours, a notice after
   the command (on stderr) or on the TUI's status line, at most once a
-  day. htt never downloads or installs anything itself.
+  day. It gives both ways to update, since htt can't tell how you
+  installed it: the release page to download it from, and the
+  `go install` command:
+
+  ```
+  A new version of htt is available: v0.4.0 (you have v0.3.0).
+    Download it:  https://github.com/bricef/htt/releases/tag/v0.4.0
+    Or with Go:   go install github.com/bricef/htt/cmd/htt@latest
+  Turn this check off with check_for_updates: false in your config file.
+  ```
+
+  htt never downloads or installs anything itself.
 - **If it fails** (offline, a timeout, a rate limit, any error):
   nothing. The command runs exactly as it would have, and nothing is
   printed; the TUI's `--log-file` records why. The request runs in the
@@ -261,7 +272,8 @@ plus govulncheck. A separate workflow,
 Mondays, so a vulnerability published while htt is quiet still shows
 up. GitHub pauses a scheduled workflow after 60 days without activity
 and doesn't resume it by itself; turn it back on with
-`gh workflow enable weekly.yml`. The workflows' actions are pinned to
+`gh workflow enable weekly.yml` (`just release-check` warns when it's
+off). The workflows' actions are pinned to
 commits, and Dependabot updates them monthly.
 
 Quick dev loop for the TUI. It never writes to the terminal outside

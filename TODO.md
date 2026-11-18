@@ -71,6 +71,22 @@ Each confirmed against `main` on 2026-11-03.
 
 ## Done
 
+- [x] `just release-check` (and `just release`) warns when GitHub has
+      paused the weekly scan (2026-11-18), with the command that turns
+      it back on; a warning only, and a failed lookup says so and
+      carries on
+- [x] Time logs are checked for dates htt can't read (2026-11-18):
+      the `log` commands but `log edit`, `status`, `workon` and
+      `htt report` warn about such entries on stderr as they do for
+      task files, naming the log file and line, once per line per run;
+      `ts:` never warns
+- [x] A task typed with a date htt can't read warns as it's written
+      (2026-11-18): `todo add`, `add-to`, `replace`, `edit` and
+      `log add` name the line it went to on stderr, instead of leaving
+      it to the next command that reads the file
+- [x] The update notice suits every install (2026-11-18): it gives the
+      release page to download from as well as `go install`, and the
+      TUI's one-line form fits an 80-column status line
 - [x] Release binaries (2026-11-17): every release gets archives for
       Linux and macOS on amd64 and arm64, a SHA256SUMS file and
       build-provenance attestations, built by GitHub Actions

@@ -30,7 +30,8 @@ var Begin = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("copy task: %w", err)
 		}
-		return appendToday(entry)
+		_, err = appendToday(entry)
+		return err
 	},
 }
 

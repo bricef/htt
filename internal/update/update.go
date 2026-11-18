@@ -35,6 +35,10 @@ const (
 	Interval = 24 * time.Hour
 
 	installCommand = "go install github.com/bricef/htt/cmd/htt@latest"
+
+	// releasesPage lists every release, newest first, each with its
+	// binaries and notes that say how to install it.
+	releasesPage = "github.com/bricef/htt/releases"
 )
 
 // version is a version given at build time, for builds Go can't stamp
@@ -141,18 +145,22 @@ type Release struct {
 	URL     string // the release page
 }
 
-// Notice is the message for the end of a CLI command.
+// Notice is the message for the end of a CLI command. htt can't tell
+// how it was installed, so the notice gives both ways to update: the
+// release page, to download a binary from, and go install.
 func (r Release) Notice() string {
 	return fmt.Sprintf("A new version of htt is available: %s (you have %s).\n"+
-		"  Update:        %s\n"+
-		"  Release notes: %s\n"+
+		"  Download it:  %s\n"+
+		"  Or with Go:   %s\n"+
 		"Turn this check off with check_for_updates: false in your config file.",
-		r.Version, r.Current, installCommand, r.URL)
+		r.Version, r.Current, r.URL, installCommand)
 }
 
-// Short is the one-line form, for the TUI's status line.
+// Short is the one-line form, for the TUI's status line: both ways to
+// update, in under 80 columns. It leaves out the running version,
+// which can be a long pseudo-version.
 func (r Release) Short() string {
-	return fmt.Sprintf("htt %s is out (you have %s): %s", r.Version, r.Current, installCommand)
+	return fmt.Sprintf("htt %s is out: %s, or go install …@latest", r.Version, releasesPage)
 }
 
 // Check is one run's update check. Start creates it; once Done is

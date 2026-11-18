@@ -174,10 +174,11 @@ func (r *FileRepository) Save(ctx *domain.Context) error {
 	}
 	defer func() { _ = f.Close() }()
 
-	for _, task := range ctx.Tasks {
+	for i, task := range ctx.Tasks {
 		if _, err := fmt.Fprintln(f, task.Raw); err != nil {
 			return fmt.Errorf("write task: %w", err)
 		}
+		task.FileLine = i + 1 // where it is now, for messages about it
 	}
 	return nil
 }

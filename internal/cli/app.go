@@ -46,11 +46,14 @@ func SetRepository(r domain.Repository) {
 // on first use; tests override it via SetTimelogRepository.
 var defaultTimelogRepo domain.TimelogRepository
 
+// timelogRepo returns the TimelogRepository CLI commands use:
+// defaultTimelogRepo, warning on stderr about the dates htt can't read
+// in each day's log a command loads (see warningTimelogRepository).
 func timelogRepo() domain.TimelogRepository {
 	if defaultTimelogRepo == nil {
 		defaultTimelogRepo = storage.NewFileTimelogRepository(vars.Get(vars.ConfigKeyDataDir))
 	}
-	return defaultTimelogRepo
+	return warningTimelogRepository{defaultTimelogRepo}
 }
 
 // SetTimelogRepository overrides the package-level TimelogRepository

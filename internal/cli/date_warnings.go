@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"time"
 
 	"github.com/bricef/htt/internal/domain"
 )
@@ -25,7 +26,7 @@ type warningRepository struct{ domain.Repository }
 func (r warningRepository) Context(name string) (*domain.Context, error) {
 	ctx, err := r.Repository.Context(name)
 	if err == nil {
-		r.warnDates(ctx)
+		warnContext(r.Repository, ctx, ctx.Tasks)
 	}
 	return ctx, err
 }
@@ -33,7 +34,7 @@ func (r warningRepository) Context(name string) (*domain.Context, error) {
 func (r warningRepository) CurrentContext() (*domain.Context, error) {
 	ctx, err := r.Repository.CurrentContext()
 	if err == nil {
-		r.warnDates(ctx)
+		warnContext(r.Repository, ctx, ctx.Tasks)
 	}
 	return ctx, err
 }
@@ -41,9 +42,70 @@ func (r warningRepository) CurrentContext() (*domain.Context, error) {
 func (r warningRepository) Contexts() ([]*domain.Context, error) {
 	ctxs, err := r.Repository.Contexts()
 	for _, ctx := range ctxs {
-		r.warnDates(ctx)
+		warnContext(r.Repository, ctx, ctx.Tasks)
 	}
 	return ctxs, err
+}
+
+// warningTimelogRepository is the TimelogRepository CLI commands use
+// (see timelogRepo): warningRepository for time logs. Each day's log a
+// command loads warns about the entries with dates htt can't read, in
+// the same form and with the same once-per-run record. An entry's ts:
+// timestamp is htt's own, not a date Task.DateWarnings reads, so it
+// never warns. Timelog.Append saves through the wrapped repository.
+type warningTimelogRepository struct{ domain.TimelogRepository }
+
+func (r warningTimelogRepository) Today() (*domain.Timelog, error) {
+	tl, err := r.TimelogRepository.Today()
+	if err == nil {
+		warnTimelog(r.TimelogRepository, tl, tl.Entries)
+	}
+	return tl, err
+}
+
+func (r warningTimelogRepository) Day(date time.Time) (*domain.Timelog, error) {
+	tl, err := r.TimelogRepository.Day(date)
+	if err == nil {
+		warnTimelog(r.TimelogRepository, tl, tl.Entries)
+	}
+	return tl, err
+}
+
+// warnTypedTask warns about the dates htt can't read in a task the user
+// typed (todo add, add-to, replace, edit), once it's saved in ctx, so a
+// bad date is pointed out as it's written rather than by the next
+// command that reads the file. Saving set the task's FileLine. The
+// warning counts as given for that line: a later load in the same run
+// (the REPL reloads after every command) doesn't repeat it.
+func warnTypedTask(ctx *domain.Context, task *domain.Task) {
+	warnContext(baseRepo(), ctx, []*domain.Task{task})
+}
+
+// warnTypedEntry is warnTypedTask for a time-log entry the user typed
+// (log add), once it's saved in tl.
+func warnTypedEntry(tl *domain.Timelog, entry *domain.Task) {
+	warnTimelog(timelogRepo(), tl, []*domain.Task{entry})
+}
+
+// warnTimelog warns about entries, lines of tl.
+func warnTimelog(r domain.TimelogRepository, tl *domain.Timelog, entries []*domain.Task) {
+	file := r.LogPath(tl.Date)
+	if file == "" {
+		file = "timelog " + tl.Date.Format("2006-01-02") // a repository without files, in tests
+	}
+	warnDates(file, entries)
+}
+
+// warnContext warns about tasks, lines of ctx. The archive never warns.
+func warnContext(r domain.Repository, ctx *domain.Context, tasks []*domain.Task) {
+	if ctx.Name == domain.ArchiveContextName {
+		return
+	}
+	file := r.ContextPath(ctx.Name)
+	if file == "" {
+		file = ctx.Name // a repository without files, in tests
+	}
+	warnDates(file, tasks)
 }
 
 // datesWarned holds the date warnings already given in this run, by
@@ -52,18 +114,13 @@ func (r warningRepository) Contexts() ([]*domain.Context, error) {
 // the context after every command, which may have moved the line.
 var datesWarned = map[string]bool{}
 
-func (r warningRepository) warnDates(ctx *domain.Context) {
-	if ctx.Name == domain.ArchiveContextName {
-		return
-	}
-	file := r.ContextPath(ctx.Name)
-	if file == "" {
-		file = ctx.Name // a repository without files, in tests
-	}
+// warnDates prints the date warnings of tasks, lines of file, that
+// this run hasn't given yet.
+func warnDates(file string, tasks []*domain.Task) {
 	// Two identical lines in one file both warn; on later loads,
 	// neither does.
 	given := map[string]bool{}
-	for _, task := range ctx.Tasks {
+	for _, task := range tasks {
 		for _, w := range task.DateWarnings() {
 			key := file + "\n" + task.Entry() + "\n" + w
 			if datesWarned[key] {

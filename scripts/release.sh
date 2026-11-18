@@ -20,6 +20,7 @@ repo=bricef/htt
 module=github.com/bricef/htt
 govulncheck=golang.org/x/vuln/cmd/govulncheck@v1.9.0 # the version CI runs
 binaries_workflow=release-binaries.yml
+weekly_workflow=weekly.yml
 here=$(cd "$(dirname "$0")" && pwd)
 
 usage() {
@@ -30,6 +31,9 @@ step() { printf '\n==> %s\n' "$*"; }
 fail() {
 	printf 'release: %s\n' "$*" >&2
 	exit 1
+}
+warn() { # something to fix that doesn't stop a release
+	printf 'release: warning: %s\n' "$*" >&2
 }
 dry_run=${RELEASE_DRY_RUN:-}
 run() { # a command that changes something outside this checkout
@@ -191,6 +195,23 @@ just vet
 just check
 go mod tidy -diff
 go run "$govulncheck" ./...
+
+# GitHub turns a scheduled workflow off after 60 days without activity
+# in the repository and never turns it back on, which would silently
+# end the weekly vulnerability scan. A warning, after the noisy local
+# checks so it stays in view; it never stops a release.
+step "The weekly scan is on"
+weekly_err=$(mktemp)
+if weekly=$(gh api "repos/$repo/actions/workflows/$weekly_workflow" --jq .state 2>"$weekly_err"); then
+	if [[ $weekly == active ]]; then
+		echo "$weekly_workflow is active"
+	else
+		warn "$weekly_workflow is '${weekly:-unknown}', not active, so GitHub isn't running the weekly vulnerability scan; turn it back on with: gh workflow enable $weekly_workflow --repo $repo"
+	fi
+else
+	warn "couldn't look up whether $weekly_workflow is active ($(tr '\n' ' ' <"$weekly_err" | sed 's/ *$//')); carrying on. Check it with: gh workflow view $weekly_workflow --repo $repo"
+fi
+rm -f "$weekly_err"
 
 if [[ -n $previous ]]; then
 	step "Merged since $previous (material for the notes)"

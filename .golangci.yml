@@ -1,0 +1,7 @@
+# golangci-lint v2. The linters are the default (standard) set; gofmt
+# makes `golangci-lint run` (just check, and CI's lint step) report a
+# file that isn't gofmt-formatted, which it didn't before.
+version: "2"
+formatters:
+  enable:
+    - gofmt

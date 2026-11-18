@@ -52,9 +52,6 @@ Each confirmed against `main` on 2026-11-03.
   - [ ] Say why the TUI closed, after it exits
   - [ ] Themes: paint the whole screen background, a `--theme` flag or
         preview for trying themes, light/dark adaptive colours
-- Editors
-  - [ ] Parse `$EDITOR` like git does (`EDITOR="code --wait"` fails to
-        start today) and honour `$VISUAL`
 - REPL
   - [ ] Tab completion
   - [ ] Fixed-position prompt
@@ -74,6 +71,13 @@ Each confirmed against `main` on 2026-11-03.
 
 ## Done
 
+- [x] htt picks and runs your editor as git does (2026-11-18):
+      `$VISUAL`, unless `TERM` is `dumb`, then `$EDITOR`; a value with
+      spaces or shell characters runs through `sh` with the file as
+      its last argument, so `EDITOR="code --wait"` works, and on
+      Windows the value is split into words, double quotes grouping
+      them. The CLI's edit commands and the TUI's `f` share one
+      launcher (`internal/editor`)
 - [x] Log a time-log entry at a given time (2026-11-18): `log start`,
       `log add`, `log end` and `workon` take `--at` (`HH:MM` today,
       `"yesterday HH:MM"` or `"YYYY-MM-DD HH:MM"`), which puts the

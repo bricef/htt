@@ -170,7 +170,7 @@ var Show = &cobra.Command{
 
 var Edit = &cobra.Command{
 	Use:     "edit",
-	Short:   "Open the current time log file using $EDITOR.",
+	Short:   "Open the current time log file in your editor ($VISUAL or $EDITOR).",
 	Args:    cobra.NoArgs,
 	Aliases: []string{"e"},
 	RunE: func(cmd *cobra.Command, args []string) error {

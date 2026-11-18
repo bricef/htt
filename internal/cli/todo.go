@@ -114,7 +114,7 @@ func applyDueFlag(task *domain.Task, value string) error {
 
 var edit = &cobra.Command{
 	Use:     "edit <item index>",
-	Short:   "Edit the item specified using $EDITOR",
+	Short:   "Edit the item specified in your editor ($VISUAL or $EDITOR)",
 	Args:    cobra.ExactArgs(1),
 	Aliases: []string{"e"},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -190,7 +190,7 @@ var do = &cobra.Command{
 
 var editDone = &cobra.Command{
 	Use:     "edit-done",
-	Short:   "Open the done file using $EDITOR",
+	Short:   "Open the done file in your editor ($VISUAL or $EDITOR)",
 	Args:    cobra.NoArgs,
 	Aliases: []string{"ed"},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -204,7 +204,7 @@ var editDone = &cobra.Command{
 
 var editArchive = &cobra.Command{
 	Use:     "edit-archive",
-	Short:   "Open the archive file using $EDITOR (for manual garbage collection)",
+	Short:   "Open the archive file in your editor (for manual garbage collection)",
 	Args:    cobra.NoArgs,
 	Aliases: []string{"ea"},
 	RunE: func(cmd *cobra.Command, args []string) error {

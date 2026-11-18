@@ -6,10 +6,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/bricef/htt/internal/domain"
+	"github.com/bricef/htt/internal/editor"
 	"github.com/bricef/htt/internal/storage"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -446,23 +449,32 @@ func editorErr(t *testing.T, cmd *exec.Cmd) error {
 	return err
 }
 
+// vi sets the editor variables to EDITOR=vi alone, whatever the
+// environment the tests run in has.
+func vi(t *testing.T) {
+	t.Helper()
+	t.Setenv("VISUAL", "")
+	t.Setenv("EDITOR", "vi")
+}
+
 func TestEditFile_WithoutEditorStaysOpen(t *testing.T) {
+	t.Setenv("VISUAL", "")
 	t.Setenv("EDITOR", "")
 	m, _ := seedFileModel(t, "todo", "first")
 	m, buf := withLogBuffer(m)
 
 	result, cmd := EditFile.Act(m)
 	if cmd != nil {
-		t.Errorf("no $EDITOR: expected no command (no quit, no exec), got one")
+		t.Errorf("no editor: expected no command (no quit, no exec), got one")
 	}
-	if got := asModel(t, result).status; !strings.Contains(got, "$EDITOR") {
-		t.Errorf("status = %q, want it to mention $EDITOR", got)
+	if got, want := asModel(t, result).status, "Can't edit: neither $VISUAL nor $EDITOR is set."; got != want {
+		t.Errorf("status = %q, want %q", got, want)
 	}
-	assertLogged(t, buf.String(), "level=WARN", `action="edit file"`, "$EDITOR is not set")
+	assertLogged(t, buf.String(), "level=WARN", `action="edit file"`, "neither $VISUAL nor $EDITOR is set")
 }
 
 func TestEditFile_WithoutAFileStaysOpen(t *testing.T) {
-	t.Setenv("EDITOR", "vi")
+	vi(t)
 	m, _ := seedModel(t, "todo", "first") // memory repo: no file path
 	m, buf := withLogBuffer(m)
 
@@ -477,7 +489,7 @@ func TestEditFile_WithoutAFileStaysOpen(t *testing.T) {
 }
 
 func TestEditFile_HandsTheTerminalToTheEditor(t *testing.T) {
-	t.Setenv("EDITOR", "vi")
+	vi(t)
 	m, _ := seedFileModel(t, "todo", "first")
 	m, buf := withLogBuffer(m)
 
@@ -493,6 +505,57 @@ func TestEditFile_HandsTheTerminalToTheEditor(t *testing.T) {
 	}
 }
 
+// captureExec makes EditFile record the command it hands to Bubble Tea
+// in the returned slice, instead of running it.
+func captureExec(t *testing.T) *[]string {
+	t.Helper()
+	var args []string
+	prev := execProcess
+	execProcess = func(c *exec.Cmd, fn tea.ExecCallback) tea.Cmd {
+		args = c.Args
+		return func() tea.Msg { return nil }
+	}
+	t.Cleanup(func() { execProcess = prev })
+	return &args
+}
+
+func TestEditFile_RunsTheEditorAsGitDoes(t *testing.T) {
+	// The TUI ran $EDITOR as one program name and ignored $VISUAL.
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no /bin/sh to run the editor through")
+	}
+	cases := []struct {
+		name                 string
+		visual, editor, term string
+		want                 func(path string) []string
+	}{
+		{"a plain EDITOR", "", "vi", "xterm", func(p string) []string { return []string{"vi", p} }},
+		{"EDITOR with arguments", "", "code --wait", "xterm", func(p string) []string {
+			return []string{"/bin/sh", "-c", `code --wait "$@"`, "code --wait", p}
+		}},
+		{"VISUAL wins", "subl -w", "vi", "xterm", func(p string) []string {
+			return []string{"/bin/sh", "-c", `subl -w "$@"`, "subl -w", p}
+		}},
+		{"TERM=dumb uses EDITOR", "subl -w", "vi", "dumb", func(p string) []string { return []string{"vi", p} }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("VISUAL", tc.visual)
+			t.Setenv("EDITOR", tc.editor)
+			t.Setenv("TERM", tc.term)
+			args := captureExec(t)
+			m, path := seedFileModel(t, "todo", "first")
+
+			if _, cmd := EditFile.Act(m); cmd == nil {
+				t.Fatalf("expected an exec command for the editor")
+			}
+			if want := tc.want(path); !slices.Equal(*args, want) {
+				t.Errorf("the editor's command = %q, want %q", *args, want)
+			}
+		})
+	}
+}
+
 func TestEditorFinished_ReloadsWhatTheEditorSaved(t *testing.T) {
 	m, path := seedFileModel(t, "todo", "first", "second", "third")
 	m.list.Select(2)
@@ -500,7 +563,7 @@ func TestEditorFinished_ReloadsWhatTheEditorSaved(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, cmd := m.Update(editorFinishedMsg{editor: "vi"})
+	result, cmd := m.Update(editorFinishedMsg{editor: editor.Editor{Var: "EDITOR", Value: "vi"}})
 	if isQuit(cmd) {
 		t.Fatalf("a clean editor exit should not quit")
 	}
@@ -524,13 +587,13 @@ func TestEditorFinished_NonZeroExitReportsAndStillReloads(t *testing.T) {
 	}
 
 	err := editorErr(t, exec.Command("sh", "-c", "exit 3"))
-	result, cmd := m.Update(editorFinishedMsg{editor: "vi", err: err})
+	result, cmd := m.Update(editorFinishedMsg{editor: editor.Editor{Var: "EDITOR", Value: "vi"}, err: err})
 	if isQuit(cmd) {
 		t.Fatalf("an editor error should not quit the TUI")
 	}
 	got := asModel(t, result)
-	if !strings.Contains(got.status, "status 3") {
-		t.Errorf("status = %q, want the exit status", got.status)
+	if !strings.Contains(got.status, "$EDITOR exited with status 3") {
+		t.Errorf("status = %q, want the variable and the exit status", got.status)
 	}
 	if len(got.context.Tasks) != 2 {
 		t.Errorf("context has %d tasks, want the 2 on disk", len(got.context.Tasks))
@@ -544,14 +607,14 @@ func TestEditorFinished_StartFailureReports(t *testing.T) {
 
 	missing := filepath.Join(t.TempDir(), "no-such-editor")
 	err := editorErr(t, exec.Command(missing))
-	result, cmd := m.Update(editorFinishedMsg{editor: missing, err: err})
+	result, cmd := m.Update(editorFinishedMsg{editor: editor.Editor{Var: "VISUAL", Value: missing}, err: err})
 	if isQuit(cmd) {
 		t.Fatalf("an editor that won't start should not quit the TUI")
 	}
-	if got := asModel(t, result).status; !strings.Contains(got, "Couldn't run $EDITOR") {
-		t.Errorf("status = %q, want a start failure message", got)
+	if got := asModel(t, result).status; !strings.Contains(got, "Couldn't run $VISUAL") {
+		t.Errorf("status = %q, want a start failure naming the variable", got)
 	}
-	assertLogged(t, buf.String(), "level=ERROR", `msg="editor failed to run"`)
+	assertLogged(t, buf.String(), "level=ERROR", `msg="editor failed to run"`, "editor="+missing)
 }
 
 func TestEditorFinished_UnreadableFileStillQuits(t *testing.T) {
@@ -567,7 +630,7 @@ func TestEditorFinished_UnreadableFileStillQuits(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chmod(path, 0o644) })
 
-	_, cmd := m.Update(editorFinishedMsg{editor: "vi"})
+	_, cmd := m.Update(editorFinishedMsg{editor: editor.Editor{Var: "EDITOR", Value: "vi"}})
 	if !isQuit(cmd) {
 		t.Errorf("a reload failure should quit")
 	}
@@ -577,9 +640,9 @@ func TestEditorFinished_UnreadableFileStillQuits(t *testing.T) {
 func TestStatus_ShownInViewAndClearedByTheNextKey(t *testing.T) {
 	m, _ := seedModel(t, "todo", "first", "second")
 	m.width, m.height = 80, 24
-	m.status = "Set $EDITOR to edit files from here."
+	m.status = "Can't edit: neither $VISUAL nor $EDITOR is set."
 
-	if view := m.View(); !strings.Contains(view, "Set $EDITOR to edit files from here.") {
+	if view := m.View(); !strings.Contains(view, "Can't edit: neither $VISUAL nor $EDITOR is set.") {
 		t.Errorf("view should show the status line:\n%s", view)
 	}
 	result, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'j'}})

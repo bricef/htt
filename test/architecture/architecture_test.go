@@ -58,10 +58,25 @@ func TestArchitecture_DependencyDirections(t *testing.T) {
 			"internal/utils",
 			"internal/vars",
 		},
+		// The editor launcher is a leaf the CLI and TUI share: it
+		// builds the editor's command and leaves running it to them.
+		"internal/editor": {
+			"internal/cli",
+			"internal/tui",
+			"internal/domain",
+			"internal/storage",
+			"internal/utils",
+			"internal/vars",
+			"internal/update",
+			"internal/dates",
+			"internal/parseutils",
+		},
 		"internal/tui": {
 			"internal/cli",
 			// utils' Fatal helpers exit the process, and its editor
-			// helper runs $EDITOR on the terminal, which the TUI owns.
+			// helper runs the editor on the terminal, which the TUI
+			// owns; the TUI hands internal/editor's command to Bubble
+			// Tea instead.
 			"internal/utils",
 		},
 	}

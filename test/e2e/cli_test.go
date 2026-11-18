@@ -508,6 +508,23 @@ func TestFirstRun_SaysItCreatedTheConfigOnStderr(t *testing.T) {
 	}
 }
 
+func TestFirstRun_MakesTheConfigDirectory(t *testing.T) {
+	// Where htt has never run, there's no config directory either. htt
+	// found the directory to make with path.Dir, which splits only at /,
+	// so on Windows it made none and couldn't write the config file.
+	e := newEnv(t)
+	if err := os.RemoveAll(filepath.Join(e.home, ".config")); err != nil {
+		t.Fatal(err)
+	}
+
+	r := e.mustRun("todo", "add", "first task")
+	assertEqual(t, "stdout", r.stdout, "Added: "+today()+" first task\n")
+	if _, err := os.Stat(filepath.Join(e.home, ".config", "htt", "config.yaml")); err != nil {
+		t.Errorf("the first run should create the config file: %v", err)
+	}
+	assertEqual(t, "todo.txt", e.readData("todo.txt"), today()+" first task\n")
+}
+
 func TestUpdateCheck_NoNetworkWithoutATerminal(t *testing.T) {
 	// The e2e harness runs htt without a terminal, as a script would.
 	// Route any HTTPS through a local "proxy" that only counts
@@ -600,6 +617,20 @@ func TestRepl_HistoryPersistsAcrossSessions(t *testing.T) {
 		t.Fatalf("no REPL history next to config.yaml: %v", err)
 	}
 	assertInOrder(t, "repl-history", string(b), "add first task\n", "add second task\n")
+}
+
+func TestRepl_PipedInputIsReadAsItIs(t *testing.T) {
+	// Lines from a pipe are read with no prompt or echo, so the only
+	// prompt in the output is the one htt prints above a command's
+	// output. readline does this by itself on Unix only. On Windows it
+	// took stdin for the console: it read nothing from a pipe, and its
+	// terminal mode draws the prompt again for every character read.
+	e := newEnv(t)
+	r := e.mustRunWithInput("add buy milk\nq\n", "repl")
+	if n := strings.Count(r.stdout, "htt(todo)> "); n != 1 {
+		t.Errorf("want the prompt once, above the add's output; got it %d times:\n%q", n, r.stdout)
+	}
+	assertEqual(t, "todo.txt", e.readData("todo.txt"), today()+" buy milk\n")
 }
 
 // replScreens splits REPL output at each clear-screen sequence: the

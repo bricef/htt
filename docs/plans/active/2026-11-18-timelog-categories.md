@@ -1,7 +1,7 @@
 # Time log: categories, breaks and day ends
 
 **Date:** 2026-11-18
-**Status:** Planned
+**Status:** In progress
 
 ## Motivation
 
@@ -49,8 +49,8 @@ From the design discussion (2026-11-18):
    `work: false` keeps a category out of worked time; categories count
    as work unless they say otherwise. Entries that match nothing go to
    the default category (`working` unless configured), which counts as
-   work. `workon` copies a task's text, tags included, so its time is
-   categorised by the task's `+project`.
+   work (but see 8). `workon` copies a task's text, tags included, so
+   its time is categorised by the task's `+project`.
 3. **`@end` ends the day.** It closes the last entry. An entry logged
    after it starts a new stretch, and the gap between them counts as
    nothing (so existing logs that used `@end` for lunch read sensibly).
@@ -63,6 +63,21 @@ From the design discussion (2026-11-18):
    real entry is unattributed work.
 6. **The file format doesn't change.** Existing logs are read with the
    new rules, so past reports become correct retroactively.
+
+Clarified by Brice during the build (2026-11-18):
+
+7. **Tag matching is exact.** A configured tag matches only an
+   identical tag in the entry: same characters, same case; no prefix,
+   partial, fuzzy or case-insensitive matching. `@break` matches an
+   entry with the tag `@break` (`@break coffee`), and not `@Break`,
+   `@breakfast` or `@break-time`.
+8. **`default_category` may name any category in
+   `timelog.categories`,** and that category's `work` setting then
+   decides whether unmatched time counts as work. Unset, the default
+   is `working`, the built-in category that counts as work; if the
+   list defines `working` itself, the list's definition (its `work`
+   included) applies. Naming a category that isn't defined (other than
+   `working`) is a config error naming the key and the value.
 
 ## The model
 

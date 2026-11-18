@@ -665,11 +665,13 @@ func TestEditCommands_EditorProblemsFailLikeTodoEdit(t *testing.T) {
 		env    []string // the editor variables set; nil sets none
 		stderr string
 	}{
-		{"no editor", nil, "❌ neither $VISUAL nor $EDITOR is set\n"},
-		{"empty VISUAL and EDITOR", []string{"VISUAL=", "EDITOR="}, "❌ neither $VISUAL nor $EDITOR is set\n"},
+		{"no editor", []string{"TERM=xterm"}, "❌ neither $VISUAL nor $EDITOR is set\n"},
+		{"empty VISUAL and EDITOR", []string{"TERM=xterm", "VISUAL=", "EDITOR="}, "❌ neither $VISUAL nor $EDITOR is set\n"},
 		// Not a real editor: if VISUAL ran, it would fail at once
 		// rather than wait for a terminal.
-		{"only VISUAL on a dumb terminal", []string{"TERM=dumb", "VISUAL=no-such-visual-editor"}, "❌ $EDITOR is not set ($VISUAL isn't used when TERM is dumb)\n"},
+		{"only VISUAL on a dumb terminal", []string{"TERM=dumb", "VISUAL=no-such-visual-editor"}, "❌ $EDITOR is not set ($VISUAL isn't used when TERM is dumb or unset)\n"},
+		// As git does, an unset TERM is a dumb one.
+		{"only VISUAL, TERM unset", []string{"VISUAL=no-such-visual-editor"}, "❌ $EDITOR is not set ($VISUAL isn't used when TERM is dumb or unset)\n"},
 		{"editor fails", []string{"EDITOR=false"}, "❌ run editor: exit status 1\n"},
 		{"editor with arguments fails", []string{"EDITOR=false --wait"}, "❌ run editor: exit status 1\n"},
 	}
@@ -730,6 +732,7 @@ func TestConfigDir_PrintsTheConfigDirectory(t *testing.T) {
 func TestRepl_AnEditorProblemDoesNotEndTheSession(t *testing.T) {
 	// utils.Fatal exited the process, taking the REPL with it.
 	e := newEnv(t)
+	e.extraEnv = []string{"TERM=xterm"}
 	r := e.mustRunWithInput("edit-done\nadd still here\nq\n", "repl")
 	assertContains(t, "stderr", r.stderr, "neither $VISUAL nor $EDITOR is set")
 	assertEqual(t, "todo.txt", e.readData("todo.txt"), today()+" still here\n")

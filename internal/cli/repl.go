@@ -253,7 +253,7 @@ Quotes group words, as in a shell: /log end --at "yesterday 17:30".
 An apostrophe in a word (Sam's) is kept as typed.
 
 Your editor is $VISUAL, or $EDITOR when $VISUAL isn't set or TERM is
-dumb, as in git; EDITOR="code --wait" works.
+dumb or unset, as in git; EDITOR="code --wait" works.
 
 For per-command details, use /<command> --help (e.g. /todo add --help).`
 

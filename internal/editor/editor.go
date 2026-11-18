@@ -21,15 +21,24 @@ type Editor struct {
 
 var (
 	errNotSet     = errors.New("neither $VISUAL nor $EDITOR is set")
-	errNotSetDumb = errors.New("$EDITOR is not set ($VISUAL isn't used when TERM is dumb)")
+	errNotSetDumb = errors.New("$EDITOR is not set ($VISUAL isn't used when TERM is dumb or unset)")
 )
 
 // Choose returns the editor getenv's environment names, as git picks
-// one: $VISUAL, unless TERM is dumb, then $EDITOR. A variable that's
-// unset, empty or only whitespace doesn't count. getenv is os.Getenv
-// outside tests. The only error is that no editor is set.
+// one: $VISUAL, unless TERM is dumb or (outside Windows) unset, then
+// $EDITOR. A variable that's unset, empty or only whitespace doesn't
+// count. getenv is os.Getenv outside tests. The only error is that no
+// editor is set.
 func Choose(getenv func(string) string) (Editor, error) {
-	dumb := getenv("TERM") == "dumb"
+	return choose(getenv, runtime.GOOS)
+}
+
+// choose is Choose for goos, which decides what an unset TERM means.
+func choose(getenv func(string) string, goos string) (Editor, error) {
+	term := getenv("TERM")
+	// As git's is_terminal_dumb, an unset TERM is dumb, except on Windows,
+	// where consoles leave it unset and Git for Windows sets one itself.
+	dumb := term == "dumb" || (term == "" && goos != "windows")
 	if v := getenv("VISUAL"); !dumb && strings.TrimSpace(v) != "" {
 		return Editor{Var: "VISUAL", Value: v}, nil
 	}
@@ -78,7 +87,8 @@ func (e Editor) argv(goos, path string) ([]string, error) {
 		}
 		return append(words, path), nil
 	}
-	if !strings.ContainsAny(e.Value, shellChars) {
+	// ":" is git's "don't run an editor": sh runs it, and it does nothing.
+	if e.Value != ":" && !strings.ContainsAny(e.Value, shellChars) {
 		return []string{e.Value, path}, nil
 	}
 	return []string{"/bin/sh", "-c", e.Value + ` "$@"`, e.Value, path}, nil

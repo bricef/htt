@@ -17,7 +17,7 @@ func getenv(vars map[string]string) func(string) string {
 
 const (
 	notSet     = "neither $VISUAL nor $EDITOR is set"
-	notSetDumb = "$EDITOR is not set ($VISUAL isn't used when TERM is dumb)"
+	notSetDumb = "$EDITOR is not set ($VISUAL isn't used when TERM is dumb or unset)"
 )
 
 func TestChoose(t *testing.T) {
@@ -28,23 +28,26 @@ func TestChoose(t *testing.T) {
 		err  string // "" when Choose should find an editor
 	}{
 		{"EDITOR alone", map[string]string{"EDITOR": "vi"}, Editor{"EDITOR", "vi"}, ""},
-		{"VISUAL alone", map[string]string{"VISUAL": "code --wait"}, Editor{"VISUAL", "code --wait"}, ""},
+		{"VISUAL alone", map[string]string{"VISUAL": "code --wait", "TERM": "xterm"}, Editor{"VISUAL", "code --wait"}, ""},
 		{"VISUAL wins over EDITOR", map[string]string{"VISUAL": "code --wait", "EDITOR": "vi", "TERM": "xterm-256color"}, Editor{"VISUAL", "code --wait"}, ""},
-		{"VISUAL wins with TERM unset", map[string]string{"VISUAL": "code", "EDITOR": "vi"}, Editor{"VISUAL", "code"}, ""},
+		// As git's is_terminal_dumb: an unset TERM is a dumb one.
+		{"TERM unset skips VISUAL", map[string]string{"VISUAL": "code", "EDITOR": "vi"}, Editor{"EDITOR", "vi"}, ""},
+		{"TERM unset and only VISUAL", map[string]string{"VISUAL": "code"}, Editor{}, notSetDumb},
 		{"TERM=dumb skips VISUAL", map[string]string{"VISUAL": "code", "EDITOR": "vi", "TERM": "dumb"}, Editor{"EDITOR", "vi"}, ""},
 		{"only TERM=dumb exactly is dumb", map[string]string{"VISUAL": "code", "EDITOR": "vi", "TERM": "dumb-emacs"}, Editor{"VISUAL", "code"}, ""},
-		{"empty VISUAL falls back to EDITOR", map[string]string{"VISUAL": "", "EDITOR": "vi"}, Editor{"EDITOR", "vi"}, ""},
-		{"blank VISUAL falls back to EDITOR", map[string]string{"VISUAL": " \t", "EDITOR": "vi"}, Editor{"EDITOR", "vi"}, ""},
+		{"empty VISUAL falls back to EDITOR", map[string]string{"VISUAL": "", "EDITOR": "vi", "TERM": "xterm"}, Editor{"EDITOR", "vi"}, ""},
+		{"blank VISUAL falls back to EDITOR", map[string]string{"VISUAL": " \t", "EDITOR": "vi", "TERM": "xterm"}, Editor{"EDITOR", "vi"}, ""},
 		{"the value is kept as set", map[string]string{"EDITOR": " vim -u NONE "}, Editor{"EDITOR", " vim -u NONE "}, ""},
-		{"neither set", map[string]string{}, Editor{}, notSet},
-		{"both empty", map[string]string{"VISUAL": "", "EDITOR": ""}, Editor{}, notSet},
-		{"both blank", map[string]string{"VISUAL": " ", "EDITOR": "\n"}, Editor{}, notSet},
+		{"neither set", map[string]string{"TERM": "xterm"}, Editor{}, notSet},
+		{"both empty", map[string]string{"VISUAL": "", "EDITOR": "", "TERM": "xterm"}, Editor{}, notSet},
+		{"both blank", map[string]string{"VISUAL": " ", "EDITOR": "\n", "TERM": "xterm"}, Editor{}, notSet},
+		{"neither set, TERM unset", map[string]string{}, Editor{}, notSetDumb},
 		{"TERM=dumb and only VISUAL", map[string]string{"VISUAL": "code", "TERM": "dumb"}, Editor{}, notSetDumb},
 		{"TERM=dumb and neither", map[string]string{"TERM": "dumb"}, Editor{}, notSetDumb},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := Choose(getenv(tc.env))
+			got, err := choose(getenv(tc.env), "linux")
 			if tc.err != "" {
 				if err == nil || err.Error() != tc.err {
 					t.Fatalf("Choose() = %+v, %v; want error %q", got, err, tc.err)
@@ -58,6 +61,19 @@ func TestChoose(t *testing.T) {
 				t.Errorf("Choose() = %+v, want %+v", got, tc.want)
 			}
 		})
+	}
+}
+
+// TERM is normally unset in a Windows console, and Git for Windows sets
+// it itself (to cygwin), so there an unset TERM isn't a dumb one.
+func TestChoose_WindowsUsesVISUALWithTERMUnset(t *testing.T) {
+	got, err := choose(getenv(map[string]string{"VISUAL": "code --wait", "EDITOR": "notepad"}), "windows")
+	if err != nil || got != (Editor{"VISUAL", "code --wait"}) {
+		t.Errorf("choose() on Windows = %+v, %v; want VISUAL", got, err)
+	}
+	got, err = choose(getenv(map[string]string{"VISUAL": "code", "EDITOR": "notepad", "TERM": "dumb"}), "windows")
+	if err != nil || got != (Editor{"EDITOR", "notepad"}) {
+		t.Errorf("choose() on Windows with TERM=dumb = %+v, %v; want EDITOR", got, err)
 	}
 }
 
@@ -81,6 +97,8 @@ func TestArgv_UnixExecsAPlainValueAndShellsTheRest(t *testing.T) {
 		{`"/opt/my editor/ed" --wait`, shell(`"/opt/my editor/ed" --wait`, path)},
 		{"$HOME/bin/ed", shell("$HOME/bin/ed", path)},
 		{" vi", shell(" vi", path)},
+		// git's "don't run an editor": sh runs : and leaves the file be.
+		{":", shell(":", path)},
 	}
 	for _, goos := range []string{"linux", "darwin"} {
 		for _, tc := range cases {
@@ -222,6 +240,26 @@ func TestCommand_RunsTheValueAsGitWould(t *testing.T) {
 		if string(got) != tc.want {
 			t.Errorf("EDITOR=%q: the editor got\n%s\nwant\n%s", tc.value, got, tc.want)
 		}
+	}
+}
+
+func TestCommand_ColonRunsNoEditor(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("runs /bin/sh")
+	}
+	file := filepath.Join(t.TempDir(), "todo.txt")
+	if err := os.WriteFile(file, []byte("buy milk\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cmd, err := Editor{"EDITOR", ":"}.Command(file)
+	if err != nil {
+		t.Fatalf("Command(%q): %v", ":", err)
+	}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("EDITOR=: %v\n%s", err, out)
+	}
+	if got, _ := os.ReadFile(file); string(got) != "buy milk\n" {
+		t.Errorf("EDITOR=: changed the file: %q", got)
 	}
 }
 

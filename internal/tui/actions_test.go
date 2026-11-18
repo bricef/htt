@@ -458,6 +458,7 @@ func vi(t *testing.T) {
 }
 
 func TestEditFile_WithoutEditorStaysOpen(t *testing.T) {
+	t.Setenv("TERM", "xterm") // a normal terminal: an unset TERM is dumb
 	t.Setenv("VISUAL", "")
 	t.Setenv("EDITOR", "")
 	m, _ := seedFileModel(t, "todo", "first")

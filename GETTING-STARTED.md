@@ -249,8 +249,9 @@ task from the current context at random.
 
 `htt todo edit`, `edit-done`, `edit-archive`, `htt log edit` and `f`
 in the TUI open your editor, which htt picks as git does: `$VISUAL`,
-unless `TERM` is `dumb`, and otherwise `$EDITOR`. A variable that's
-empty counts as unset.
+unless `TERM` is `dumb` or unset (on Windows, only `dumb`), and
+otherwise `$EDITOR`. A variable that's empty counts as unset. As in
+git, `EDITOR=:` opens no editor and leaves the file as it is.
 
 The value can hold arguments, quotes and variables, as in a shell:
 

@@ -662,20 +662,25 @@ func TestEditCommands_EditorProblemsFailLikeTodoEdit(t *testing.T) {
 	}
 	cases := []struct {
 		name   string
-		editor string // "" leaves $EDITOR unset
+		env    []string // the editor variables set; nil sets none
 		stderr string
 	}{
-		{"no editor", "", "❌ $EDITOR variable is empty or not set\n"},
-		{"editor fails", "false", "❌ run editor: exit status 1\n"},
+		{"no editor", []string{"TERM=xterm"}, "❌ neither $VISUAL nor $EDITOR is set\n"},
+		{"empty VISUAL and EDITOR", []string{"TERM=xterm", "VISUAL=", "EDITOR="}, "❌ neither $VISUAL nor $EDITOR is set\n"},
+		// Not a real editor: if VISUAL ran, it would fail at once
+		// rather than wait for a terminal.
+		{"only VISUAL on a dumb terminal", []string{"TERM=dumb", "VISUAL=no-such-visual-editor"}, "❌ $EDITOR is not set ($VISUAL isn't used when TERM is dumb or unset)\n"},
+		// As git does, an unset TERM is a dumb one.
+		{"only VISUAL, TERM unset", []string{"VISUAL=no-such-visual-editor"}, "❌ $EDITOR is not set ($VISUAL isn't used when TERM is dumb or unset)\n"},
+		{"editor fails", []string{"EDITOR=false"}, "❌ run editor: exit status 1\n"},
+		{"editor with arguments fails", []string{"EDITOR=false --wait"}, "❌ run editor: exit status 1\n"},
 	}
 	for _, tc := range cases {
 		for _, args := range commands {
 			label := tc.name + ": htt " + strings.Join(args, " ")
 			e := newEnv(t)
 			e.mustRun("todo", "add", "a task")
-			if tc.editor != "" {
-				e.extraEnv = []string{"EDITOR=" + tc.editor}
-			}
+			e.extraEnv = tc.env
 			r := e.run(args...)
 			if r.exitCode != 1 {
 				t.Errorf("%s: exit code %d, want 1", label, r.exitCode)
@@ -727,8 +732,9 @@ func TestConfigDir_PrintsTheConfigDirectory(t *testing.T) {
 func TestRepl_AnEditorProblemDoesNotEndTheSession(t *testing.T) {
 	// utils.Fatal exited the process, taking the REPL with it.
 	e := newEnv(t)
+	e.extraEnv = []string{"TERM=xterm"}
 	r := e.mustRunWithInput("edit-done\nadd still here\nq\n", "repl")
-	assertContains(t, "stderr", r.stderr, "$EDITOR variable is empty or not set")
+	assertContains(t, "stderr", r.stderr, "neither $VISUAL nor $EDITOR is set")
 	assertEqual(t, "todo.txt", e.readData("todo.txt"), today()+" still here\n")
 }
 

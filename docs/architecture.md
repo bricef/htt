@@ -16,6 +16,7 @@ internal/
   storage/                 MemoryRepository / FileRepository (and timelog impls) — satisfy the domain interfaces
   update/                  the once-a-day check for a newer GitHub release
   dates/                   date phrases ("next Friday") for --due and the TUI; --at's times
+  editor/                  the user's editor and the command that opens a file in it, as git picks and runs one
   parseutils/              parsing helpers for the todo.txt format
   utils/                   small odds and ends (StringToFilename, EditFilePath, Fatal, …)
   vars/                    viper config keys + defaults
@@ -41,9 +42,9 @@ cli ─────────────► tui
 storage ─────────► domain
 ```
 
-`parseutils`, `dates`, `vars` and `utils` are leaf helpers: they import nothing
-else from `internal/`, and the layers below may use them, with the
-exceptions noted.
+`parseutils`, `dates`, `vars`, `editor` and `utils` are leaf helpers:
+they import nothing else from `internal/` (but `utils` uses `editor`),
+and the layers below may use them, with the exceptions noted.
 
 - `domain` imports only `parseutils` and `vars`; never `storage`,
   `cli`, `tui` or `utils`.
@@ -51,8 +52,13 @@ exceptions noted.
   `tui`.
 - `tui` imports `domain` (it may also use `storage`); never `cli`,
   never `utils` (whose `Fatal` helpers exit the process, and whose
-  editor helper runs `$EDITOR` on the terminal the TUI owns), and
+  editor helper runs the editor on the terminal the TUI owns), and
   never the standard `log` package (see [TUI](#tui)).
+- `editor` imports nothing else from `internal/`. `Choose` picks the
+  editor from the environment (`$VISUAL`, then `$EDITOR`), and
+  `Editor.Command` builds the `*exec.Cmd` that opens a file in it;
+  running it is the caller's: `utils.EditFilePath` runs it on the
+  CLI's terminal, and the TUI's edit action hands it to Bubble Tea.
 - `cli` sits at the top and may import anything below (including `tui`,
   to register the interactive subcommand).
 - `update` imports nothing else from `internal/`: it knows GitHub's
@@ -60,10 +66,9 @@ exceptions noted.
   `cli` decides when it may run and passes the TUI a notice source.
 
 `test/architecture/architecture_test.go` enforces the `domain`,
-`storage`, `tui`, `dates` and `update` rules by scanning imports in each
-package. If a
-future change breaks one, the test fails and forces the discussion
-before the dependency lands.
+`storage`, `tui`, `dates`, `editor` and `update` rules by scanning
+imports in each package. If a future change breaks one, the test fails
+and forces the discussion before the dependency lands.
 
 ## Domain types
 
@@ -372,7 +377,8 @@ the program.
   `tui.colors` and calls `tui.ResolveTheme`, so the tui package never
   reads config, and passes the result in `Options`. The model builds
   its `styles` from it once; `View` takes every colour from there.
-- **Other programs.** The edit action runs `$EDITOR` through
+- **Other programs.** The edit action gets the editor's command from
+  `internal/editor`, as the CLI's edit commands do, and runs it through
   `tea.ExecProcess`, which releases the terminal while the editor runs
   and sends `editorFinishedMsg` back to `Update` when it exits.
 

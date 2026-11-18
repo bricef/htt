@@ -8,12 +8,12 @@ import (
 	"log"
 	"math"
 	"os"
-	"os/exec"
 	"path"
 	"regexp/syntax"
 	"strings"
 	"time"
 
+	"github.com/bricef/htt/internal/editor"
 	"github.com/buger/goterm"
 )
 
@@ -118,16 +118,20 @@ func StringSliceIndex(slice []string, item string) (int, error) {
 	return 0, errors.New("could not find item in slice")
 }
 
-// EditFilePath opens filepath in $EDITOR on this terminal and waits
-// for the editor to exit. It returns an error when $EDITOR is unset or
-// empty, or the editor can't start or exits with an error.
+// EditFilePath opens filepath in the user's editor on this terminal
+// and waits for the editor to exit; internal/editor picks the editor
+// and builds its command, as git does. It returns an error when neither
+// $VISUAL nor $EDITOR names an editor, or the editor can't start or
+// exits with an error.
 func EditFilePath(filepath string) error {
-	editor, ok := os.LookupEnv("EDITOR")
-	if !ok || editor == "" {
-		return errors.New("$EDITOR variable is empty or not set")
+	ed, err := editor.Choose(os.Getenv)
+	if err != nil {
+		return err
 	}
-
-	proc := exec.Command(editor, filepath)
+	proc, err := ed.Command(filepath)
+	if err != nil {
+		return fmt.Errorf("start editor: %w", err)
+	}
 	proc.Stdin = os.Stdin
 	proc.Stdout = os.Stdout
 	proc.Stderr = os.Stderr

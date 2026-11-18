@@ -240,9 +240,9 @@ Common commands (run implicitly as todo <command>):
   show                      re-render the view (or hit Enter on empty line)
   search <regex>            filter the current view
   random                    pick a task at random
-  edit <index>              open the task in $EDITOR
-  edit-done                 open done.txt in $EDITOR
-  edit-archive              open archive.txt in $EDITOR
+  edit <index>              open the task in your editor
+  edit-done                 open done.txt in your editor
+  edit-archive              open archive.txt in your editor
 
 REPL controls:
   /<command> [args...]      run any htt command (e.g. /log start, /report)
@@ -251,6 +251,9 @@ REPL controls:
 
 Quotes group words, as in a shell: /log end --at "yesterday 17:30".
 An apostrophe in a word (Sam's) is kept as typed.
+
+Your editor is $VISUAL, or $EDITOR when $VISUAL isn't set or TERM is
+dumb or unset, as in git; EDITOR="code --wait" works.
 
 For per-command details, use /<command> --help (e.g. /todo add --help).`
 

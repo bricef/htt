@@ -47,7 +47,7 @@ the most detailed, unless --log-level picks another:
 
   debug   every action the TUI runs (each keypress)
   info    the TUI starting and exiting
-  warn    an action that can't run right now (e.g. editing with no $EDITOR)
+  warn    an action that can't run right now (e.g. editing with no editor set)
   error   an action or the editor failed; most action failures also
           close the TUI, editor failures don't
 

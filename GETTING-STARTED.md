@@ -220,9 +220,9 @@ Three ways to change a task:
   After: buy oat milk
   ```
 
-- `htt todo edit <id>` (alias `e`) opens that one task in `$EDITOR`,
-  then prints the same `Before:` / `After:` pair. Saving it unchanged
-  or empty changes nothing.
+- `htt todo edit <id>` (alias `e`) opens that one task in your editor
+  (see [Your editor](#your-editor)), then prints the same `Before:` /
+  `After:` pair. Saving it unchanged or empty changes nothing.
 - Editing the whole file by hand works too: each context is a plain
   text file (see [Where your data lives](#where-your-data-lives)).
 
@@ -235,15 +235,40 @@ $ htt todo delete 1
 Deleted task: 2026-05-15 submit timesheet archived-from:todo deleted-on:2026-05-15
 ```
 
-`htt todo edit-archive` (alias `ea`) opens the archive in `$EDITOR` if
-you want to recover or prune entries, and `htt todo edit-done` (alias
-`ed`) does the same for the done list. If `$EDITOR` isn't set, or the
-editor won't start or exits with an error, these, `htt todo edit` and
-`htt log edit` say so (`❌ $EDITOR variable is empty or not set`) and
-exit with status 1.
+`htt todo edit-archive` (alias `ea`) opens the archive in your editor
+if you want to recover or prune entries, and `htt todo edit-done`
+(alias `ed`) does the same for the done list. If no editor is set, or
+the editor won't start or exits with an error, these, `htt todo edit`
+and `htt log edit` say so (`❌ neither $VISUAL nor $EDITOR is set`)
+and exit with status 1.
 
 When you can't decide what to do next, `htt todo random` prints one
 task from the current context at random.
+
+### Your editor
+
+`htt todo edit`, `edit-done`, `edit-archive`, `htt log edit` and `f`
+in the TUI open your editor, which htt picks as git does: `$VISUAL`,
+unless `TERM` is `dumb` or unset (on Windows, only `dumb`), and
+otherwise `$EDITOR`. A variable that's empty counts as unset. As in
+git, `EDITOR=:` opens no editor and leaves the file as it is.
+
+The value can hold arguments, quotes and variables, as in a shell:
+
+```
+export EDITOR="code --wait"
+export VISUAL="emacsclient -t -a ''"
+```
+
+A value with a space or a shell character in it runs through `sh`,
+with the file as its last argument, so a path with spaces still
+arrives as one argument; any other value is the editor's program
+name. Editors that open the file and return straight away, as VS Code
+and Sublime Text do, need telling to wait (`code --wait`, `subl -w`),
+or htt reads the file back before you've changed it. On Windows,
+which has no `sh`, the value is split into words at spaces, double
+quotes grouping words and backslashes kept as typed:
+`"C:\Program Files\Microsoft VS Code\bin\code.cmd" --wait`.
 
 ## Due dates
 
@@ -445,7 +470,7 @@ last entry counts until now. Each day stands alone, midnight to
 midnight in your time zone: an entry still running at midnight stops
 there, and the next day starts with its own first entry.
 
-`htt log edit` (alias `e`) opens today's log file in `$EDITOR`, for
+`htt log edit` (alias `e`) opens today's log file in your editor, for
 fixing a typo, or moving or deleting an entry.
 
 ### Logging at an earlier time
@@ -751,7 +776,7 @@ files. The keys:
 | `+` / `-`            | raise / lower its priority                      |
 | `n` or `a`           | add a task: type it, `Enter` to add, `Esc` to cancel |
 | `e`                  | edit the task: change it, `Enter` to save, `Esc` to cancel |
-| `f`                  | edit the current tab's file in `$EDITOR`        |
+| `f`                  | edit the current tab's file in your editor      |
 | `?`                  | show or hide the full keymap                    |
 | `q`, `Esc`, `Ctrl-C` | quit (`Esc` clears a search first, if there is one) |
 
@@ -801,11 +826,11 @@ the file keeps its order.
 Tasks in the done tab can't be added or edited here; `f` opens
 `done.txt` if you need to.
 
-`f` hands the terminal to `$EDITOR` and reloads the file when the
-editor exits. If `$EDITOR` isn't set, or the editor won't start or
-exits with an error, the TUI says so on a line above the keymap and
-carries on; after an editor error it still reloads, in case the file
-was saved.
+`f` hands the terminal to your editor (see [Your editor](#your-editor))
+and reloads the file when the editor exits. If no editor is set, or
+the editor won't start or exits with an error, the TUI says so on a
+line above the keymap and carries on; after an editor error it still
+reloads, in case the file was saved.
 
 When a tab shows tasks with dates htt can't read (see
 [Dates htt can't read](#due-dates)), the same line says so for the
@@ -880,7 +905,7 @@ level, the most detailed, unless you pick another with `--log-level`:
 | ------------- | ------------------------------------------------------- |
 | `debug`       | every action the TUI runs (each keypress)               |
 | `info`        | the TUI starting and exiting                            |
-| `warn`        | an action that can't run right now, like completing a task in the done tab or editing with no `$EDITOR` set |
+| `warn`        | an action that can't run right now, like completing a task in the done tab or editing with no editor set |
 | `error`       | an action or the editor failed, with the reason; most action failures also close the TUI, editor failures don't |
 
 Each level also includes the levels below it in the table.

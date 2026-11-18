@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/bricef/htt/internal/domain"
+	"github.com/bricef/htt/internal/editor"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -134,33 +135,44 @@ var Help = mkAction("toggle help", func(m model) (tea.Model, tea.Cmd, error) {
 	return m, nil, nil
 })
 
+// execProcess is tea.ExecProcess. Tests replace it to see the command
+// EditFile hands to Bubble Tea, without running an editor.
+var execProcess = tea.ExecProcess
+
 var EditFile = mkAction("edit file", func(m model) (tea.Model, tea.Cmd, error) {
-	// Opens the context file in $EDITOR. tea.ExecProcess hands the
-	// terminal over: Bubble Tea leaves the alt screen and stops
-	// reading keys until the editor exits, then sends
-	// editorFinishedMsg. Nothing here closes the TUI: when the editor
-	// can't run, the status line says why and the user carries on.
-	// The repo owns path resolution; an empty path means the repo
-	// isn't file-backed (e.g. memory repo in tests).
+	// Opens the context file in the user's editor, which
+	// internal/editor picks and builds the command for as git does
+	// ($VISUAL, then $EDITOR). tea.ExecProcess hands the terminal
+	// over: Bubble Tea leaves the alt screen and stops reading keys
+	// until the editor exits, then sends editorFinishedMsg. Nothing
+	// here closes the TUI: when the editor can't run, the status line
+	// says why and the user carries on. The repo owns path
+	// resolution; an empty path means the repo isn't file-backed
+	// (e.g. memory repo in tests).
 	path := m.repo.ContextPath(m.context.Name)
 	if path == "" {
 		m.status = fmt.Sprintf("%s has no file to edit.", m.context.Name)
 		return m, nil, fmt.Errorf("%w: context %s has no file to edit", errUnavailable, m.context.Name)
 	}
-	editor := os.Getenv("EDITOR")
-	if editor == "" {
-		m.status = "Set $EDITOR to edit files from here."
-		return m, nil, fmt.Errorf("%w: $EDITOR is not set", errUnavailable)
+	ed, err := editor.Choose(os.Getenv)
+	if err != nil {
+		m.status = fmt.Sprintf("Can't edit: %v.", err)
+		return m, nil, fmt.Errorf("%w: %w", errUnavailable, err)
 	}
-	return m, tea.ExecProcess(exec.Command(editor, path), func(err error) tea.Msg {
-		return editorFinishedMsg{editor: editor, err: err}
+	cmd, err := ed.Command(path)
+	if err != nil {
+		m.status = fmt.Sprintf("Couldn't run the editor: %v", err)
+		return m, nil, err
+	}
+	return m, execProcess(cmd, func(err error) tea.Msg {
+		return editorFinishedMsg{editor: ed, err: err}
 	}), nil
 })
 
 // editorFinishedMsg reports that the editor EditFile started has
 // exited, or failed to start. err is nil after a clean exit.
 type editorFinishedMsg struct {
-	editor string
+	editor editor.Editor
 	err    error
 }
 
@@ -174,11 +186,11 @@ func editorFinished(m model, msg editorFinishedMsg) (tea.Model, tea.Cmd) {
 	switch {
 	case msg.err == nil:
 	case errors.As(msg.err, &exitErr):
-		m.status = fmt.Sprintf("$EDITOR exited with status %d; showing the file as it is on disk.", exitErr.ExitCode())
-		m.logger.Error("editor exited with an error", "editor", msg.editor, "err", msg.err)
+		m.status = fmt.Sprintf("$%s exited with status %d; showing the file as it is on disk.", msg.editor.Var, exitErr.ExitCode())
+		m.logger.Error("editor exited with an error", "editor", msg.editor.Value, "err", msg.err)
 	default:
-		m.status = fmt.Sprintf("Couldn't run $EDITOR: %v", msg.err)
-		m.logger.Error("editor failed to run", "editor", msg.editor, "err", msg.err)
+		m.status = fmt.Sprintf("Couldn't run $%s: %v", msg.editor.Var, msg.err)
+		m.logger.Error("editor failed to run", "editor", msg.editor.Value, "err", msg.err)
 	}
 	if err := refresh(&m); err != nil {
 		m.logger.Error("reload after editing failed", "err", err)

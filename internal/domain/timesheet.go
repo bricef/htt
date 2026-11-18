@@ -43,11 +43,14 @@ func (s DayStatus) String() string {
 }
 
 // Interval is the time one entry ran, from Start to End, in its
-// category.
+// category. An entry no category's tags matched is Uncategorised: its
+// Category is the default category, whose Work decides whether its
+// time counts as work.
 type Interval struct {
-	Entry      *Task
-	Category   Category
-	Start, End time.Time
+	Entry         *Task
+	Category      Category
+	Uncategorised bool
+	Start, End    time.Time
 }
 
 // Duration is how long the interval ran.
@@ -65,7 +68,8 @@ type Timesheet struct {
 }
 
 // Timesheet reads the day's entries as intervals, each entry in its
-// category from c (nil for none: everything is working).
+// category from c (Categoriser.Match), or uncategorised (nil for no
+// categories: everything is uncategorised, in working).
 //
 // An entry runs from its ts: to the next entry's: the last entry before
 // an @end runs to the @end, and an @end makes no interval, so the gap
@@ -127,11 +131,13 @@ func (l *Timelog) Timesheet(c *Categoriser, now time.Time) (*Timesheet, error) {
 		if i+1 < len(entries) {
 			until = within(entries[i+1].at)
 		}
+		cat, matched := c.Match(e.entry)
 		sheet.Intervals = append(sheet.Intervals, Interval{
-			Entry:    e.entry,
-			Category: c.Categorise(e.entry),
-			Start:    within(e.at),
-			End:      until,
+			Entry:         e.entry,
+			Category:      cat,
+			Uncategorised: !matched,
+			Start:         within(e.at),
+			End:           until,
 		})
 	}
 
@@ -147,7 +153,8 @@ func (l *Timelog) Timesheet(c *Categoriser, now time.Time) (*Timesheet, error) {
 	return sheet, nil
 }
 
-// Worked is the time in categories that count as work.
+// Worked is the time in categories that count as work: uncategorised
+// time too when the default category counts as work.
 func (s *Timesheet) Worked() time.Duration {
 	var d time.Duration
 	for _, iv := range s.Intervals {
@@ -158,14 +165,30 @@ func (s *Timesheet) Worked() time.Duration {
 	return d
 }
 
-// ByCategory is the time in each category with an interval, breaks
-// included, by category name.
+// ByCategory is the time each category's tags matched, by category
+// name, breaks included: a category with a matched interval has an
+// entry. Uncategorised time isn't in it, not even under the default
+// category; see Uncategorised.
 func (s *Timesheet) ByCategory() map[string]time.Duration {
 	by := map[string]time.Duration{}
 	for _, iv := range s.Intervals {
-		by[iv.Category.Name] += iv.Duration()
+		if !iv.Uncategorised {
+			by[iv.Category.Name] += iv.Duration()
+		}
 	}
 	return by
+}
+
+// Uncategorised is the time of the entries no category matched, which
+// are in the default category.
+func (s *Timesheet) Uncategorised() time.Duration {
+	var d time.Duration
+	for _, iv := range s.Intervals {
+		if iv.Uncategorised {
+			d += iv.Duration()
+		}
+	}
+	return d
 }
 
 // Current is the interval running now, today's last one, or nil when

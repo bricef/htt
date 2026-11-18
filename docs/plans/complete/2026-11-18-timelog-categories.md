@@ -100,6 +100,23 @@ What building showed about the open questions:
   until midnight (a 15-hour day in the report). The report flags it,
   but `htt log edit` is still the only fix.
 
+Amendments: Brice's decisions of 2026-11-18, after the merge, on two
+of the open questions above.
+
+- **Uncategorised time has a line of its own in the report.** An
+  entry no category's tags match is uncategorised: the report shows
+  its time per day and in the totals on an `uncategorised` line, never
+  folded into a named category's, so an unmapped or misspelt tag
+  stands out. Whether it counts as worked still follows the default
+  category (decision 8), and the line names it:
+  `uncategorised  3h 0m  (counted as working)`, lined up with the
+  categories' lines, after them. A category's line holds only the
+  entries its tags matched, the default's included, so the built-in
+  `working`, which has no tags, never has a line. The domain records
+  it: `Categoriser.Match` says whether a category matched, each
+  `Interval` carries `Uncategorised`, `ByCategory` is matched time
+  only and `Timesheet.Uncategorised` the rest; `Worked` is unchanged.
+
 ## Motivation
 
 The time log is one file per day; each entry means "from now on I'm
@@ -241,4 +258,5 @@ Clarified by Brice during the build (2026-11-18):
   file.
 - Should `log status` name the category, or only the report?
 - Should the report list time in the default category separately as
-  "uncategorised" too, so unmapped tags are noticed?
+  "uncategorised" too, so unmapped tags are noticed? Decided: yes (see
+  Amendments in Outcome).

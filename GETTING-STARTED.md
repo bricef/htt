@@ -460,11 +460,16 @@ timelog:
 - Tags match **exactly** as written: `@break` matches `@break coffee`,
   but not `@Break`, `@breakfast` or `@break-time`.
 - A category counts as work unless it says `work: false`.
-- Entries no category matches go to the **default category**:
-  `working`, which counts as work, unless `default_category` names one
-  of your categories, whose `work` then decides.
+- Entries no category matches are **uncategorised**: `htt report`
+  lists their time on a line of its own, so a tag you haven't mapped,
+  or one spelt differently (`+HTT`), stands out. Whether that time
+  counts as work follows the **default category**: `working`, which
+  counts as work, unless `default_category` names one of your
+  categories, whose `work` then decides. The default category's own
+  line in the report holds only the entries its tags matched, so the
+  built-in `working`, which has no tags, never has one.
 - `@start` is an ordinary entry: the time between `htt log start` and
-  your first real entry is `working`, unless you give `@start` a
+  your first real entry is uncategorised, unless you give `@start` a
   category.
 - `htt workon` logs the task's text, tags included, so a task's
   `+project` picks its category.
@@ -512,30 +517,37 @@ Deleted (0)
 
 Time logged
   2026-05-13  14h 15m worked (no @end: counted to 24:00)
-    break       45m
-    htt      6h 10m
-    admin     8h 0m
-    working      5m
+    break             45m
+    htt            6h 10m
+    admin           8h 0m
+    uncategorised      5m  (counted as working)
   2026-05-14    7h 0m worked
-    break     1h 0m
-    htt      4h 50m
-    admin    1h 30m
-    working     40m
+    break           1h 0m
+    htt            4h 50m
+    admin          1h 30m
+    uncategorised     40m  (counted as working)
   2026-05-15   1h 44m worked (in progress)
-    working  1h 44m
+    uncategorised  1h 44m  (counted as working)
   Total: 22h 59m worked
-    break    1h 45m
-    htt      11h 0m
-    admin    9h 30m
-    working  2h 29m
+    break          1h 45m
+    htt            11h 0m
+    admin          9h 30m
+    uncategorised  2h 29m  (counted as working)
 ```
 
 Time logged gives each day's worked time, then its time in each
-category, breaks included, and the same totals for the period. A day
-without an `@end` is counted to midnight and flagged; today's last
-entry counts until now, in progress. A task added and completed in
-the period counts under both Added and Completed, by the context it
-was in; a deleted task is listed only under Deleted.
+category, breaks included, and the same totals for the period. The
+`uncategorised` line is the time of entries no category matched,
+never folded into a category's line, and says which category it
+counts as: the default category, whose `work` decides whether it is
+worked (here `working`, so it is). If time shows up there that you
+meant to categorise, look for a tag missing from your categories, or
+spelt differently. A day without an `@end` is counted to midnight and
+flagged; today's last entry counts until now, in progress.
+
+A task added and completed in the period counts under both Added and
+Completed, by the context it was in; a deleted task is listed only
+under Deleted.
 
 ## The rollup
 

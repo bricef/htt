@@ -101,37 +101,39 @@ func TestReport_TimeByCategoryPerDay(t *testing.T) {
 	e.writeTimelog(loc, "2026-11-04",
 		"09:00 @start", "09:30 review the PR +htt", "13:00 mail @email")
 
+	// Entries no category matches are uncategorised, on a line of their
+	// own, counted as working: the default category, built in.
 	r := e.mustRun("report", "--since", "2026-11-02")
 	assertEqual(t, "time section", timeSection(t, r.stdout), `Time logged
   2026-11-02   7h 0m worked
-    break      1h 0m
-    working    7h 0m
+    break            1h 0m
+    uncategorised    7h 0m  (counted as working)
   2026-11-03   7h 0m worked
-    working    7h 0m
+    uncategorised    7h 0m  (counted as working)
   2026-11-04  15h 0m worked (no @end: counted to 24:00)
-    htt       3h 30m
-    admin     11h 0m
-    working      30m
+    htt             3h 30m
+    admin           11h 0m
+    uncategorised      30m  (counted as working)
   Total: 29h 0m worked
-    break      1h 0m
-    htt       3h 30m
-    admin     11h 0m
-    working  14h 30m
+    break            1h 0m
+    htt             3h 30m
+    admin           11h 0m
+    uncategorised  14h 30m  (counted as working)
 `)
 	assertEqual(t, "stderr", r.stderr, "")
 }
 
 func TestReport_TimeWithoutCategoriesIsAllWorking(t *testing.T) {
 	// With no categories configured, a break entry is just another
-	// entry: everything is working.
+	// entry: everything is uncategorised, counted as working.
 	e, loc := timelogEnv(t)
 	e.writeTimelog(loc, "2026-11-02", "09:00 work", "12:00 @lunch", "13:00 work", "17:00 @end")
 	r := e.mustRun("report", "--since", "2026-11-02")
 	assertEqual(t, "time section", timeSection(t, r.stdout), `Time logged
   2026-11-02  8h 0m worked
-    working  8h 0m
+    uncategorised  8h 0m  (counted as working)
   Total: 8h 0m worked
-    working  8h 0m
+    uncategorised  8h 0m  (counted as working)
 `)
 }
 
@@ -150,13 +152,105 @@ func TestReport_TheDayTheClocksGoBackIsOneDay(t *testing.T) {
 	r := e.mustRun("report", "--since", "2026-10-24")
 	assertEqual(t, "time section", timeSection(t, r.stdout), `Time logged
   2026-10-24  1h 0m worked
-    working  1h 0m
+    uncategorised  1h 0m  (counted as working)
   2026-10-25  1h 0m worked
-    working  1h 0m
+    uncategorised  1h 0m  (counted as working)
   2026-10-26  1h 0m worked
-    working  1h 0m
+    uncategorised  1h 0m  (counted as working)
   Total: 3h 0m worked
-    working  3h 0m
+    uncategorised  3h 0m  (counted as working)
+`)
+}
+
+func TestReport_UncategorisedTimeUnderEachDefault(t *testing.T) {
+	// The same day under each kind of default category. Time no
+	// category matched (a misspelt +HTT included) is on its own line,
+	// never in a category's, and counts as worked or not as the default
+	// says; the default gets a line only for what its own tags matched.
+	const categories = `timelog:
+  categories:
+    - name: break
+      tags: ["@lunch"]
+      work: false
+    - name: htt
+      tags: ["+htt"]
+`
+	cases := []struct{ name, config, want string }{
+		{"the built-in working", categories, `Time logged
+  2026-11-02  6h 0m worked
+    break          1h 0m
+    htt            2h 0m
+    uncategorised  4h 0m  (counted as working)
+  Total: 6h 0m worked
+    break          1h 0m
+    htt            2h 0m
+    uncategorised  4h 0m  (counted as working)
+`},
+		{"working defined with tags", categories + `    - name: working
+      tags: ["@desk"]
+`, `Time logged
+  2026-11-02  6h 0m worked
+    break          1h 0m
+    htt            2h 0m
+    working        1h 0m
+    uncategorised  3h 0m  (counted as working)
+  Total: 6h 0m worked
+    break          1h 0m
+    htt            2h 0m
+    working        1h 0m
+    uncategorised  3h 0m  (counted as working)
+`},
+		{"a defined category that isn't work", categories + "  default_category: break\n", `Time logged
+  2026-11-02  2h 0m worked
+    break          1h 0m
+    htt            2h 0m
+    uncategorised  4h 0m  (counted as break)
+  Total: 2h 0m worked
+    break          1h 0m
+    htt            2h 0m
+    uncategorised  4h 0m  (counted as break)
+`},
+		{"a tagless category that isn't work", categories + `    - name: idle
+      work: false
+  default_category: idle
+`, `Time logged
+  2026-11-02  2h 0m worked
+    break          1h 0m
+    htt            2h 0m
+    uncategorised  4h 0m  (counted as idle)
+  Total: 2h 0m worked
+    break          1h 0m
+    htt            2h 0m
+    uncategorised  4h 0m  (counted as idle)
+`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			e, loc := timelogEnv(t)
+			e.writeConfig(tc.config)
+			e.writeTimelog(loc, "2026-11-02",
+				"09:00 review the PR +htt", "11:00 filing @desk", "12:00 @lunch", "13:00 fix the bug +HTT", "16:00 @end")
+			r := e.mustRun("report", "--since", "2026-11-02")
+			assertEqual(t, "time section", timeSection(t, r.stdout), tc.want)
+			assertEqual(t, "stderr", r.stderr, "")
+		})
+	}
+}
+
+func TestReport_NoUncategorisedLineWhenEverythingMatches(t *testing.T) {
+	e, loc := timelogEnv(t)
+	e.writeConfig(planConfig)
+	e.writeTimelog(loc, "2026-11-02", "09:00 review the PR +htt", "12:00 @lunch", "13:00 mail @email", "17:00 @end")
+	r := e.mustRun("report", "--since", "2026-11-02")
+	assertEqual(t, "time section", timeSection(t, r.stdout), `Time logged
+  2026-11-02  7h 0m worked
+    break  1h 0m
+    htt    3h 0m
+    admin  4h 0m
+  Total: 7h 0m worked
+    break  1h 0m
+    htt    3h 0m
+    admin  4h 0m
 `)
 }
 
@@ -178,11 +272,11 @@ func TestReport_TodaysOpenEntryRunsUntilNow(t *testing.T) {
 	today := time.Now().In(loc).Format("2006-01-02")
 	assertEqual(t, "time section", timeSection(t, r.stdout), `Time logged
   `+today+`  1h 30m worked (in progress)
-    htt      1h 0m
-    working    30m
+    htt            1h 0m
+    uncategorised    30m  (counted as working)
   Total: 1h 30m worked
-    htt      1h 0m
-    working    30m
+    htt            1h 0m
+    uncategorised    30m  (counted as working)
 `)
 }
 

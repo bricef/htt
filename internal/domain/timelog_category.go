@@ -143,19 +143,39 @@ func (c *Categoriser) Check() error {
 }
 
 // Categorise returns entry's category: the first of c's categories
-// with a tag the entry carries, or the default category. Tags match
-// exactly: a category's @break matches an entry's @break, and not
-// @Break, @breakfast or @break-time.
+// with a tag the entry carries, or the default category. See Match,
+// which also says which of the two it is.
 func (c *Categoriser) Categorise(entry *Task) Category {
+	cat, _ := c.Match(entry)
+	return cat
+}
+
+// Match returns the first of c's categories with a tag entry carries,
+// and true; or, when none has one, the default category and false: the
+// entry is uncategorised, and the default's Work decides whether its
+// time counts as work. The default matches like any category through
+// its own tags, if it has some. Tags match exactly: a category's @break
+// matches an entry's @break, and not @Break, @breakfast or @break-time.
+func (c *Categoriser) Match(entry *Task) (Category, bool) {
 	if c == nil {
-		return builtinDefault()
+		return builtinDefault(), false
 	}
 	for _, cat := range c.categories {
 		for _, tag := range cat.Tags {
 			if carriesTag(entry, tag) {
-				return cat
+				return cat, true
 			}
 		}
+	}
+	return c.fallback, false
+}
+
+// Default is the category of the entries no category matches: working,
+// built in, unless the list defines its own or WithDefault picked
+// another.
+func (c *Categoriser) Default() Category {
+	if c == nil {
+		return builtinDefault()
 	}
 	return c.fallback
 }

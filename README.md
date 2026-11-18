@@ -10,7 +10,8 @@ also edit by hand.
   `home`, …), with priorities, natural-language due dates
   (`--due "next Friday"`), search, and sorted or filtered views.
 - **A time log**: a timestamped record of what you worked on each day,
-  with breaks, day ends and categories by tag.
+  with breaks, day ends and categories by tag, and entries logged after
+  the fact (`htt log end --at "yesterday 17:30"`).
 - **Reports**: what you completed, added and deleted, and how long you
   worked, per category, over any period.
 - **Three ways in**: one-shot commands, a todo-mode shell (`htt repl`)

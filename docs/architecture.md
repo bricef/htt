@@ -15,7 +15,7 @@ internal/
   domain/                  Context, Task, Timelog + Repository / TimelogRepository interfaces
   storage/                 MemoryRepository / FileRepository (and timelog impls) — satisfy the domain interfaces
   update/                  the once-a-day check for a newer GitHub release
-  dates/                   date phrases ("next Friday") for --due and the TUI
+  dates/                   date phrases ("next Friday") for --due and the TUI; --at's times
   parseutils/              parsing helpers for the todo.txt format
   utils/                   small odds and ends (StringToFilename, EditFilePath, Fatal, …)
   vars/                    viper config keys + defaults
@@ -164,14 +164,23 @@ a blank line), for messages that point into the file.
 ### `Timelog`
 
 A day's worth of activity entries. Each entry is a `Task` annotated
-with a `ts:<RFC3339>` timestamp by `Timelog.Append`. Persistent method
-is `Append`; the pure ones are `IsEmpty` and `Timesheet`
-(`timesheet.go`), which reads the day as `Interval`s: each entry runs
-until the next one; an `@end` (`IsDayEnd`: the entry is just `@end`)
-makes none, so the gap after it belongs to nothing; and the day's last
-entry runs to local midnight (`DayUnended`) unless it is an `@end`
-(`DayEnded`), or, today, until now (`DayInProgress`). Intervals never
-leave their day. `Timesheet` takes `now`, and `now`'s zone is the
+with a `ts:<RFC3339>` timestamp, in UTC, by `Timelog.Append` or
+`AppendAt`. The persistent methods are `Append`, which stamps now and
+adds the entry at the end, and `AppendAt(task, at, now)`, which stamps
+`at` and puts the entry right after the last entry at or before it (or
+first), so a day in time order stays in order and the newest of
+entries at the same time is the one that runs. `AppendAt` refuses,
+changing nothing, a time later than `now` (`ErrFutureEntry`) and one
+whose date in `now`'s zone isn't the log's. The CLI's `--at` (on `log
+start`, `add`, `end` and `workon`) reads the time with
+`dates.ParseAt`, loads the day it names and calls `AppendAt`. The pure
+methods are `IsEmpty` and `Timesheet` (`timesheet.go`), which reads
+the day as `Interval`s: each entry runs until the next one; an `@end`
+(`IsDayEnd`: the entry is just `@end`) makes none, so the gap after it
+belongs to nothing; and the day's last entry runs to local midnight
+(`DayUnended`, which the report flags with the `htt log end --at`
+that ends it) unless it is an `@end` (`DayEnded`), or, today, until
+now (`DayInProgress`). Intervals never leave their day. `Timesheet` takes `now`, and `now`'s zone is the
 local one, so tests pin both. `htt report` sums the sheets (`Worked`,
 `ByCategory`, `Uncategorised`); `htt log status` reads `Status`,
 `EndedAt` and `Current`, whose `Category` (its name, and whether it
@@ -270,14 +279,15 @@ repository in `warningTimelogRepository`, which warns about the
 entries of each day's log a command loads (`Today`, `Day`), in the
 same form and with the same once-per-run record, naming the file
 `LogPath` gives. An entry's `ts:` timestamp isn't a date
-`Task.DateWarnings` reads, so it never warns. `Timelog.Append` saves
-through the wrapped repository.
+`Task.DateWarnings` reads, so it never warns. `Timelog.Append` and
+`AppendAt` save through the wrapped repository.
 
 Commands that write a task the user typed (`todo add`, `add-to`,
 `replace`, `edit`, and `log add` for a time-log entry) warn about it
 once it's saved, through `warnTypedTask` / `warnTypedEntry`, rather
 than leaving it to the next load: saving set its `FileLine`, so the
-warning names the line it went to. These share the once-per-run
+warning names the line it went to (for `log add --at`, in the day's
+file it went to, wherever in it). These share the once-per-run
 record, so the REPL's reload after the command doesn't repeat them.
 
 ## TUI
@@ -417,6 +427,8 @@ Worth reading if you're touching the relevant area:
 - `2026-11-18-timelog-categories.md` — how a day's entries become
   intervals, what `@end` and the 24:00 rule mean, and why categories
   are a list matched by exact tags.
+- `2026-11-18-timelog-at.md` — what `--at` takes, where an entry
+  logged at a time goes, and what a time the clocks skip becomes.
 - `2026-11-02-tui-log-file.md` — why the TUI has its own logger and
   how actions report errors.
 - `2026-11-02-tui-editor-exec.md` — how the editor gets the terminal,

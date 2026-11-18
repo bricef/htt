@@ -370,7 +370,9 @@ next entry.
   context, so you don't retype it.
 - `htt log end` writes an `@end` entry, which ends the day.
 
-Each prints the entry it logged:
+Each logs the entry now, or, with `--at`, at an earlier time (see
+[Logging at an earlier time](#logging-at-an-earlier-time)), and
+prints the entry it logged:
 
 ```
 $ htt log start
@@ -436,13 +438,80 @@ Not working (day ended at 17:00)
 An entry logged after an `@end` starts again, and the time between
 them counts as nothing, so a day where `log end` marked lunch still
 adds up. A day with no `@end` counts its last entry until midnight,
-and `htt report` flags it; today's last entry counts until now. Each
-day stands alone, midnight to midnight in your time zone: an entry
-still running at midnight stops there, and the next day starts with
-its own first entry.
+and `htt report` flags it, with the command that ends it (see
+[Logging at an earlier time](#logging-at-an-earlier-time)); today's
+last entry counts until now. Each day stands alone, midnight to
+midnight in your time zone: an entry still running at midnight stops
+there, and the next day starts with its own first entry.
 
 `htt log edit` (alias `e`) opens today's log file in `$EDITOR`, for
-fixing a forgotten `log end` or a typo.
+fixing a typo, or moving or deleting an entry.
+
+### Logging at an earlier time
+
+Forgot to log something as it happened? `htt log start`, `log add`,
+`log end` and `htt workon` all take `--at`, the time to log the entry
+at instead of now:
+
+- `--at 9:30` (or `09:30`): today at that time;
+- `--at "yesterday 17:30"`: yesterday at that time;
+- `--at "2026-05-10 08:15"`: that day at that time.
+
+Times are on the 24-hour clock, in your time zone. The entry goes into
+that day's log, in its place in time, so `htt log show` still reads in
+order, and the confirmation says when:
+
+```
+$ htt log show
+reviewing the auth PR ts:2026-05-15T10:00:00Z
+@lunch ts:2026-05-15T13:00:00Z
+$ htt log start --at 9:30
+Logging entry: @start (at 09:30 today)
+$ htt log add --at 12:15 standup @meeting
+Logging entry: standup @meeting (at 12:15 today)
+$ htt log show
+@start ts:2026-05-15T09:30:00Z
+reviewing the auth PR ts:2026-05-15T10:00:00Z
+standup @meeting ts:2026-05-15T12:15:00Z
+@lunch ts:2026-05-15T13:00:00Z
+$ htt workon 0 --at "2026-05-10 08:15"
+Logging entry: 2026-05-15 review PR for the new auth flow (at 08:15 on 2026-05-10)
+```
+
+(These `ts:` times are in UTC, as htt stores them, here the same as
+the local time.) An entry at the same time as another goes after it,
+so it's the one that runs. A time later than now is refused, and
+nothing is logged; so is anything else htt can't read as a time:
+
+```
+$ htt log add --at 23:59 reading
+❌ --at "23:59" is later than now (17:42): nothing logged
+$ htt log add --at 9.30 reading
+❌ --at: "9.30" isn't a time htt can read (use HH:MM for today, "yesterday HH:MM" or "YYYY-MM-DD HH:MM", on the 24-hour clock)
+```
+
+The usual case is a forgotten `log end`. The day runs to midnight, and
+`htt report` says how to end it:
+
+```
+$ htt report
+…
+Time logged
+  2026-05-14  15h 0m worked (no @end: counted to 24:00)
+              end the day with htt log end --at "2026-05-14 HH:MM"
+    uncategorised  15h 0m  (counted as working)
+…
+$ htt log end --at "2026-05-14 17:30"
+Logging entry: @end (at 17:30 yesterday)
+```
+
+Give it the time you stopped, after the day's last entry: an `@end`
+before it ends a stretch, and the day still runs to midnight.
+
+On a day the clocks change, a time they skip or repeat is whatever Go
+makes of it, and the confirmation shows the time it took: in London,
+`--at "2026-03-29 01:30"` (the hour the clocks skip) is logged at
+02:30.
 
 ### Categories
 
@@ -537,6 +606,7 @@ Deleted (0)
 
 Time logged
   2026-05-13  14h 15m worked (no @end: counted to 24:00)
+              end the day with htt log end --at "2026-05-13 HH:MM"
     break             45m
     htt            6h 10m
     admin           8h 0m
@@ -563,7 +633,9 @@ counts as: the default category, whose `work` decides whether it is
 worked (here `working`, so it is). If time shows up there that you
 meant to categorise, look for a tag missing from your categories, or
 spelt differently. A day without an `@end` is counted to midnight and
-flagged; today's last entry counts until now, in progress.
+flagged, with the command that ends it: fill in the time you stopped
+(see [Logging at an earlier time](#logging-at-an-earlier-time)).
+Today's last entry counts until now, in progress.
 
 A task added and completed in the period counts under both Added and
 Completed, by the context it was in; a deleted task is listed only
@@ -833,6 +905,9 @@ Commands without a prefix dispatch as `todo <cmd>`: `add foo`,
 to escape to a full CLI command: `/log start`, `/report --since 7d`.
 `/interactive` and `/repl` are disabled inside the REPL (no nested
 screens / recursive prompts). `/help` shows the REPL's own help.
+The REPL splits a line at its spaces and doesn't read quotes, so of
+the `--at` forms only `/log end --at 17:30` works there; give
+`"yesterday 17:30"` or a date from the shell.
 
 Exit with Ctrl-D, Ctrl-C, or by typing `quit`, `exit`, or `q`. An
 empty Enter clears the last output and redraws the context. Up/down

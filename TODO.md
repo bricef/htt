@@ -18,6 +18,14 @@ Each confirmed against `main` on 2026-11-03.
   uses `unix.EOPNOTSUPP` on every platform. goterm v1.0.4 fixes it
   (htt then builds and vets for windows/amd64 and windows/arm64);
   after the bump, add both to the platforms in `scripts/dist.sh`.
+- **Where the clocks go forward at midnight, the report gets that night
+  wrong** (confirmed 2026-11-18, in `America/Santiago` on 2026-09-06):
+  that midnight doesn't exist, and `time.Date` puts it an hour early,
+  at 23:00 the day before. So `Timesheet` ends 2026-09-05 at 23:00
+  (an entry at 22:00 ended at 23:30 counts 1h), and `htt report`'s day
+  walk lands on 2026-09-05 twice, listing it twice (2h in all). Zones
+  whose clocks change at 01:00 or later, as in Europe and the US,
+  aren't affected.
 
 ## Wishlist
 
@@ -32,7 +40,6 @@ Each confirmed against `main` on 2026-11-03.
   - [ ] More `show` views: multi-key sort, negated filters, created-date
         ranges, saved views
 - Time log
-  - [ ] `log@`: log an entry at a given time
   - [ ] Interval output
   - [ ] Review jrnl for inspiration
 - Reports
@@ -67,6 +74,13 @@ Each confirmed against `main` on 2026-11-03.
 
 ## Done
 
+- [x] Log a time-log entry at a given time (2026-11-18): `log start`,
+      `log add`, `log end` and `workon` take `--at` (`HH:MM` today,
+      `"yesterday HH:MM"` or `"YYYY-MM-DD HH:MM"`), which puts the
+      entry into that day's log in time order and says when in the
+      confirmation; a time later than now is refused. `htt report`'s
+      flag on a day without an `@end` gives the `htt log end --at` that
+      ends it. Was the wishlist's `log@`
 - [x] Time log categories, breaks and day ends (2026-11-18):
       `timelog.categories` sorts entries by tag (exact, first match
       wins) and `work: false` keeps a category such as breaks out of

@@ -50,10 +50,18 @@ var defaultTimelogRepo domain.TimelogRepository
 // defaultTimelogRepo, warning on stderr about the dates htt can't read
 // in each day's log a command loads (see warningTimelogRepository).
 func timelogRepo() domain.TimelogRepository {
+	return warningTimelogRepository{baseTimelogRepo()}
+}
+
+// baseTimelogRepo returns defaultTimelogRepo itself, without the
+// warnings. Status reads a past day's log through it, only to see
+// whether the day ended (printUnendedDay), and shows none of its
+// entries.
+func baseTimelogRepo() domain.TimelogRepository {
 	if defaultTimelogRepo == nil {
 		defaultTimelogRepo = storage.NewFileTimelogRepository(vars.Get(vars.ConfigKeyDataDir))
 	}
-	return warningTimelogRepository{defaultTimelogRepo}
+	return defaultTimelogRepo
 }
 
 // SetTimelogRepository overrides the package-level TimelogRepository

@@ -74,6 +74,12 @@ Each confirmed against `main` on 2026-11-03.
 
 ## Done
 
+- [x] Status flags a forgotten `log end` (2026-11-18): `htt log status`
+      and `htt status` look at the last day logged before today, up to
+      two weeks back, and when it has no `@end` add a line after the
+      status with the `htt log end --at` that ends it; `log active`
+      stays one line. Was the categories plan's decision 4, left
+      unbuilt
 - [x] Log a time-log entry at a given time (2026-11-18): `log start`,
       `log add`, `log end` and `workon` take `--at` (`HH:MM` today,
       `"yesterday HH:MM"` or `"YYYY-MM-DD HH:MM"`), which puts the

@@ -438,7 +438,8 @@ Not working (day ended at 17:00)
 An entry logged after an `@end` starts again, and the time between
 them counts as nothing, so a day where `log end` marked lunch still
 adds up. A day with no `@end` counts its last entry until midnight,
-and `htt report` flags it, with the command that ends it (see
+and `htt report` flags it, as do `htt log status` and `htt status`
+for the last day you logged, with the command that ends it (see
 [Logging at an earlier time](#logging-at-an-earlier-time)); today's
 last entry counts until now. Each day stands alone, midnight to
 midnight in your time zone: an entry still running at midnight stops
@@ -496,10 +497,16 @@ $ htt log add --at 9.30 reading
 ❌ --at: "9.30" isn't a time htt can read (use HH:MM for today, "yesterday HH:MM" or "YYYY-MM-DD HH:MM", on the 24-hour clock, or ISO 8601's YYYY-MM-DDTHH:MM, with :SS and a zone (Z, +05:30) if you like)
 ```
 
-The usual case is a forgotten `log end`. The day runs to midnight, and
-`htt report` says how to end it:
+The usual case is a forgotten `log end`. The day runs to midnight.
+`htt log status` and `htt status` look at the last day you logged
+before today, up to two weeks back, and when it has no `@end` say so
+on a line after the status; `htt report` flags every such day in its
+range. Both give the command that ends it:
 
 ```
+$ htt log status
+Currently working on: 2026-05-15 review PR for the new auth flow (uncategorised, 12m)
+2026-05-14 has no @end (counted to 24:00): end it with htt log end --at "2026-05-14 HH:MM"
 $ htt report
 …
 Time logged
@@ -509,10 +516,15 @@ Time logged
 …
 $ htt log end --at "2026-05-14 17:30"
 Logging entry: @end (at 17:30 yesterday)
+$ htt log status
+Currently working on: 2026-05-15 review PR for the new auth flow (uncategorised, 13m)
 ```
 
 Give it the time you stopped, after the day's last entry: an `@end`
 before it ends a stretch, and the day still runs to midnight.
+`htt log active` doesn't look back, so it stays one line, for a shell
+prompt; and status looks only at the last day you logged, so an older
+day left without an `@end` shows only in the report.
 
 On a day the clocks change, a time they skip or repeat is whatever Go
 makes of it, and the confirmation shows the time it took: in London,
@@ -651,7 +663,9 @@ under Deleted.
 
 `htt status` (alias `htt ?`) is the one command that combines both:
 current activity, every context, and the current context's tasks.
-It's the natural "where am I?" command.
+It's the natural "where am I?" command. Like `htt log status`, it
+says on a line after the first when the last day you logged has no
+`@end` (see [Logging at an earlier time](#logging-at-an-earlier-time)).
 
 ```
 $ htt status

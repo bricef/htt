@@ -184,7 +184,14 @@ now (`DayInProgress`). Intervals never leave their day. `Timesheet` takes `now`,
 local one, so tests pin both. `htt report` sums the sheets (`Worked`,
 `ByCategory`, `Uncategorised`); `htt log status` reads `Status`,
 `EndedAt` and `Current`, whose `Category` (its name, and whether it
-is work) and `Uncategorised` it shows.
+is work) and `Uncategorised` it shows. `log status` and `htt status`
+(not `log active`) then find the most recent day before today with
+entries, up to 14 days back, with `LastLogBefore(repo, now, days)`
+(`timelog_repository.go`), which walks back through `Day` a calendar
+day at a time in `now`'s zone (each day at noon, since a midnight can
+be missing), and add a line with the `htt log end --at` that ends it
+when that day's sheet is `DayUnended`. Only that day: older ones are
+the report's.
 
 Each interval has a `Category` from a `Categoriser`'s `Match`
 (`timelog_category.go`): the first category with one of the entry's
@@ -255,6 +262,7 @@ func baseRepo() domain.Repository
 func SetRepository(r domain.Repository)
 
 func timelogRepo() domain.TimelogRepository
+func baseTimelogRepo() domain.TimelogRepository
 func SetTimelogRepository(r domain.TimelogRepository)
 ```
 
@@ -280,7 +288,10 @@ entries of each day's log a command loads (`Today`, `Day`), in the
 same form and with the same once-per-run record, naming the file
 `LogPath` gives. An entry's `ts:` timestamp isn't a date
 `Task.DateWarnings` reads, so it never warns. `Timelog.Append` and
-`AppendAt` save through the wrapped repository.
+`AppendAt` save through the wrapped repository. Status's look at a
+past day (`printUnendedDay`) goes through `baseTimelogRepo()`, the
+repository unwrapped: it reads that day only for its `@end` and shows
+none of its entries, so their dates are the report's to warn about.
 
 Commands that write a task the user typed (`todo add`, `add-to`,
 `replace`, `edit`, and `log add` for a time-log entry) warn about it

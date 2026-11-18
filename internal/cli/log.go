@@ -193,6 +193,15 @@ HH:MM)".
 A timelog config htt can't use doesn't stop it: it warns on stderr
 and shows the entry without its category.`
 
+// unendedHelp ends the help of log status and htt status, which flag
+// the last day logged before today when it has no @end (see
+// printUnendedDay; "two weeks" is statusLookBack).
+const unendedHelp = `It also looks at the last day you logged before today, up to two
+weeks back. When that day has no @end, so its last entry counts until
+midnight, a line after the status says so, with the command that ends
+it, for the time you stopped:
+  htt log end --at "YYYY-MM-DD HH:MM"`
+
 var Status = &cobra.Command{
 	Use:   "status",
 	Short: "Show the status of the time log.",
@@ -201,7 +210,9 @@ run: "Currently working on: <entry> (<category>, <time>)", or "Not
 working: <entry> (<category>, <time>)" when the category doesn't
 count as work, such as a break.
 
-` + todayHelp,
+` + todayHelp + `
+
+` + unendedHelp,
 	Args:    cobra.NoArgs,
 	Aliases: []string{"?"},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -279,9 +290,53 @@ htt log add @lunch, and give it a category that doesn't count as work
 // <duration>)", "Not working: <entry> (<category>, <duration>)" on an
 // entry whose category isn't work, "Not working (day ended at HH:MM)"
 // after an @end, or "Not currently working on any task." on a day with
-// nothing logged.
+// nothing logged; then the line about the last day logged before today
+// if it has no @end (printUnendedDay). `log active` prints today's line
+// alone.
 func printStatus() error {
-	return printToday("Not currently working on any task.", "Currently working on:")
+	if err := printToday("Not currently working on any task.", "Currently working on:"); err != nil {
+		return err
+	}
+	printUnendedDay(time.Now())
+	return nil
+}
+
+// statusLookBack is how many days before today status looks back for
+// the last day logged (printUnendedDay). unendedHelp says two weeks.
+const statusLookBack = 14
+
+// printUnendedDay prints status's line about the most recent day before
+// now's with a time log, up to statusLookBack days back, when that day
+// has no @end (domain.DayUnended), with the command that ends it, as
+// the report flags it:
+//
+//	2026-11-17 has no @end (counted to 24:00): end it with htt log end --at "2026-11-17 HH:MM"
+//
+// Only that day: an older day without an @end is the report's to flag.
+// It needs no categories, so a timelog config htt can't use doesn't
+// change it, and it loads the day without date warnings
+// (baseTimelogRepo), since it shows none of the day's entries. A log it
+// can't read doesn't stop the status: it warns on stderr, and prints no
+// line.
+func printUnendedDay(now time.Time) {
+	tl, err := domain.LastLogBefore(baseTimelogRepo(), now, statusLookBack)
+	if err == nil && tl == nil {
+		return // nothing logged in the days it looks at
+	}
+	var sheet *domain.Timesheet
+	if err == nil {
+		if sheet, err = tl.Timesheet(nil, now); err != nil {
+			err = fmt.Errorf("read the timelog for %s: %w", tl.Date.Format("2006-01-02"), err)
+		}
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: %v; not checking that day for an @end\n", err)
+		return
+	}
+	if sheet.Status == domain.DayUnended {
+		date := tl.Date.Format("2006-01-02")
+		fmt.Printf("%s has no @end (counted to 24:00): end it with htt log end --at %q\n", date, date+" HH:MM")
+	}
 }
 
 // notWorking is printToday's prefix for an entry whose category doesn't

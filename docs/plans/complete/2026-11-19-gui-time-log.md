@@ -35,8 +35,8 @@ Choices made while building:
   and the halves. Decision 5 says "worked ÷ days in the month × 7",
   which for a past month is the same; for this month, dividing by its
   days to come would understate every average. The weeks chart shows
-  all the month's weeks, those to come empty. Worth a look if Brice
-  meant otherwise.
+  all the month's weeks, those to come empty. Brice agreed
+  (2026-11-19): "it's meaningless to average over data we don't have."
 - **The timeline opens** on the prototype's rule: from the whole hour
   at least half an hour before the first entry to the whole hour at
   least half an hour after the last end (24:00 when a day has no

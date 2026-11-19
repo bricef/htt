@@ -367,6 +367,40 @@ func TestAPI_BadDates(t *testing.T) {
 	}
 }
 
+func TestAPI_DatesAreCalendarDates(t *testing.T) {
+	// In Asunción the clocks went forward at midnight on Monday 1
+	// October 1990 and on Sunday 1 October 2023: those midnights never
+	// happened, and Go puts a time that doesn't exist on the day before.
+	// A date the API is given is a day on the calendar all the same.
+	loc, err := time.LoadLocation("America/Asuncion")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := newServer(Config{
+		Timelogs:   testRepo(t, loc, map[string][]string{"2023-10-02": {"09:00 work +htt", "10:00 @end"}}),
+		Categories: testCategories(t),
+		Now:        func() time.Time { return time.Date(2023, 11, 15, 12, 0, 0, 0, loc) },
+	}, testToken)
+	m := getView(t, s, "api/month?month=2023-10")
+	want := period{Kind: "month", Key: "2023-10", Start: "2023-10-01", End: "2023-10-31", Previous: "2023-09", Next: "2023-11", Current: "2023-11"}
+	if m.Period != want {
+		t.Errorf("month 2023-10: period %+v, want %+v", m.Period, want)
+	}
+	if len(m.Days) != 31 || m.Days[0].Date != "2023-10-01" || m.Days[1].Worked != 3600 {
+		t.Errorf("month 2023-10: %d days from %s, the 2nd worked %d", len(m.Days), m.Days[0].Date, m.Days[1].Worked)
+	}
+	if next := getView(t, s, "api/month?month=2023-09").Period.Next; next != "2023-10" {
+		t.Errorf("the month after September 2023 is %s", next)
+	}
+	w := getView(t, s, "api/week?date=1990-10-01")
+	if w.Period.Start != "1990-10-01" || w.Period.End != "1990-10-07" || w.Period.Previous != "1990-09-24" {
+		t.Errorf("the week of Monday 1 October 1990: %+v", w.Period)
+	}
+	if w := getView(t, s, "api/week?date=2023-10-01"); w.Period.Start != "2023-09-25" || w.Days[6].Date != "2023-10-01" {
+		t.Errorf("the week of Sunday 1 October 2023: %+v", w.Period)
+	}
+}
+
 func TestAPI_BadConfig(t *testing.T) {
 	// A config htt can't use: the API says so, naming the key, and the
 	// page still loads, to show it.

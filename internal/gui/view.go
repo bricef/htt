@@ -192,7 +192,7 @@ func (s *Server) handleWeek(w http.ResponseWriter, r *http.Request) {
 	now := s.now()
 	date := now
 	if q := r.URL.Query().Get("date"); q != "" {
-		d, err := time.ParseInLocation(dateLayout, q, now.Location())
+		d, err := calendarDate(dateLayout, q, now.Location())
 		if err != nil {
 			writeError(w, r, http.StatusBadRequest, fmt.Errorf("date: want YYYY-MM-DD, got %q", q))
 			return
@@ -207,7 +207,7 @@ func (s *Server) handleMonth(w http.ResponseWriter, r *http.Request) {
 	now := s.now()
 	date := now
 	if q := r.URL.Query().Get("month"); q != "" {
-		d, err := time.ParseInLocation(monthLayout, q, now.Location())
+		d, err := calendarDate(monthLayout, q, now.Location())
 		if err != nil {
 			writeError(w, r, http.StatusBadRequest, fmt.Errorf("month: want YYYY-MM, got %q", q))
 			return
@@ -216,6 +216,18 @@ func (s *Server) handleMonth(w http.ResponseWriter, r *http.Request) {
 	}
 	v, err := s.monthView(date, now)
 	s.answer(w, r, v, err)
+}
+
+// calendarDate reads s, a date in layout (a month's is its 1st), as a day
+// on the calendar: that day at noon in loc. It isn't read at midnight in
+// loc: where the clocks go forward at midnight, that midnight doesn't
+// exist, and Go puts it on the day before.
+func calendarDate(layout, s string, loc *time.Location) (time.Time, error) {
+	d, err := time.Parse(layout, s) // in UTC, where every midnight happens
+	if err != nil {
+		return time.Time{}, err
+	}
+	return time.Date(d.Year(), d.Month(), d.Day(), 12, 0, 0, 0, loc), nil
 }
 
 // now is the server's clock to the second: entries are logged to the

@@ -53,10 +53,20 @@ func (w syncWriter) Write(p []byte) (int, error) {
 // it's still running.
 func (e *env) startGUI(args ...string) *guiProcess {
 	e.t.Helper()
+	return e.startGUIWith(nil, append([]string{"--no-open"}, args...)...)
+}
+
+// startGUIWith runs `htt gui --port 0` with args, as startGUI does, after
+// prepare (if not nil) has set up the command.
+func (e *env) startGUIWith(prepare func(*exec.Cmd), args ...string) *guiProcess {
+	e.t.Helper()
 	g := &guiProcess{done: make(chan error, 1)}
-	g.cmd = exec.Command(binaryPath, append([]string{"--no-color", "gui", "--no-open", "--port", "0"}, args...)...)
+	g.cmd = exec.Command(binaryPath, append([]string{"--no-color", "gui", "--port", "0"}, args...)...)
 	g.cmd.Env = append(append(e.homeEnv(), "PATH="+os.Getenv("PATH")), e.extraEnv...)
 	g.cmd.Stderr = syncWriter{&g.mu, &g.stderr}
+	if prepare != nil {
+		prepare(g.cmd)
+	}
 	stdout, err := g.cmd.StdoutPipe()
 	if err != nil {
 		e.t.Fatal(err)

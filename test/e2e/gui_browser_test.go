@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -53,16 +54,109 @@ func chromePath(t *testing.T) string {
 	return ""
 }
 
+// browser is headless Chrome for a test, and the errors the pages it
+// loads report.
+type browser struct {
+	t        *testing.T
+	ctx      context.Context // the test's, with a timeout
+	mu       sync.Mutex
+	problems []string
+}
+
+// newBrowser starts headless Chrome for t, its window width × height,
+// and skips t where there's none; HTT_TEST_CHROME names one. It stops
+// when t ends.
+func newBrowser(t *testing.T, width, height int) *browser {
+	t.Helper()
+	chrome := chromePath(t)
+	if chrome == "" {
+		t.Skip("no Chrome or Chromium found; set HTT_TEST_CHROME to run the browser test")
+	}
+	opts := append(chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.ExecPath(chrome),
+		chromedp.NoSandbox,
+		chromedp.DisableGPU,
+		chromedp.WindowSize(width, height),
+	)
+	allocCtx, cancelAlloc := chromedp.NewExecAllocator(context.Background(), opts...)
+	t.Cleanup(cancelAlloc)
+	ctx, cancel := chromedp.NewContext(allocCtx)
+	t.Cleanup(cancel)
+	if err := chromedp.Do(ctx); err != nil { // start the browser, with no timeout
+		t.Fatalf("start %s: %v", chrome, err)
+	}
+
+	// Everything the page says on the console, exceptions and the
+	// browser's log (a failed load, a Content-Security-Policy violation)
+	// included; the errors fail the test.
+	b := &browser{t: t}
+	messages := chromedp.Console(ctx)
+	listening, stopListening := context.WithCancel(context.Background())
+	t.Cleanup(stopListening)
+	go func() {
+		for m, err := range messages {
+			if err != nil || listening.Err() != nil {
+				return
+			}
+			if m.Type == chromedp.ConsoleError || m.IsException() {
+				b.mu.Lock()
+				b.problems = append(b.problems, fmt.Sprintf("%s (%s:%d)", m, m.URL, m.Line+1))
+				b.mu.Unlock()
+			}
+		}
+	}()
+	tctx, tcancel := context.WithTimeout(ctx, 90*time.Second)
+	t.Cleanup(tcancel)
+	b.ctx = tctx
+	return b
+}
+
+// do runs the steps; if one fails, it fails the test, with what the page
+// reported and what htt gui printed.
+func (b *browser) do(g *guiProcess, steps ...chromedp.Action[chromedp.Void]) {
+	b.t.Helper()
+	if err := chromedp.Do(b.ctx, steps...); err != nil {
+		stdout, stderr := g.output()
+		b.mu.Lock()
+		defer b.mu.Unlock()
+		b.t.Fatalf("%v\nthe page reported: %v\nhtt gui stdout: %s\nstderr: %s", err, b.problems, stdout, stderr)
+	}
+}
+
+// checkConsole fails the test if a page reported an error.
+func (b *browser) checkConsole() {
+	b.t.Helper()
+	time.Sleep(200 * time.Millisecond) // the last messages on their way
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if len(b.problems) > 0 {
+		b.t.Errorf("the page reported:\n  %s", strings.Join(b.problems, "\n  "))
+	}
+}
+
+// waitFor polls the page until the JavaScript condition holds.
+func waitFor(what, condition string) chromedp.Action[chromedp.Void] {
+	return func(ctx context.Context, tg *chromedp.Target) (chromedp.Void, error) {
+		if _, err := chromedp.Poll[bool](condition, chromedp.WithPollingTimeout(30*time.Second))(ctx, tg); err != nil {
+			return chromedp.Void{}, fmt.Errorf("waiting for %s: %w", what, err)
+		}
+		return chromedp.Void{}, nil
+	}
+}
+
+// svgText is a JavaScript expression for the text the charts drew in
+// the element with that id.
+func svgText(id string) string {
+	return fmt.Sprintf(`(document.querySelector("#%s svg") || {textContent: ""}).textContent`, id)
+}
+
 // TestGUI_InTheBrowser loads the page from the real binary in headless
 // Chrome and checks it draws both views, and a known label in each,
 // without a JavaScript exception or an error on the console (a failed
 // load or a Content-Security-Policy violation included). It's skipped
 // where there's no Chrome; HTT_TEST_CHROME names one.
 func TestGUI_InTheBrowser(t *testing.T) {
-	chrome := chromePath(t)
-	if chrome == "" {
-		t.Skip("no Chrome or Chromium found; set HTT_TEST_CHROME to run the browser test")
-	}
+	b := newBrowser(t, 1180, 1400)
 	// The logs are written in the zone htt runs in: pinned with TZ
 	// where Go reads it, the system's on Windows.
 	e := newEnv(t)
@@ -87,108 +181,57 @@ timelog:
 	e.writeTimelog(loc, "2026-11-03", "09:30 answer mail", "10:00 fix +smoke")
 	g := e.startGUI()
 
-	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.ExecPath(chrome),
-		chromedp.NoSandbox,
-		chromedp.DisableGPU,
-		chromedp.WindowSize(1180, 1400),
-	)
-	allocCtx, cancelAlloc := chromedp.NewExecAllocator(context.Background(), opts...)
-	defer cancelAlloc()
-	ctx, cancel := chromedp.NewContext(allocCtx)
-	defer cancel()
-	if err := chromedp.Do(ctx); err != nil { // start the browser, with no timeout
-		t.Fatalf("start %s: %v", chrome, err)
-	}
-
-	// Everything the page says on the console, exceptions and the
-	// browser's log (a failed load, a Content-Security-Policy violation)
-	// included; the errors fail the test.
-	var mu sync.Mutex
-	var problems []string
-	messages := chromedp.Console(ctx)
-	listening, stopListening := context.WithCancel(context.Background())
-	go func() {
-		for m, err := range messages {
-			if err != nil || listening.Err() != nil {
-				return
-			}
-			if m.Type == chromedp.ConsoleError || m.IsException() {
-				mu.Lock()
-				problems = append(problems, fmt.Sprintf("%s (%s:%d)", m, m.URL, m.Line+1))
-				mu.Unlock()
-			}
-		}
-	}()
-	defer stopListening()
-
-	tctx, tcancel := context.WithTimeout(ctx, 90*time.Second)
-	defer tcancel()
-	// waitFor polls the page until the JavaScript condition holds.
-	waitFor := func(what, condition string) chromedp.Action[chromedp.Void] {
-		return func(ctx context.Context, tg *chromedp.Target) (chromedp.Void, error) {
-			if _, err := chromedp.Poll[bool](condition, chromedp.WithPollingTimeout(30*time.Second))(ctx, tg); err != nil {
-				return chromedp.Void{}, fmt.Errorf("waiting for %s: %w", what, err)
-			}
-			return chromedp.Void{}, nil
-		}
-	}
-	// svgText is the text the charts drew in the element.
-	svgText := func(id string) string {
-		return fmt.Sprintf(`(document.querySelector("#%s svg") || {textContent: ""}).textContent`, id)
-	}
-	fail := func(err error) {
-		t.Helper()
-		stdout, stderr := g.output()
-		mu.Lock()
-		defer mu.Unlock()
-		t.Fatalf("%v\nthe page reported: %v\nhtt gui stdout: %s\nstderr: %s", err, problems, stdout, stderr)
-	}
-
 	// The week: the timeline's legend and labels, the totals' labels;
 	// the zoom out to the whole day.
-	if err := chromedp.Do(tctx,
+	b.do(g,
 		chromedp.Navigate(g.url+"#week/2026-11-04"),
 		waitFor("the week's timeline", svgText("timeline")+`.includes("smoke-test") && `+svgText("timeline")+`.includes("no @end")`),
 		waitFor("the week's totals", svgText("summary")+`.includes("7h 0m")`),
 		waitFor("the week's title", `document.querySelector("#title").textContent === "2–8 November 2026"`),
 		chromedp.Click(chromedp.ID("zoom")),
 		waitFor("the whole day", `document.querySelector("#zoom").textContent === "Hours logged"`),
-	); err != nil {
-		fail(err)
-	}
+	)
 	// The month, by its route: the calendar, the charts, the table.
-	if err := chromedp.Do(tctx,
+	b.do(g,
 		chromedp.Evaluate[chromedp.Void](`location.hash = "#month/2026-11"`),
 		waitFor("the month's calendar", svgText("calendar")+`.includes("7h 0m")`),
 		waitFor("the month's charts", svgText("trends")+`.includes("smoke-test") && `+svgText("weeks")+`.includes("2–8 Nov") && `+svgText("weekday")+`.includes("Mon")`),
 		waitFor("the month's table", `document.querySelector("#month-totals").textContent.includes("smoke-test")`),
 		waitFor("the month's title", `document.querySelector("#title").textContent === "November 2026"`),
-	); err != nil {
-		fail(err)
-	}
+	)
 	// Dark, when the system asks for it, drawn again; then the week by
 	// its tab, which goes back to the week shown before.
-	if _, err := chromedp.Call(tctx, emulation.SetEmulatedMedia, emulation.SetEmulatedMediaParams{
+	if _, err := chromedp.Call(b.ctx, emulation.SetEmulatedMedia, emulation.SetEmulatedMediaParams{
 		Features: []*emulation.MediaFeature{{Name: "prefers-color-scheme", Value: "dark"}},
 	}); err != nil {
-		fail(err)
+		t.Fatal(err)
 	}
-	if err := chromedp.Do(tctx,
+	b.do(g,
 		waitFor("the dark page", `getComputedStyle(document.body).backgroundColor === "rgb(14, 20, 23)"`),
 		waitFor("the dark calendar", svgText("calendar")+`.includes("7h 0m")`),
 		chromedp.Click(chromedp.ID("tab-week")),
 		waitFor("the week again", `document.querySelector("#title").textContent === "2–8 November 2026" && location.hash === "#week/2026-11-04"`),
 		waitFor("the dark week", svgText("timeline")+`.includes("smoke-test")`),
-	); err != nil {
-		fail(err)
-	}
+	)
+	b.checkConsole()
+}
 
-	time.Sleep(200 * time.Millisecond) // the last messages on their way
-	stopListening()
-	mu.Lock()
-	defer mu.Unlock()
-	if len(problems) > 0 {
-		t.Errorf("the page reported:\n  %s", strings.Join(problems, "\n  "))
+// TestGUI_InTheBrowser_RedirectFile opens the file htt gui hands the
+// opener in Chrome, and checks it sends the browser on to the page.
+func TestGUI_InTheBrowser_RedirectFile(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("htt opens the browser with ShellExecute on Windows, which no program on PATH can stand in for")
 	}
+	b := newBrowser(t, 1180, 900)
+	e := newEnv(t)
+	e.writeConfig("check_for_updates: false\n")
+	rec := t.TempDir()
+	e.useFakeOpener(`printf '%s\n' "$1" > '` + rec + `/file.tmp' && mv '` + rec + `/file.tmp' '` + rec + `/file'`)
+	g := e.startGUIWith(nil)
+	file := strings.TrimSpace(waitForFile(t, filepath.Join(rec, "file")))
+	b.do(g,
+		chromedp.Navigate("file://"+file),
+		waitFor("the page", `location.href.startsWith(`+strconv.Quote(g.url)+`) && `+svgText("timeline")+` !== ""`),
+	)
+	b.checkConsole()
 }

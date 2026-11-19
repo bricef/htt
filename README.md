@@ -14,6 +14,10 @@ also edit by hand.
   the fact (`htt log end --at "yesterday 17:30"`).
 - **Reports**: what you completed, added and deleted, and how long you
   worked, per category, over any period.
+- **The time log in your browser** (`htt gui`): each day as a timeline
+  coloured by category, the week's totals, and a month's report with
+  weekly averages and category trends, served by htt from the binary,
+  on your computer only.
 - **Three ways in**: one-shot commands, a todo-mode shell (`htt repl`)
   and a full-screen TUI (`htt interactive`) with search, in-place
   editing with a live preview and tag completion, task lines coloured
@@ -161,6 +165,7 @@ Usage:
 Available Commands:
   completion  Generate the autocompletion script for the specified shell
   config      Manage configuration.
+  gui         See the time log in your browser.
   help        Help about any command
   interactive Enter interactive mode
   log         Manage the activity log.
@@ -194,6 +199,8 @@ have.
 
 htt works offline. It reaches the network for one thing only, the
 update check below, and never sends your tasks or time logs anywhere.
+`htt gui` serves its page on 127.0.0.1 only, and the page fetches
+nothing from elsewhere: its chart library and fonts are in the binary.
 
 ### Update check
 
@@ -243,11 +250,11 @@ proxy; that's the Go toolchain, before htt ever runs.)
 ## Architecture
 
 Layered around a domain package that owns the contracts and storage
-implementations that satisfy them. CLI (cobra) and TUI (bubble tea)
-sit at the top.
+implementations that satisfy them. CLI (cobra), TUI (bubble tea) and
+the GUI's server (a local web page) sit at the top.
 
 ```
-cli ─────────────► tui
+cli ─────────────► tui, gui
  │                  │
  ▼                  ▼
 storage ─────────► domain

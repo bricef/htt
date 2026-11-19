@@ -1,7 +1,128 @@
 # GUI: the time log, seen
 
 **Date:** 2026-11-19
-**Status:** Planned
+**Status:** Complete (2026-11-19)
+
+## Outcome
+
+Built as planned, on `feat/gui`, in six commits: the period
+aggregates in the domain, the server and its API, the page and its
+assets, the `htt gui` command, a browser smoke test, and the docs.
+The binary grows from 17,875,384 to 20,533,351 bytes (+2.7 MB), or
+from 12,587,170 to 14,827,682 (+2.2 MB) as releases build it
+(`-trimpath -ldflags='-s -w'`), linux/amd64, cgo off: 1.2 MB of
+embedded assets, the rest the HTTP server, the API and the opener.
+
+Choices made while building:
+
+- **The domain's period aggregates** are in `timesheet_period.go`:
+  `Totals` (worked; breaks, the rest of the time logged, uncategorised
+  time included when the default category isn't work; by category;
+  uncategorised; and `ToMidnight`, the last entry of each day without
+  `@end`), `Period` with `WeekOf` and `MonthOf` (days held as dates at
+  noon, so counted by date), `Weeks`, `Halves`, `Rolling`,
+  `WeekdayAverages` and `Summarise`. `Timesheet` gained `Date`, the
+  log's date at noon: where the clocks go forward at midnight its
+  `Start` is on the day before, and a week or a month needs each day's
+  weekday and date.
+- **`future` is the GUI's, not the domain's.** A `DayStatus` says how
+  a log stands when read at now; a day after today has no log to read,
+  so the server doesn't load one (a hand-written log for tomorrow is
+  ignored), and the day has no time.
+- **This week's and this month's figures are over the days so far**,
+  today included: the summary, the averages (the average week is
+  worked ÷ days so far × 7), the weekday averages, the rolling totals
+  and the halves. Decision 5 says "worked ÷ days in the month × 7",
+  which for a past month is the same; for this month, dividing by its
+  days to come would understate every average. The weeks chart shows
+  all the month's weeks, those to come empty. Worth a look if Brice
+  meant otherwise.
+- **The timeline opens** on the prototype's rule: from the whole hour
+  at least half an hour before the first entry to the whole hour at
+  least half an hour after the last end (24:00 when a day has no
+  `@end`, as decision 4 says); the whole day when nothing is logged.
+  A *Whole day* button zooms out and back, besides the slider.
+- **The API's categories** are the config's, in its order, those with
+  tags only (a default without tags, such as the built-in `working`,
+  can never have time of its own), then `uncategorised`, with
+  `countedAs` naming the default. The colour index counts the work
+  categories and the others separately, as the prototype coloured
+  `htt` teal with `break` first in the list.
+- **Colours**: the prototype's teal, amber and violet, then five more
+  work colours, ordered so neighbours in a stack stay apart for
+  colour-blind readers (checked with a palette validator, light and
+  dark); four muted tones for categories that aren't work;
+  uncategorised grey. The approved teal and dark tones sit just
+  outside that validator's chroma and lightness bands; they're kept as
+  approved.
+- **Each day of the month has its intervals**, as decision 9 says,
+  though the month view draws none: 58 KB for a full month of
+  realistic logs, refetched every minute only for this month.
+- **A config htt can't use**: the API answers 500 with its error and
+  "fix it, then restart htt gui"; the page shows that instead of the
+  views, and `htt gui` warns once on stderr. It draws no time without
+  categories, as `htt report` stops rather than report it.
+- **The browser opens** through `github.com/cli/browser` v1.3.0, the
+  GitHub CLI's opener, rather than a hand-rolled one: it also covers
+  WSL (`wslview`) and uses ShellExecute on Windows, and its one
+  dependency, `golang.org/x/sys`, was already in htt's. Its output is
+  dropped; a failure says so on stderr.
+- **Fonts** from IBM's npm packages (`@ibm/plex-sans` 2.0.0,
+  `@ibm/plex-mono` 2.5.0, static woff2, Latin1), not Google Fonts,
+  whose Plex Sans is now one variable font: pinned versions, checked
+  against the registry's integrity. Same design as the prototype's.
+  ECharts' files include `LICENSE-d3`, which its LICENSE names, and
+  ZRender's BSD licence, since `echarts.min.js` bundles ZRender and
+  its LICENSE doesn't say so. `.gitignore`'s `vendor`, meant for the
+  module's vendor directory, ignored `web/vendor` too; it's now
+  `/vendor`.
+- **The guards**, in order: Host (403), token (404, constant-time),
+  method (405). The API's two paths are matched exactly and anything
+  else must be a regular file of `web/`, so `..` and empty path
+  elements reach nothing without cleaning. A Content-Security-Policy
+  keeps the page to its own files; styles may be inline (the tooltips'
+  HTML has style attributes), scripts may not, and ECharts needs no
+  `eval` (its one `new Function` parses GeoJSON strings, unused).
+- **The address** comes from the listener itself, so it says what was
+  bound; the browser test and the e2e tests read it from stdout.
+- **chromedp v0.22.1**, the newest release at least two weeks old, on
+  its new generic API (v0.20 on); test-only. The browser test finds
+  Chrome in `$HTT_TEST_CHROME`, on `PATH`, or where macOS and Windows
+  install it. On the dev box that's a script that sets
+  `LD_LIBRARY_PATH` and execs Playwright's `chrome-headless-shell`.
+
+Tests, as planned: tables and properties for the domain (150 generated
+months in six zones, months starting on every weekday); golden JSON
+for a week and a month and the guards for the server; e2e with the real
+binary (the interrupt skipped on Windows, where Go can't send one to
+another process); and the browser smoke test. Breaking each rule in
+turn, 63 mutations (20 in the aggregates, 28 in the server and API, 7
+in the command, 8 in the page), failed a test every time; two guards
+that no test could break were redundant and were removed (path
+cleaning, and an `fs.ValidPath` check that `fs.Stat` already makes).
+
+Screenshots of both views, light and dark, 1180 and 400 px wide, were
+checked by eye; at phone width the weeks chart shortens its labels.
+
+Left open:
+
+- **The config is read when `htt gui` starts**; a change needs a
+  restart, which the page and the help say. Reading it per request
+  would mean the GUI reading viper, or the CLI handing it a func.
+- **Release archives don't carry the third-party licences as files.**
+  They're in the binary and served under the token, but Apache-2.0
+  asks redistributors to give a copy of the licence and NOTICE;
+  `scripts/dist.sh` could add them (htt's Go dependencies' licences
+  aren't shipped either).
+- **`/i` runs the TUI inside the REPL**: the REPL refuses
+  `interactive` but not its alias `i`. Found while adding `gui`; not
+  fixed here.
+- **`htt report` could share the aggregates** (the wishlist's calendar
+  modes, `--week` and `--month`).
+- **The browser test hasn't run on CI yet.** CI's Linux and Windows
+  runners have Chrome, so it will run there.
+- Out of scope as planned: a native window, editing, task views,
+  colours in the config, push updates.
 
 ## Motivation
 

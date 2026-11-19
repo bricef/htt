@@ -217,32 +217,103 @@ timelog:
 }
 
 // TestGUI_InTheBrowser_Corners draws what a review found the page
-// getting wrong: an entry in the hour that repeats when the clocks go
-// back.
+// getting wrong: categories named after Object.prototype's members; an
+// entry pinned below the timeline, then another week; an average week
+// above every week's bar; and an entry in the hour that repeats when
+// the clocks go back.
 func TestGUI_InTheBrowser_Corners(t *testing.T) {
 	b := newBrowser(t, 1180, 1400)
 	e := newEnv(t)
+	// constructor and toString have no time: a plain object's lookup
+	// found Object.prototype's functions, and the tables said NaNm.
 	e.writeConfig(`check_for_updates: false
 timelog:
   categories:
     - name: review
       tags: ["+review"]
+    - name: constructor
+      tags: ["+constructor"]
+    - name: toString
+      tags: ["+tostring"]
+      work: false
+    - name: __proto__
+      tags: ["+proto"]
 `)
-	// London's clocks go back at 02:00 BST on 25 October 2026: from 01:50
-	// BST to 01:10 GMT is 20 minutes, drawn from 01:50 to 02:10, and
-	// shown with its clock times. TZ sets htt's zone where Go reads it,
-	// not on Windows.
+	// July 2026, 09:00 to 17:00 Monday to Friday: 23 days, 184h, so the
+	// average week, 184h ÷ 31 × 7, is 41h 33m, above every week's 40h at
+	// most. TZ sets htt's zone where Go reads it; Windows writes the logs
+	// in its own.
+	loc := time.Local
 	clocksBack := runtime.GOOS != "windows"
 	if clocksBack {
+		var err error
+		if loc, err = time.LoadLocation("Europe/London"); err != nil {
+			t.Fatal(err)
+		}
 		e.extraEnv = append(e.extraEnv, "TZ=Europe/London")
+	}
+	for d := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC); d.Month() == time.July; d = d.AddDate(0, 0, 1) {
+		if d.Weekday() != time.Saturday && d.Weekday() != time.Sunday {
+			e.writeTimelog(loc, d.Format("2006-01-02"), "09:00 work +review", "17:00 @end")
+		}
+	}
+	// London's clocks go back at 02:00 BST on 25 October 2026: from 01:50
+	// BST to 01:10 GMT is 20 minutes, drawn from 01:50 to 02:10, and
+	// shown with its clock times. Not on Windows, where htt's zone is the
+	// system's.
+	if clocksBack {
 		e.writeData(filepath.Join("timelogs", "2026-10-25.log"),
 			"late fix +review ts:2026-10-25T00:50:00Z\n@end ts:2026-10-25T01:10:00Z\n")
 	}
 	g := e.startGUI()
+	// No animations: the test clicks an entry where it's drawn.
+	if _, err := chromedp.Call(b.ctx, emulation.SetEmulatedMedia, emulation.SetEmulatedMediaParams{
+		Features: []*emulation.MediaFeature{{Name: "prefers-reduced-motion", Value: "reduce"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	// The week of 8 July: the categories without time have none.
+	const row = `[...document.querySelectorAll("#week-totals tr")].find((tr) => tr.firstElementChild.textContent === %q).lastElementChild.textContent === "0m"`
+	b.do(g,
+		chromedp.Navigate(g.url+"#week/2026-07-08"),
+		waitFor("the week of 8 July", `document.querySelector("#title").textContent === "6–12 July 2026"`),
+		waitFor("no time in constructor, toString or __proto__", fmt.Sprintf(row, "constructor")+" && "+fmt.Sprintf(row, "toString")+" && "+fmt.Sprintf(row, "__proto__")),
+		waitFor("no NaN in the week", `!document.body.textContent.includes("NaN")`),
+		waitFor("a colour for __proto__", `(() => {
+			const tr = [...document.querySelectorAll("#week-totals tr")].find((tr) => tr.firstElementChild.textContent === "__proto__");
+			return getComputedStyle(tr.querySelector(".swatch i")).backgroundColor !== "rgba(0, 0, 0, 0)";
+		})()`),
+	)
+	// Pin Wednesday's entry at 12:00; another week clears it.
+	at, err := chromedp.Run(b.ctx, chromedp.Evaluate[[]float64](`(() => {
+		const el = document.getElementById("timeline");
+		const [x, y] = echarts.getInstanceByDom(el).convertToPixel({ gridIndex: 0 }, [720, 2]);
+		const box = el.getBoundingClientRect();
+		return [box.left + x, box.top + y];
+	})()`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	b.do(g,
+		chromedp.MouseClickXY(at[0], at[1]),
+		waitFor("the entry pinned", `document.querySelector("#detail").textContent.includes("work +review · Wed 8, 09:00–17:00")`),
+		chromedp.Click(chromedp.ID("previous")),
+		waitFor("the week before", `document.querySelector("#title").textContent === "29 June – 5 July 2026"`),
+		waitFor("the pin gone", `document.querySelector("#detail").textContent === "Click an entry to see it here."`),
+	)
+	// The month: the average week drawn, dashed and labelled, though
+	// it's above every bar; no NaN in its table.
+	b.do(g,
+		chromedp.Evaluate[chromedp.Void](`location.hash = "#month/2026-07"`),
+		waitFor("July", `document.querySelector("#title").textContent === "July 2026"`),
+		waitFor("the average week, 41h 33m, in the weeks chart", svgText("weeks")+`.includes("avg 41h 33m") && !!document.querySelector("#weeks svg path[stroke-dasharray]")`),
+		waitFor("no NaN in the month", `!document.body.textContent.includes("NaN")`),
+	)
 
 	if clocksBack {
 		b.do(g,
-			chromedp.Navigate(g.url+"#week/2026-10-25"),
+			chromedp.Evaluate[chromedp.Void](`location.hash = "#week/2026-10-25"`),
 			waitFor("the week of 25 October", `document.querySelector("#title").textContent === "19–25 October 2026"`),
 			waitFor("the entry drawn for its 20 minutes, its clock times in the tooltip", `(() => {
 				const chart = echarts.getInstanceByDom(document.getElementById("timeline"));

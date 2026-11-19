@@ -55,7 +55,9 @@
   }
   const colourToken = (c) => c.uncategorised ? "--uncategorised" : c.work ? "--work-" + (c.colour % 8) : "--rest-" + (c.colour % 4);
   const seriesOf = (iv) => iv.uncategorised ? "uncategorised" : iv.category;
-  const timeIn = (totals, name) => (totals && totals.categories[name]) || 0;
+  // Anything keyed by a category's name is looked up as its own: a
+  // category may be called constructor, toString or __proto__.
+  const timeIn = (totals, name) => (totals && Object.hasOwn(totals.categories, name) && totals.categories[name]) || 0;
   const workText = (c) => c.uncategorised
     ? (c.work ? "yes" : "no") + ", as " + c.countedAs
     : c.work ? "yes" : "no";
@@ -64,7 +66,7 @@
   const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
   let P; // the palette in effect
   function palette(categories) {
-    const cat = {};
+    const cat = Object.create(null); // by name, so no name is Object.prototype's
     categories.forEach((c) => { cat[c.name] = css(colourToken(c)); });
     return {
       fg: css("--fg"), muted: css("--muted"), line: css("--line"), surface: css("--surface"), bg: css("--bg"),
@@ -307,17 +309,34 @@
     });
   }
 
+  // roundTop is a round number at or above x for a value axis to end on,
+  // one ECharts' own ticks land on: a multiple of the step it picks for
+  // an axis from 0 to it, a round number near a fifth of it.
+  function roundTop(x) {
+    const step = (top) => {
+      const e = Math.pow(10, Math.floor(Math.log10(top / 5))), f = top / 5 / e;
+      return (f < 1.5 ? 1 : f < 2.5 ? 2 : f < 4 ? 3 : f < 7 ? 5 : 10) * e;
+    };
+    let top = x;
+    for (let i = 0; i < 3; i++) {
+      const s = step(top);
+      top = +(Math.ceil(top / s - 1e-9) * s).toPrecision(12); // 1.2, not 1.2000000000000002
+    }
+    return top;
+  }
+
   function weeksOption(data, size) {
     const narrow = size !== "wide", tiny = size === "tiny";
     const keys = seriesOrder(data.categories);
     const avg = data.summary.averageWeek;
+    const avgHours = avg != null && avg > 0 ? hours(avg) : null;
     const series = stackedSeries(data.weeks, keys, (w) => w.totals, {
       position: "top", barWidth: "52%",
       label: (w) => w.totals.worked > 0 ? "{v|" + (tiny ? shortHours(w.totals.worked) : dur(w.totals.worked)) + "}" : "",
     });
-    if (avg != null && avg > 0) {
+    if (avgHours != null) {
       series[0].markLine = {
-        silent: true, symbol: "none", data: [{ yAxis: hours(avg) }],
+        silent: true, symbol: "none", data: [{ yAxis: avgHours }],
         lineStyle: { color: P.muted, type: "dashed", width: 1 },
         label: { show: !tiny, formatter: "avg " + dur(avg), position: "insideStartTop", color: P.muted, fontFamily: MONO(), fontSize: 11 },
       };
@@ -340,6 +359,11 @@
       yAxis: {
         type: "value", axisLabel: Object.assign(axisText(), { formatter: (v) => v + "h" }),
         splitLine: { lineStyle: { color: P.line } },
+        // ECharts doesn't stretch an axis to a markLine, and leaves out
+        // one beyond it: when the average week is above every bar, the
+        // axis goes past it, with room for its label. null is ECharts'
+        // own top.
+        max: (extent) => avgHours != null && avgHours > extent.max ? roundTop(avgHours * 1.05) : null,
       },
       series,
     });
@@ -462,9 +486,9 @@
     const halfLabel = (h, from, to) => "Per week, " + (h.days ? spanLabel(h.start, h.end) : from + "–" + to + " " + shortMonth(p.start));
     $("month-head").innerHTML = `<tr><th>Category</th><th class="num">${esc(monthName(p.start))}</th><th class="num">Share of worked</th>`
       + `<th class="num">${esc(halfLabel(a, 1, 15))}</th><th class="num">${esc(halfLabel(b, 16, parseDate(p.end).getDate()))}</th><th class="num">Change</th></tr>`;
-    const rows = Object.fromEntries(data.table.map((r) => [r.category, r]));
+    const rows = new Map(data.table.map((r) => [r.category, r]));
     $("month-totals").innerHTML = seriesOrder(data.categories).map((c) => {
-      const r = rows[c.name];
+      const r = rows.get(c.name);
       const change = r.change == null ? "–" : (r.change > 0 ? "+" : "") + percent(r.change);
       const cls = r.change == null ? "" : r.change >= 0 ? "up" : "down";
       return `<tr><td>${swatch(c)}</td><td class="num">${dur(r.total)}</td><td class="num">${r.shareOfWorked == null ? "–" : percent(r.shareOfWorked)}</td>`
@@ -482,6 +506,8 @@
   // A chart's size class: wide, narrow (under 560px) or tiny (under 420px).
   const sizeOf = (el) => el.clientWidth < 420 ? "tiny" : el.clientWidth < 560 ? "narrow" : "wide";
   let zoomed = null; // the timeline's zoom, kept while the same week is shown: [period key, from, to]
+
+  const unpinned = $("detail").textContent; // what's below the timeline with no entry pinned
 
   function pinEntry(p) {
     if (!p.data || !p.data.iv || !state.data) return;
@@ -533,7 +559,9 @@
   }
 
   // ---- State, routes and loading ----
-  const state = { data: null, seq: 0, last: { week: "#week", month: "#month" } };
+  // shown is the period on the page, kind/key: refreshing it keeps the
+  // pinned entry, another clears it.
+  const state = { data: null, seq: 0, last: { week: "#week", month: "#month" }, shown: "" };
 
   function route() {
     const [view, key] = location.hash.replace(/^#/, "").split("/");
@@ -583,6 +611,10 @@
 
   function show() {
     const data = state.data, p = data.period;
+    if (state.shown !== p.kind + "/" + p.key) {
+      state.shown = p.kind + "/" + p.key;
+      $("detail").textContent = unpinned;
+    }
     $("error").hidden = true;
     $("no-categories").hidden = data.categories.some((c) => !c.uncategorised);
     ["week", "month"].forEach((v) => { $("view-" + v).hidden = v !== p.kind; });

@@ -62,11 +62,12 @@ Choices made while building:
   "fix it, then restart htt gui"; the page shows that instead of the
   views, and `htt gui` warns once on stderr. It draws no time without
   categories, as `htt report` stops rather than report it.
-- **The browser opens** through `github.com/cli/browser` v1.3.0, the
-  GitHub CLI's opener, rather than a hand-rolled one: it also covers
-  WSL (`wslview`) and uses ShellExecute on Windows, and its one
-  dependency, `golang.org/x/sys`, was already in htt's. Its output is
-  dropped; a failure says so on stderr.
+- **The browser opens** (replaced after review, below) through
+  `github.com/cli/browser` v1.3.0, the GitHub CLI's opener, rather
+  than a hand-rolled one: it also covers WSL (`wslview`) and uses
+  ShellExecute on Windows, and its one dependency, `golang.org/x/sys`,
+  was already in htt's. Its output is dropped; a failure says so on
+  stderr.
 - **Fonts** from IBM's npm packages (`@ibm/plex-sans` 2.0.0,
   `@ibm/plex-mono` 2.5.0, static woff2, Latin1), not Google Fonts,
   whose Plex Sans is now one variable font: pinned versions, checked
@@ -123,6 +124,39 @@ Left open:
   runners have Chrome, so it will run there.
 - Out of scope as planned: a native window, editing, task views,
   colours in the config, push updates.
+
+After review (an independent review of `feat/gui`, fixed on the same
+branch, each fix with a test seen failing first and a mutation check):
+
+- **The token was on the opener's command line**, for any local user
+  to read in `ps`. htt now opens a private file (0600, in a new 0700
+  temporary directory, removed when it stops) that redirects to the
+  address, as Jupyter does. `github.com/cli/browser` couldn't do that
+  or the next fix, so it's replaced by htt's own opener (`open`;
+  `xdg-open`, `x-www-browser`, `www-browser`, `wslview`, then
+  `explorer.exe` on WSL; ShellExecute on Windows) and the dependency
+  is gone; `golang.org/x/sys` is now a direct one.
+- **Ctrl-C reached the opener**, and with it a browser it had started:
+  the opener now runs in a process group of its own, and one stopped
+  by a signal isn't reported as a failure.
+- **Stopping** waited five seconds with a connection open and exited 1;
+  now requests under way get a second, a second Ctrl-C cuts it short,
+  the rest are closed, and it exits 0.
+- **Dates in the API** are read as calendar dates: at local midnight,
+  where that midnight doesn't exist (America/Asuncion), October was
+  September.
+- **The page**: the weeks chart's axis reaches the average week when
+  it's above every bar (it vanished); categories named after
+  `Object.prototype`'s members no longer show `NaNm`; a pinned entry
+  goes when the period changes; an entry in the hour that repeats is
+  drawn for its true length (the API's new `drawnEndMinute`), its
+  tooltip keeping its clock times.
+- **Smaller**: `--port 80` accepts the bare Host browsers send; the
+  CSP test checks the whole policy; `TestListenAndServe` holds a
+  request under way.
+- **Open**: a sandboxed browser that can't read the temporary
+  directory (Snap's Firefox, probably, which has its own `/tmp`) would
+  say it can't find the file; the printed address still works.
 
 ## Motivation
 

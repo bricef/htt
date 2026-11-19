@@ -700,11 +700,20 @@ htt gui: http://127.0.0.1:41731/9f86d081884c7d659a2feaa0c55ad015/ (Ctrl-C to sto
 ```
 
 It opens that address in your default browser and serves until you
-press Ctrl-C. `--no-open` only prints the address, for you to open (in
-another browser, say), and `--port 8080` serves on that port rather
-than on a free one. The address carries a random token, new each time,
-and htt answers nothing without it. It listens on 127.0.0.1 only, and
-only reads your logs.
+press Ctrl-C, which stops it within a second (press it again not to
+wait); the browser stays open. `--no-open` only prints the address,
+for you to open (in another browser, say), and `--port 8080` serves on
+that port rather than on a free one. The address carries a random
+token, new each time, and htt answers nothing without it. It listens
+on 127.0.0.1 only, and only reads your logs.
+
+A program's command line is there for anyone on the computer to see,
+so htt doesn't hand the address to the program that opens your
+browser (`xdg-open`, `open`; ShellExecute on Windows): it writes a
+small page that sends the browser on to the address into a new
+temporary directory only you can read, opens that, and removes it when
+it stops. A sandboxed browser may not see your temporary directory, and
+say it can't find the file: open the address htt printed yourself.
 
 The page has two views, **Week** and **Month**, each with ‹ Previous,
 This week (or month) and Next ›. The address keeps the one you're on,

@@ -411,14 +411,32 @@ local web page that draws the time log, and the JSON it draws from
 repository, without date warnings, as the page refreshes every
 minute; the `Categoriser`, or the config's error; and the clock),
 `gui.New` makes a server under a random 128-bit token, and
-`ListenAndServe(ctx, port, ready)` listens on 127.0.0.1, calls `ready`
-with the address (which the CLI prints and opens with
-`github.com/cli/browser`) and serves until `ctx` ends: the CLI's
-`signal.NotifyContext` on Ctrl-C or SIGTERM. Then it shuts down,
-letting requests under way finish. The REPL refuses `gui`.
+`ListenAndServe(stop, port, ready)` listens on 127.0.0.1, calls
+`ready` with the address (which the CLI prints and opens) and serves
+until a signal on `stop`, the CLI's `signal.Notify` channel for Ctrl-C
+and SIGTERM. Then it stops taking requests, gives those under way a
+second to finish (a second signal cuts it short), closes the
+connections left, a browser's idle ones among them, and returns nil.
+The REPL refuses `gui`.
+
+The CLI opens the browser without putting the address on a command
+line, where any user of the computer could read its token (`ps`,
+`/proc/<pid>/cmdline`): `openBrowser` writes a page that sends the
+browser on to the address (a meta refresh, `location.replace`, a link)
+to `open.html` in a new temporary directory (0700, the file 0600), as
+Jupyter does, opens that file, and removes the directory when the
+server stops. The opener is htt's own (`opener_unix.go`,
+`opener_windows.go`): `open` on macOS; elsewhere the first of
+`xdg-open`, `x-www-browser`, `www-browser` and `wslview` on `PATH`,
+then, on WSL without wslu, `explorer.exe` with the file's Windows path
+from `wslpath -w`; ShellExecute on Windows. On Unix it runs in a
+process group of its own: the terminal's Ctrl-C goes to htt's group,
+and the opener may be the browser itself. A failure to open is a line
+on stderr; an opener stopped by a signal isn't one.
 
 `Server.Handler(port)` is the server's guard, in this order: a `Host`
-that isn't `127.0.0.1:<port>` or `localhost:<port>` is a 403 (DNS
+that isn't `127.0.0.1:<port>` or `localhost:<port>` (or, on port 80,
+either without the port, as browsers send it) is a 403 (DNS
 rebinding); a path that doesn't start with `/<token>/` is a 404
 (compared in constant time; `/<token>` alone redirects); a method
 other than GET or HEAD is a 405. Every answer carries a
@@ -429,8 +447,11 @@ else is a file of `web/`, served only if it's a regular file.
 
 The API (`view.go`, versioned there in `apiVersion`): `api/week?date=`
 any day of the week, `api/month?month=YYYY-MM`, each today's by
-default. Go computes, the page draws: the handlers read each day's log
-as a timesheet at the server's clock (to the second), add the days up
+default, read as days on the calendar (parsed in UTC, then noon in the
+local zone: where the clocks go forward at midnight, local midnight
+doesn't exist). Go computes, the page draws: the handlers read each
+day's log as a timesheet at the server's clock (to the second), add
+the days up
 with the domain's period functions, and answer a view: `now`, `today`,
 the `categories` (in the config's order, those with tags, then
 `uncategorised`; each with `work` and a colour index, its place among
@@ -445,8 +466,11 @@ and end, `seconds`, and `open`: `now` or `midnight`). Durations are
 seconds; times are RFC 3339 with the local offset, each with its
 minutes since local midnight on the wall clock (`startMinute`, 1440
 at the day's end), for drawing, so a day the clocks change draws by
-its clock while durations stay true. A `summary` comes with both; the
-week adds `hours`, the stretch its timeline opens on, and the month
+its clock while durations stay true; where the wall clock runs
+backwards, in the hour that repeats when the clocks go back, an
+interval is drawn for its true length, to its `drawnEndMinute`. A
+`summary` comes with both; the week adds `hours`, the stretch its
+timeline opens on, and the month
 `weeks`, `weekdays`, `rolling`, `halves` and the `table` of
 categories. The figures (summary, averages, rolling totals, halves)
 are over the days so far, today included. A bad date is a 400; a
@@ -471,11 +495,19 @@ golden files in `testdata` (`go test ./internal/gui -update` rewrites
 them, to be read before they're committed). `test/e2e/gui_test.go`
 runs `htt gui --no-open --port 0`, reads the address from stdout, and
 stops it with an interrupt (not on Windows, where Go can't send one).
+`test/e2e/gui_opener_test.go` puts a stand-in `xdg-open`/`open` on
+`PATH` (not on Windows, where ShellExecute opens the browser) and
+checks what it's given: a private file, not the token; and that the
+terminal's Ctrl-C, sent to htt's process group, leaves it running.
 `test/e2e/gui_browser_test.go` loads the page in headless Chrome
-(chromedp) and fails on a JavaScript exception or a console error. It
-finds Chrome in `$HTT_TEST_CHROME` (which may be a script that sets up
-the browser's environment and execs it), on `PATH`, or where macOS and
-Windows install it, and is skipped without one.
+(chromedp) and fails on a JavaScript exception or a console error:
+both views; the corners a review found (categories named after
+`Object.prototype`'s members, a pinned entry and another week, an
+average week above every bar, the hour that repeats); and the opener's
+file redirecting to the page. It finds Chrome in `$HTT_TEST_CHROME`
+(which may be a script that sets up the browser's environment and
+execs it), on `PATH`, or where macOS and Windows install it, and is
+skipped without one.
 
 ## Update check
 

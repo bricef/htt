@@ -4,9 +4,10 @@
 // The server is local and private. It listens on 127.0.0.1 only; every
 // path starts with a random token, new each run, that the address htt
 // prints and opens carries, and anything else is a 404; a request whose
-// Host isn't 127.0.0.1:<port> or localhost:<port> is refused, so a page
-// elsewhere can't reach it through DNS rebinding; and it only reads,
-// answering GET and HEAD and nothing else.
+// Host isn't 127.0.0.1:<port> or localhost:<port> (or, on port 80,
+// either without the port) is refused, so a page elsewhere can't reach
+// it through DNS rebinding; and it only reads, answering GET and HEAD
+// and nothing else.
 //
 // Go computes, the page draws: the API's handlers read each day's
 // timesheet and add them up with the domain's period aggregates (see
@@ -25,6 +26,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -53,7 +55,12 @@ type Config struct {
 type Server struct {
 	cfg   Config
 	token string
+	grace time.Duration // how long requests under way have to finish once it's stopped
 }
+
+// shutdownGrace is how long requests under way have to finish once the
+// server is stopped: a moment, as the API answers in milliseconds.
+const shutdownGrace = time.Second
 
 // New returns a server for cfg under a new random token of 128 bits.
 func New(cfg Config) (*Server, error) {
@@ -68,7 +75,7 @@ func newServer(cfg Config, token string) *Server {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
-	return &Server{cfg: cfg, token: token}
+	return &Server{cfg: cfg, token: token, grace: shutdownGrace}
 }
 
 // Path is the path the GUI's page is at: its token, between slashes.
@@ -77,11 +84,12 @@ func (s *Server) Path() string {
 }
 
 // ListenAndServe serves the GUI on 127.0.0.1:port, port 0 picking a free
-// one, until ctx is done; then it stops taking requests, lets those
-// under way finish (for up to five seconds), and returns nil. Once it
-// listens, it calls ready with the page's address,
-// http://127.0.0.1:<port>/<token>/.
-func (s *Server) ListenAndServe(ctx context.Context, port int, ready func(url string)) error {
+// one, until a signal on stop asks it to stop (the CLI's Ctrl-C). Then it
+// stops taking requests, gives those under way a moment to finish (a
+// second, cut short by a second signal), closes the connections left (a
+// browser's idle ones among them), and returns nil. Once it listens, it
+// calls ready with the page's address, http://127.0.0.1:<port>/<token>/.
+func (s *Server) ListenAndServe(stop <-chan os.Signal, port int, ready func(url string)) error {
 	l, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
 	if err != nil {
 		return fmt.Errorf("listen on 127.0.0.1:%d: %w", port, err)
@@ -99,12 +107,19 @@ func (s *Server) ListenAndServe(ctx context.Context, port int, ready func(url st
 	select {
 	case err := <-served: // it stopped by itself
 		return err
-	case <-ctx.Done():
+	case <-stop:
 	}
-	stop, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	grace, cancel := context.WithTimeout(context.Background(), s.grace)
 	defer cancel()
-	if err := srv.Shutdown(stop); err != nil {
-		return fmt.Errorf("stop the server: %w", err)
+	go func() {
+		select {
+		case <-stop: // asked again: at once
+			cancel()
+		case <-grace.Done():
+		}
+	}()
+	if err := srv.Shutdown(grace); err != nil {
+		_ = srv.Close() // the moment is over: close what's left
 	}
 	if err := <-served; err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
@@ -113,8 +128,9 @@ func (s *Server) ListenAndServe(ctx context.Context, port int, ready func(url st
 }
 
 // Handler serves the GUI to requests addressed to 127.0.0.1:port or
-// localhost:port, under the server's token: the page and its assets,
-// and the API under api/.
+// localhost:port (without the port, too, when it's 80, as browsers
+// leave the default port out), under the server's token: the page and
+// its assets, and the API under api/.
 func (s *Server) Handler(port int) http.Handler {
 	files := assets()
 	route := func(w http.ResponseWriter, r *http.Request) {
@@ -131,6 +147,9 @@ func (s *Server) Handler(port int) http.Handler {
 	}
 
 	hosts := []string{"127.0.0.1:" + strconv.Itoa(port), "localhost:" + strconv.Itoa(port)}
+	if port == 80 { // the default, which a browser leaves out of Host
+		hosts = append(hosts, "127.0.0.1", "localhost")
+	}
 	prefix := s.Path()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()

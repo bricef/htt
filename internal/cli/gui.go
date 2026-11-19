@@ -1,7 +1,6 @@
 package cli
 
 import (
-	gocontext "context"
 	"errors"
 	"fmt"
 	"io"
@@ -63,9 +62,12 @@ Examples:
 		if err != nil {
 			return err
 		}
-		ctx, stop := signal.NotifyContext(gocontext.Background(), os.Interrupt, syscall.SIGTERM)
-		defer stop()
-		return server.ListenAndServe(ctx, guiPort, func(url string) {
+		// Ctrl-C (or SIGTERM) stops it; a second doesn't wait for the
+		// requests under way.
+		signals := make(chan os.Signal, 2)
+		signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+		defer signal.Stop(signals)
+		return server.ListenAndServe(signals, guiPort, func(url string) {
 			fmt.Printf("htt gui: %s (Ctrl-C to stop)\n", url)
 			if configErr != nil {
 				fmt.Fprintf(os.Stderr, "warning: %v; the page shows it until you fix it and restart htt gui\n", configErr)

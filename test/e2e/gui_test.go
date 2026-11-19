@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -269,6 +270,44 @@ func TestGUI_PrivateAndStopsOnInterrupt(t *testing.T) {
 	}
 	if _, err := (&http.Client{Timeout: 2 * time.Second}).Get(g.url); err == nil {
 		t.Errorf("still answering after it stopped")
+	}
+}
+
+func TestGUI_StopsAtOnceWithAConnectionOpen(t *testing.T) {
+	// A browser holds connections open, and one may not have sent its
+	// request yet: Ctrl-C stops htt gui all the same, within a moment,
+	// and cleanly.
+	if runtime.GOOS == "windows" {
+		t.Skip("stopping htt gui with an interrupt: Go can't send one to another process on Windows")
+	}
+	e := newEnv(t)
+	e.writeConfig("check_for_updates: false\n")
+	g := e.startGUI()
+	host := strings.TrimPrefix(g.url, "http://")
+	c, err := net.Dial("tcp", host[:strings.Index(host, "/")])
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c.Close() }()
+	if _, err := c.Write([]byte("GET /")); err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	if err := g.cmd.Process.Signal(os.Interrupt); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-g.done:
+		g.done <- err // for the cleanup
+		stdout, stderr := g.output()
+		if err != nil || stderr != "" {
+			t.Errorf("htt gui exited with %v after an interrupt\nstdout: %s\nstderr: %s", err, stdout, stderr)
+		}
+		if took := time.Since(start); took > 3*time.Second {
+			t.Errorf("htt gui took %v to stop, want a moment", took.Round(time.Millisecond))
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("htt gui still running 10s after an interrupt")
 	}
 }
 

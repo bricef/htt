@@ -66,6 +66,7 @@
           "startMinute": 540,
           "end": "2026-10-01T09:30:00+01:00",
           "endMinute": 570,
+          "drawnEndMinute": 570,
           "seconds": 1800
         },
         {
@@ -77,6 +78,7 @@
           "startMinute": 570,
           "end": "2026-10-01T12:00:00+01:00",
           "endMinute": 720,
+          "drawnEndMinute": 720,
           "seconds": 9000
         },
         {
@@ -88,6 +90,7 @@
           "startMinute": 720,
           "end": "2026-10-01T12:45:00+01:00",
           "endMinute": 765,
+          "drawnEndMinute": 765,
           "seconds": 2700
         },
         {
@@ -99,6 +102,7 @@
           "startMinute": 765,
           "end": "2026-10-01T17:00:00+01:00",
           "endMinute": 1020,
+          "drawnEndMinute": 1020,
           "seconds": 15300
         }
       ]
@@ -125,6 +129,7 @@
           "startMinute": 600,
           "end": "2026-10-02T10:15:00+01:00",
           "endMinute": 615,
+          "drawnEndMinute": 615,
           "seconds": 900
         },
         {
@@ -136,6 +141,7 @@
           "startMinute": 615,
           "end": "2026-10-02T16:00:00+01:00",
           "endMinute": 960,
+          "drawnEndMinute": 960,
           "seconds": 20700
         }
       ]
@@ -267,6 +273,7 @@
           "startMinute": 540,
           "end": "2026-10-16T00:00:00+01:00",
           "endMinute": 1440,
+          "drawnEndMinute": 1440,
           "seconds": 54000,
           "open": "midnight"
         }
@@ -293,6 +300,7 @@
           "startMinute": 540,
           "end": "2026-10-16T10:00:00+01:00",
           "endMinute": 600,
+          "drawnEndMinute": 600,
           "seconds": 3600
         }
       ]
@@ -390,6 +398,7 @@
           "startMinute": 90,
           "end": "2026-10-25T02:30:00Z",
           "endMinute": 150,
+          "drawnEndMinute": 150,
           "seconds": 7200
         }
       ]
@@ -460,6 +469,7 @@
           "startMinute": 600,
           "end": "2026-10-31T11:30:00Z",
           "endMinute": 690,
+          "drawnEndMinute": 690,
           "seconds": 5400
         }
       ]

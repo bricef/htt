@@ -67,6 +67,7 @@
           "startMinute": 540,
           "end": "2026-11-16T09:30:00Z",
           "endMinute": 570,
+          "drawnEndMinute": 570,
           "seconds": 1800
         },
         {
@@ -78,6 +79,7 @@
           "startMinute": 570,
           "end": "2026-11-16T12:30:00Z",
           "endMinute": 750,
+          "drawnEndMinute": 750,
           "seconds": 10800
         },
         {
@@ -89,6 +91,7 @@
           "startMinute": 750,
           "end": "2026-11-16T13:15:00Z",
           "endMinute": 795,
+          "drawnEndMinute": 795,
           "seconds": 2700
         },
         {
@@ -100,6 +103,7 @@
           "startMinute": 795,
           "end": "2026-11-16T13:45:00Z",
           "endMinute": 825,
+          "drawnEndMinute": 825,
           "seconds": 1800
         },
         {
@@ -111,6 +115,7 @@
           "startMinute": 825,
           "end": "2026-11-16T17:30:00Z",
           "endMinute": 1050,
+          "drawnEndMinute": 1050,
           "seconds": 13500
         }
       ]
@@ -135,6 +140,7 @@
           "startMinute": 555,
           "end": "2026-11-17T09:45:00Z",
           "endMinute": 585,
+          "drawnEndMinute": 585,
           "seconds": 1800
         },
         {
@@ -146,6 +152,7 @@
           "startMinute": 585,
           "end": "2026-11-18T00:00:00Z",
           "endMinute": 1440,
+          "drawnEndMinute": 1440,
           "seconds": 51300,
           "open": "midnight"
         }
@@ -181,6 +188,7 @@
           "startMinute": 545,
           "end": "2026-11-19T09:10:00Z",
           "endMinute": 550,
+          "drawnEndMinute": 550,
           "seconds": 300
         },
         {
@@ -192,6 +200,7 @@
           "startMinute": 550,
           "end": "2026-11-19T12:30:00Z",
           "endMinute": 750,
+          "drawnEndMinute": 750,
           "seconds": 12000
         },
         {
@@ -203,6 +212,7 @@
           "startMinute": 750,
           "end": "2026-11-19T13:15:00Z",
           "endMinute": 795,
+          "drawnEndMinute": 795,
           "seconds": 2700
         },
         {
@@ -214,6 +224,7 @@
           "startMinute": 795,
           "end": "2026-11-19T15:20:00Z",
           "endMinute": 920,
+          "drawnEndMinute": 920,
           "seconds": 7500,
           "open": "now"
         }

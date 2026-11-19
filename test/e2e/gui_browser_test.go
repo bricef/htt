@@ -216,6 +216,46 @@ timelog:
 	b.checkConsole()
 }
 
+// TestGUI_InTheBrowser_Corners draws what a review found the page
+// getting wrong: an entry in the hour that repeats when the clocks go
+// back.
+func TestGUI_InTheBrowser_Corners(t *testing.T) {
+	b := newBrowser(t, 1180, 1400)
+	e := newEnv(t)
+	e.writeConfig(`check_for_updates: false
+timelog:
+  categories:
+    - name: review
+      tags: ["+review"]
+`)
+	// London's clocks go back at 02:00 BST on 25 October 2026: from 01:50
+	// BST to 01:10 GMT is 20 minutes, drawn from 01:50 to 02:10, and
+	// shown with its clock times. TZ sets htt's zone where Go reads it,
+	// not on Windows.
+	clocksBack := runtime.GOOS != "windows"
+	if clocksBack {
+		e.extraEnv = append(e.extraEnv, "TZ=Europe/London")
+		e.writeData(filepath.Join("timelogs", "2026-10-25.log"),
+			"late fix +review ts:2026-10-25T00:50:00Z\n@end ts:2026-10-25T01:10:00Z\n")
+	}
+	g := e.startGUI()
+
+	if clocksBack {
+		b.do(g,
+			chromedp.Navigate(g.url+"#week/2026-10-25"),
+			waitFor("the week of 25 October", `document.querySelector("#title").textContent === "19–25 October 2026"`),
+			waitFor("the entry drawn for its 20 minutes, its clock times in the tooltip", `(() => {
+				const chart = echarts.getInstanceByDom(document.getElementById("timeline"));
+				const option = chart && chart.getOption();
+				const item = option && option.series.flatMap((s) => s.data).find((d) => d.iv && d.iv.entry === "late fix +review");
+				return !!item && item.value[1] === 110 && item.value[2] === 130
+					&& option.tooltip[0].formatter({ data: item }).includes("01:50–01:10 · 20m");
+			})()`),
+		)
+	}
+	b.checkConsole()
+}
+
 // TestGUI_InTheBrowser_RedirectFile opens the file htt gui hands the
 // opener in Chrome, and checks it sends the browser on to the page.
 func TestGUI_InTheBrowser_RedirectFile(t *testing.T) {

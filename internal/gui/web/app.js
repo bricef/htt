@@ -155,7 +155,9 @@
     const narrow = size !== "wide";
     const keys = seriesOrder(data.categories);
     const items = (name) => data.days.flatMap((day, row) => day.intervals.filter((iv) => seriesOf(iv) === name).map((iv) => ({
-      value: [row, iv.startMinute, iv.endMinute, iv.open === "midnight" ? 1 : iv.open === "now" ? 2 : 0],
+      // Drawn to drawnEndMinute: where the clocks go back, an entry's
+      // wall clock can run backwards. The tooltip keeps its clock times.
+      value: [row, iv.startMinute, iv.drawnEndMinute, iv.open === "midnight" ? 1 : iv.open === "now" ? 2 : 0],
       iv, date: day.date,
     })));
     const byDate = Object.fromEntries(data.days.map((d) => [d.date, d]));

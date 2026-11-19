@@ -367,6 +367,50 @@ func TestAPI_BadDates(t *testing.T) {
 	}
 }
 
+func TestWeek_TheHourThatRepeats(t *testing.T) {
+	// London's clocks went back at 02:00 BST on 25 October 2026, to
+	// 01:00 GMT. An entry from 01:50 BST to 01:10 GMT is 20 minutes long,
+	// and its wall clock runs backwards, minute 110 to minute 70: it's
+	// drawn for its 20 minutes, to 02:10, and the timeline opens on it.
+	s := newServer(Config{
+		Timelogs: testRepo(t, testZone(t), map[string][]string{
+			"2026-10-25": {"2026-10-25T00:50:00Z late fix +htt", "2026-10-25T01:10:00Z @end"},
+		}),
+		Categories: testCategories(t),
+		Now:        func() time.Time { return testNow(t) },
+	}, testToken)
+	v := getView(t, s, "api/week?date=2026-10-25")
+	ivs := v.Days[6].Intervals
+	if len(ivs) != 1 {
+		t.Fatalf("25 October: %+v", v.Days[6])
+	}
+	if iv := ivs[0]; iv.StartMinute != 110 || iv.EndMinute != 70 || iv.DrawnEndMinute != 130 || iv.Seconds != 1200 ||
+		iv.Start != "2026-10-25T01:50:00+01:00" || iv.End != "2026-10-25T01:10:00Z" {
+		t.Errorf("the entry: %+v", iv)
+	}
+	if v.Hours == nil || v.Hours.From != 60 || v.Hours.To != 180 {
+		t.Errorf("hours %+v, want 01:00 to 03:00", v.Hours)
+	}
+
+	// Santiago's go back at midnight, to 23:00 the day before: 23:50 to
+	// 23:10 that Saturday is drawn to 24:00, no further.
+	scl, err := time.LoadLocation("America/Santiago")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s = newServer(Config{
+		Timelogs: testRepo(t, scl, map[string][]string{
+			"2026-04-04": {"2026-04-05T02:50:00Z late fix +htt", "2026-04-05T03:10:00Z @end"},
+		}),
+		Categories: testCategories(t),
+		Now:        func() time.Time { return testNow(t).In(scl) },
+	}, testToken)
+	sat := getView(t, s, "api/week?date=2026-04-04").Days[5]
+	if len(sat.Intervals) != 1 || sat.Intervals[0].StartMinute != 1430 || sat.Intervals[0].EndMinute != 1390 || sat.Intervals[0].DrawnEndMinute != 1440 {
+		t.Errorf("Santiago, 4 April 2026: %+v", sat)
+	}
+}
+
 func TestAPI_DatesAreCalendarDates(t *testing.T) {
 	// In Asunción the clocks went forward at midnight on Monday 1
 	// October 1990 and on Sunday 1 October 2023: those midnights never
@@ -454,7 +498,7 @@ func TestAPI_NoCategories(t *testing.T) {
 }
 
 func TestOpeningHours(t *testing.T) {
-	iv := func(from, to float64) interval { return interval{StartMinute: from, EndMinute: to} }
+	iv := func(from, to float64) interval { return interval{StartMinute: from, EndMinute: to, DrawnEndMinute: to} }
 	cases := []struct {
 		days     []day
 		from, to float64

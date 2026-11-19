@@ -19,7 +19,9 @@ import (
 // with the local offset, each with its minutes since local midnight on
 // the wall clock (…Minute), for drawing: so a day the clocks change
 // draws by its clock, while durations stay true; the end of a day is
-// minute 1440. An error is {"version", "error"}, with status 400 for a
+// minute 1440. Where the wall clock runs backwards, as the clocks go
+// back, an interval is drawn to its drawnEndMinute (see interval). An
+// error is {"version", "error"}, with status 400 for a
 // bad date, 500 for a config htt can't use or a log it can't read.
 const apiVersion = 1
 
@@ -99,17 +101,23 @@ type day struct {
 // (the default, for an uncategorised one), whether its time is work,
 // and Open: "now" for today's entry still running, "midnight" for the
 // last entry of a day without @end, counted to 24:00.
+//
+// DrawnEndMinute is where the timeline draws it to: EndMinute, unless
+// the wall clock runs backwards (the hour that repeats when the clocks
+// go back: 01:50 BST to 01:10 GMT is minute 110 to minute 70), when it's
+// drawn for its true length from its start, to 24:00 at most.
 type interval struct {
-	Entry         string  `json:"entry"`
-	Category      string  `json:"category"`
-	Uncategorised bool    `json:"uncategorised"`
-	Work          bool    `json:"work"`
-	Start         string  `json:"start"`
-	StartMinute   float64 `json:"startMinute"`
-	End           string  `json:"end"`
-	EndMinute     float64 `json:"endMinute"`
-	Seconds       int64   `json:"seconds"`
-	Open          string  `json:"open,omitempty"`
+	Entry          string  `json:"entry"`
+	Category       string  `json:"category"`
+	Uncategorised  bool    `json:"uncategorised"`
+	Work           bool    `json:"work"`
+	Start          string  `json:"start"`
+	StartMinute    float64 `json:"startMinute"`
+	End            string  `json:"end"`
+	EndMinute      float64 `json:"endMinute"`
+	DrawnEndMinute float64 `json:"drawnEndMinute"`
+	Seconds        int64   `json:"seconds"`
+	Open           string  `json:"open,omitempty"`
 }
 
 // summary is the period's figures over its days so far: up to today, in
@@ -126,8 +134,9 @@ type summary struct {
 
 // hours is the stretch of the day the week's timeline opens on: from
 // the whole hour at least half an hour before its first entry to the
-// whole hour at least half an hour after its last end (24:00 for a day
-// without @end), in minutes; the whole day when nothing is logged.
+// whole hour at least half an hour after its last end as drawn (24:00
+// for a day without @end), in minutes; the whole day when nothing is
+// logged.
 type hours struct {
 	From float64 `json:"from"`
 	To   float64 `json:"to"`
@@ -488,6 +497,10 @@ func dayViews(days []*domain.Timesheet, now time.Time) []day {
 				EndMinute:     dayMinutes(iv.End, s),
 				Seconds:       seconds(iv.Duration()),
 			}
+			ivv.DrawnEndMinute = ivv.EndMinute
+			if ivv.EndMinute < ivv.StartMinute { // the wall clock ran backwards
+				ivv.DrawnEndMinute = math.Min(24*60, ivv.StartMinute+iv.Duration().Minutes())
+			}
 			if j == len(s.Intervals)-1 {
 				switch s.Status {
 				case domain.DayInProgress:
@@ -527,7 +540,7 @@ func openingHours(days []day) hours {
 	for _, d := range days {
 		for _, iv := range d.Intervals {
 			lo = math.Min(lo, iv.StartMinute)
-			hi = math.Max(hi, iv.EndMinute)
+			hi = math.Max(hi, iv.DrawnEndMinute)
 		}
 	}
 	if math.IsInf(lo, 1) {

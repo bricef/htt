@@ -9,6 +9,7 @@ require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/charmbracelet/x/ansi v0.9.3
 	github.com/chzyer/readline v1.5.1
+	github.com/cli/browser v1.3.0
 	github.com/fatih/color v1.19.0
 	github.com/mattn/go-isatty v0.0.20
 	github.com/mitchellh/go-homedir v1.1.0

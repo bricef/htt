@@ -129,10 +129,45 @@ func TestServer_Assets(t *testing.T) {
 	if w := get(t, s, "index.html"); w.Code != http.StatusOK || !strings.HasPrefix(w.Header().Get("Content-Type"), "text/html") {
 		t.Errorf("index.html: %d %s, want the page", w.Code, w.Header().Get("Content-Type"))
 	}
-	for _, path := range []string{"vendor/", "vendor", "nothing.js", "api", "../go.mod", "%2e%2e/assets.go"} {
+	for _, path := range []string{"vendor/", "vendor", "vendor/plex", "nothing.js", "api", "../go.mod", "%2e%2e/assets.go"} {
 		if w := get(t, s, path); w.Code != http.StatusNotFound {
 			t.Errorf("%s: %d, want a 404", path, w.Code)
 		}
+	}
+	for path, want := range map[string]string{
+		"app.js":                        "text/javascript; charset=utf-8",
+		"style.css":                     "text/css; charset=utf-8",
+		"vendor/echarts/echarts.min.js": "text/javascript; charset=utf-8",
+		"vendor/plex/IBMPlexMono-Medium-Latin1.woff2": "font/woff2",
+		"vendor/echarts/LICENSE":                      "text/plain; charset=utf-8",
+		"vendor/README.md":                            "text/plain; charset=utf-8",
+	} {
+		if w := get(t, s, path); w.Code != http.StatusOK || w.Header().Get("Content-Type") != want || w.Body.Len() == 0 {
+			t.Errorf("%s: %d %q, %d bytes; want %q", path, w.Code, w.Header().Get("Content-Type"), w.Body.Len(), want)
+		}
+	}
+}
+
+// TestPage_OnlyItsOwnAssets checks that the page asks for nothing from
+// the network, and that every file it asks for is embedded: the
+// src and href attributes of index.html and the url()s of style.css.
+func TestPage_OnlyItsOwnAssets(t *testing.T) {
+	s := testServer(t)
+	refs := regexp.MustCompile(`(?:src|href)="([^"#]+)"|url\("([^"]+)"\)`)
+	for _, file := range []string{"index.html", "style.css", "app.js"} {
+		body := get(t, s, file).Body.String()
+		if strings.Contains(body, "://") || strings.Contains(body, `"//`) {
+			t.Errorf("%s names another site", file)
+		}
+		for _, m := range refs.FindAllStringSubmatch(body, -1) {
+			ref := m[1] + m[2] // relative to the page; style.css is beside it
+			if w := get(t, s, ref); w.Code != http.StatusOK {
+				t.Errorf("%s asks for %s: %d", file, ref, w.Code)
+			}
+		}
+	}
+	if n := len(refs.FindAllString(get(t, s, "").Body.String(), -1)); n < 3 {
+		t.Errorf("index.html: %d assets found, want its stylesheet and two scripts", n)
 	}
 }
 

@@ -3,9 +3,119 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>htt · time log</title>
+<link rel="stylesheet" href="style.css">
+<script src="vendor/echarts/echarts.min.js" defer></script>
+<script src="app.js" defer></script>
 </head>
 <body>
-<p>htt gui: the page comes next; the API is at <a href="api/week">api/week</a> and <a href="api/month">api/month</a>.</p>
+<main class="page">
+  <header>
+    <p class="eyebrow">htt · time log</p>
+    <h1 id="title">Time log</h1>
+    <div class="bar">
+      <div class="tabs" role="tablist" aria-label="View">
+        <button type="button" role="tab" id="tab-week" aria-controls="view-week" aria-selected="true">Week</button>
+        <button type="button" role="tab" id="tab-month" aria-controls="view-month" aria-selected="false">Month</button>
+      </div>
+      <div class="nav" role="group" aria-label="Period">
+        <button type="button" id="previous" aria-label="Previous week">‹ Previous</button>
+        <button type="button" id="current">This week</button>
+        <button type="button" id="next" aria-label="Next week">Next ›</button>
+      </div>
+    </div>
+  </header>
+
+  <div id="error" class="error" role="alert" hidden>
+    <strong id="error-title">htt can't show the time log</strong>
+    <p><code id="error-text"></code></p>
+  </div>
+  <p id="no-categories" class="note" hidden>No categories in the config, so all time is uncategorised. Sort it with <code>timelog.categories</code> (<code>htt help report</code>), then restart <code>htt gui</code>.</p>
+
+  <div class="view" id="view-week" role="tabpanel" aria-labelledby="tab-week" hidden>
+    <div class="intro">
+      <p id="week-intro"></p>
+      <dl class="stats" id="week-stats"></dl>
+    </div>
+
+    <section class="panel" aria-labelledby="h-timeline">
+      <div class="panel-head">
+        <h2 id="h-timeline">Day by day</h2>
+        <div class="bar">
+          <p class="hint">Hover an entry for its details, click to pin it. Drag to pan; the slider or Ctrl + scroll zooms.</p>
+          <button type="button" class="chip-button" id="zoom">Whole day</button>
+        </div>
+      </div>
+      <div id="timeline" class="chart chart--timeline" role="img" aria-label="Timeline of each day's time-log entries, coloured by category"></div>
+      <div id="detail" class="detail" aria-live="polite">Click an entry to see it here.</div>
+    </section>
+
+    <section class="panel" aria-labelledby="h-week">
+      <div class="panel-head">
+        <h2 id="h-week">Week totals</h2>
+        <p class="hint">Time per category per day, labelled with worked time and breaks.</p>
+      </div>
+      <div id="summary" class="chart chart--summary" role="img" aria-label="Stacked bars of time per category for each day"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Category</th><th>Counts as work</th><th class="num">This week</th></tr></thead>
+          <tbody id="week-totals"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <div class="view" id="view-month" role="tabpanel" aria-labelledby="tab-month" hidden>
+    <div class="intro">
+      <p id="month-intro"></p>
+      <dl class="stats" id="month-stats"></dl>
+    </div>
+
+    <section class="panel" aria-labelledby="h-calendar">
+      <div class="panel-head">
+        <h2 id="h-calendar">Worked per day</h2>
+        <p class="hint">Darker is more. An outline marks a day without <code>@end</code>, counted to midnight.</p>
+      </div>
+      <div id="calendar" class="chart chart--calendar" role="img" aria-label="Calendar of the month with worked hours per day"></div>
+    </section>
+
+    <div class="pair">
+      <section class="panel" aria-labelledby="h-weeks">
+        <div class="panel-head">
+          <h2 id="h-weeks">Weeks</h2>
+          <p class="hint" id="weeks-hint">Dashed: the average week.</p>
+        </div>
+        <div id="weeks" class="chart chart--weeks" role="img" aria-label="Stacked bars of time per category for each week of the month"></div>
+      </section>
+      <section class="panel" aria-labelledby="h-weekday">
+        <div class="panel-head">
+          <h2 id="h-weekday">Average week</h2>
+          <p class="hint" id="weekday-hint">Average time per weekday.</p>
+        </div>
+        <div id="weekday" class="chart chart--weekday" role="img" aria-label="Average time per category for each weekday"></div>
+      </section>
+    </div>
+
+    <section class="panel" aria-labelledby="h-trends">
+      <div class="panel-head">
+        <h2 id="h-trends">Category trends</h2>
+        <p class="hint">Hours per week: the total of the 7 days up to each date.</p>
+      </div>
+      <div id="trends" class="chart chart--trends" role="img" aria-label="Lines of hours per week for each category across the month"></div>
+      <div class="table-wrap">
+        <table>
+          <thead id="month-head"></thead>
+          <tbody id="month-totals"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <footer>
+    <p id="updated"></p>
+    <p>Served by <code>htt gui</code> from your time logs, on this computer only. Ctrl-C in its terminal stops it.</p>
+  </footer>
+</main>
 </body>
 </html>

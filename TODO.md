@@ -71,14 +71,14 @@ Each confirmed against `main` on 2026-11-03.
 ## Done
 
 - [x] The GUI: the time log in the browser (2026-11-19): `htt gui`
-      serves a page from the binary on 127.0.0.1, under a random token,
-      and opens it: each day as a timeline coloured by category, the
-      week's totals, and a month's report (a calendar, weeks, the
-      average week, rolling category trends, halves). Go computes the
-      figures (period aggregates in the domain), the page draws them
-      with ECharts; no cgo, nothing fetched from the network. Was the
-      wishlist's "Interval output" and the Future's "Create a GUI app
-      layer"; see `docs/plans/complete/2026-11-19-gui-time-log.md`
+      serves a page from the binary on 127.0.0.1 and opens it: each
+      day as a timeline coloured by category, the week's totals, and a
+      month's report (a calendar, weeks, the average week, rolling
+      category trends, halves). Go computes the figures (period
+      aggregates in the domain), the page draws them with ECharts; no
+      cgo, nothing fetched from the network. Was the wishlist's
+      "Interval output" and the Future's "Create a GUI app layer";
+      see `docs/plans/complete/2026-11-19-gui-time-log.md`
 - [x] Windows (2026-11-18): htt builds for Windows with goterm
       v1.0.4, CI builds, vets and tests it there, and releases after
       v0.4.0 have Windows binaries, a zip holding `htt.exe` for amd64

@@ -77,13 +77,14 @@ Choices made while building:
   its LICENSE doesn't say so. `.gitignore`'s `vendor`, meant for the
   module's vendor directory, ignored `web/vendor` too; it's now
   `/vendor`.
-- **The guards**, in order: Host (403), token (404, constant-time),
-  method (405). The API's two paths are matched exactly and anything
-  else must be a regular file of `web/`, so `..` and empty path
-  elements reach nothing without cleaning. A Content-Security-Policy
-  keeps the page to its own files; styles may be inline (the tooltips'
-  HTML has style attributes), scripts may not, and ECharts needs no
-  `eval` (its one `new Function` parses GeoJSON strings, unused).
+- **The guards**, in order: Host (403), token (404, constant-time;
+  dropped after review, below), method (405). The API's two paths are
+  matched exactly and anything else must be a regular file of `web/`,
+  so `..` and empty path elements reach nothing without cleaning. A
+  Content-Security-Policy keeps the page to its own files; styles may
+  be inline (the tooltips' HTML has style attributes), scripts may
+  not, and ECharts needs no `eval` (its one `new Function` parses
+  GeoJSON strings, unused).
 - **The address** comes from the listener itself, so it says what was
   bound; the browser test and the e2e tests read it from stdout.
 - **chromedp v0.22.1**, the newest release at least two weeks old, on
@@ -111,7 +112,7 @@ Left open:
   restart, which the page and the help say. Reading it per request
   would mean the GUI reading viper, or the CLI handing it a func.
 - **Release archives don't carry the third-party licences as files.**
-  They're in the binary and served under the token, but Apache-2.0
+  They're in the binary and served by `htt gui`, but Apache-2.0
   asks redistributors to give a copy of the licence and NOTICE;
   `scripts/dist.sh` could add them (htt's Go dependencies' licences
   aren't shipped either).
@@ -129,13 +130,14 @@ After review (an independent review of `feat/gui`, fixed on the same
 branch, each fix with a test seen failing first and a mutation check):
 
 - **The token was on the opener's command line**, for any local user
-  to read in `ps`. htt now opens a private file (0600, in a new 0700
-  temporary directory, removed when it stops) that redirects to the
-  address, as Jupyter does. `github.com/cli/browser` couldn't do that
-  or the next fix, so it's replaced by htt's own opener (`open`;
-  `xdg-open`, `x-www-browser`, `www-browser`, `wslview`, then
-  `explorer.exe` on WSL; ShellExecute on Windows) and the dependency
-  is gone; `golang.org/x/sys` is now a direct one.
+  to read in `ps`. htt opened a private file instead (0600, in a new
+  0700 temporary directory, removed when it stopped) that redirected
+  to the address, as Jupyter does, until the token itself went (below).
+  `github.com/cli/browser` couldn't do that or the next fix, so it was
+  replaced by htt's own opener (`open`; `xdg-open`, `x-www-browser`,
+  `www-browser`, `wslview`, then `explorer.exe` on WSL; ShellExecute
+  on Windows), which stays; the dependency is gone, and
+  `golang.org/x/sys` is now a direct one.
 - **Ctrl-C reached the opener**, and with it a browser it had started:
   the opener now runs in a process group of its own, and one stopped
   by a signal isn't reported as a failure.
@@ -154,9 +156,35 @@ branch, each fix with a test seen failing first and a mutation check):
 - **Smaller**: `--port 80` accepts the bare Host browsers send; the
   CSP test checks the whole policy; `TestListenAndServe` holds a
   request under way.
-- **Open**: a sandboxed browser that can't read the temporary
-  directory (Snap's Firefox, probably, which has its own `/tmp`) would
-  say it can't find the file; the printed address still works.
+- **Open** then: a sandboxed browser that can't read the temporary
+  directory (Snap's Firefox, which has its own `/tmp`) would say it
+  can't find the file. Gone with the token, below.
+
+Decided after review (Brice, 2026-11-19):
+
+- **No token.** The address is plain, `http://127.0.0.1:<port>/`: the
+  page at `/`, the API at `/api/week` and `/api/month`, the assets at
+  their paths. The token stopped one threat only: other accounts on the
+  same computer reading the time log while `htt gui` runs, as
+  127.0.0.1 is open to every local user where htt's data directory is
+  0700. Everything else is covered without it: a page elsewhere can't
+  read the answers (same-origin policy; the server sends no CORS
+  headers); DNS rebinding is stopped by the Host check; there's no
+  CSRF to stop, as the GUI only reads; no other computer reaches
+  127.0.0.1; and a process of the same user could read the files
+  anyway. Go's own local read-only UIs (`go tool pprof -http`,
+  `go tool trace`) make the same call. Keeping it cost the redirect
+  file in the temporary directory, which snap browsers (Ubuntu's
+  Firefox) can't open; a more complex opener; and an address that
+  changed every run. Gone with it: the redirect file, its directory
+  and their cleanup; `/<token>`'s redirect; `crypto/rand` and
+  `crypto/subtle` in the server. The opener is still htt's own, with
+  its process group on Unix and ShellExecute on Windows, and is given
+  the address; `explorer.exe` on WSL takes it as it is, without
+  `wslpath`. GETTING-STARTED says plainly that other accounts can see
+  the page while it runs, and that `--port` makes the address one to
+  bookmark. If the GUI ever writes, protect the writes then with
+  Origin / Sec-Fetch-Site checks, not a token in the address.
 
 ## Motivation
 
@@ -185,11 +213,14 @@ in the totals, and the month views.
    binary, release pipeline unchanged. It prints the address, opens it
    in the default browser (`--no-open` doesn't), and serves until
    Ctrl-C. `--port` picks the port; the default is a free one.
-2. **Local and private.** It listens on 127.0.0.1 only. Every path
-   starts with a random token (128 bits, new each run) that the printed
-   and opened address carries; anything else is a 404. A request whose
-   `Host` isn't `127.0.0.1:<port>` or `localhost:<port>` is refused
-   (DNS rebinding). It only reads: GET and HEAD only, nothing writes.
+2. **Local.** It listens on 127.0.0.1 only, at a plain address,
+   `http://127.0.0.1:<port>/`. A request whose `Host` isn't
+   `127.0.0.1:<port>` or `localhost:<port>` is refused (DNS
+   rebinding). It only reads: GET and HEAD only, nothing writes.
+   (Amended after review: every path started with a random token,
+   128 bits, new each run, and anything else was a 404; Brice dropped
+   it, as other accounts on the computer are all it kept out. See
+   "Decided after review" in the Outcome.)
 3. **Go computes, the page draws.** The days, weeks, weekday averages,
    rolling trends and half-month comparisons are computed in Go, in the
    domain (pure functions over timesheets), where htt's tests can hold
@@ -256,12 +287,13 @@ in the totals, and the month views.
 - `internal/domain`: period aggregation over timesheets (a week, a
   month, weeks within a period, weekday averages, rolling 7-day
   totals, halves). Pure; no I/O.
-- `internal/gui` (new): the server (listener, token, Host check,
-  shutdown), handlers for the week, the month and the page's assets,
-  JSON view models, and the embedded assets. It imports `domain`; the
-  CLI hands it a timelog repository, a categoriser and a clock, so it
-  imports neither `cli` nor `storage`. The architecture test gains its
-  rules: `gui` doesn't import `cli` or `tui`; `cli` may import `gui`.
+- `internal/gui` (new): the server (listener, Host check, shutdown;
+  a token too, until review), handlers for the week, the month and
+  the page's assets, JSON view models, and the embedded assets. It
+  imports `domain`; the CLI hands it a timelog repository, a
+  categoriser and a clock, so it imports neither `cli` nor
+  `storage`. The architecture test gains its rules: `gui` doesn't
+  import `cli` or `tui`; `cli` may import `gui`.
 - `internal/cli`: the `gui` command, its flags, opening the browser,
   Ctrl-C.
 
@@ -274,11 +306,13 @@ in the totals, and the month views.
   weeks partition it, each rolling total equals a direct sum of its
   7 days, averages times counts give totals. Mutation checks.
 - **`internal/gui`**: handler tests with an in-memory repository and a
-  fixed clock: the JSON for a known week and month (golden), token and
-  Host checks, methods, bad dates, a bad config.
+  fixed clock: the JSON for a known week and month (golden), the Host
+  check (and the token's, until review), methods, bad dates, a bad
+  config.
 - **e2e**: the real binary with `htt gui --no-open --port 0`: read the
   printed address, fetch the week and month, check a wrong token is a
-  404, then stop it with an interrupt and see it exit cleanly.
+  404 (until review dropped the token), then stop it with an interrupt
+  and see it exit cleanly.
 - **Browser smoke test**: headless Chrome (chromedp) loads the page from
   the real binary and checks it draws both views without a JavaScript
   error; skipped where no Chrome is installed. CI's runners have one.

@@ -410,40 +410,44 @@ local web page that draws the time log, and the JSON it draws from
 (`internal/gui`). The CLI builds a `gui.Config` (the timelog
 repository, without date warnings, as the page refreshes every
 minute; the `Categoriser`, or the config's error; and the clock),
-`gui.New` makes a server under a random 128-bit token, and
-`ListenAndServe(stop, port, ready)` listens on 127.0.0.1, calls
-`ready` with the address (which the CLI prints and opens) and serves
+`gui.New` makes the server, and `ListenAndServe(stop, port, ready)`
+listens on 127.0.0.1, calls `ready` with the address,
+`http://127.0.0.1:<port>/` (which the CLI prints and opens), and serves
 until a signal on `stop`, the CLI's `signal.Notify` channel for Ctrl-C
 and SIGTERM. Then it stops taking requests, gives those under way a
 second to finish (a second signal cuts it short), closes the
 connections left, a browser's idle ones among them, and returns nil.
 The REPL refuses `gui`.
 
-The CLI opens the browser without putting the address on a command
-line, where any user of the computer could read its token (`ps`,
-`/proc/<pid>/cmdline`): `openBrowser` writes a page that sends the
-browser on to the address (a meta refresh, `location.replace`, a link)
-to `open.html` in a new temporary directory (0700, the file 0600), as
-Jupyter does, opens that file, and removes the directory when the
-server stops. The opener is htt's own (`opener_unix.go`,
-`opener_windows.go`): `open` on macOS; elsewhere the first of
-`xdg-open`, `x-www-browser`, `www-browser` and `wslview` on `PATH`,
-then, on WSL without wslu, `explorer.exe` with the file's Windows path
-from `wslpath -w`; ShellExecute on Windows. On Unix it runs in a
-process group of its own: the terminal's Ctrl-C goes to htt's group,
+`openBrowser` opens the address in the background, with htt's own
+opener (`opener_unix.go`, `opener_windows.go`): `open` on macOS;
+elsewhere the first of `xdg-open`, `x-www-browser`, `www-browser` and
+`wslview` on `PATH`, then, on WSL without wslu, `explorer.exe`, which
+hands an address to Windows' default browser (and exits 1 when it has,
+so its status is ignored); ShellExecute on Windows. On Unix it runs in
+a process group of its own: the terminal's Ctrl-C goes to htt's group,
 and the opener may be the browser itself. A failure to open is a line
 on stderr; an opener stopped by a signal isn't one.
 
 `Server.Handler(port)` is the server's guard, in this order: a `Host`
 that isn't `127.0.0.1:<port>` or `localhost:<port>` (or, on port 80,
 either without the port, as browsers send it) is a 403 (DNS
-rebinding); a path that doesn't start with `/<token>/` is a 404
-(compared in constant time; `/<token>` alone redirects); a method
-other than GET or HEAD is a 405. Every answer carries a
-Content-Security-Policy keeping the page to its own files, `nosniff`,
-`no-referrer` and `DENY` framing; the API's are `no-store`. Under the
-token, `api/week` and `api/month` are matched exactly and anything
-else is a file of `web/`, served only if it's a regular file.
+rebinding); a method other than GET or HEAD is a 405. Every answer
+carries a Content-Security-Policy keeping the page to its own files,
+`nosniff`, `no-referrer` and `DENY` framing; the API's are
+`no-store`. The page is at `/`; `/api/week` and `/api/month` are
+matched exactly, anything else under `/api/` is a 404 naming them, and
+anything else is a file of `web/`, served only if it's a regular file
+(a valid `fs` path, so `..`, `.` and empty elements reach nothing).
+
+There's no token or login, as in Go's own local read-only UIs (`go
+tool pprof -http`, `go tool trace`). A page elsewhere can't read the
+answers (same-origin policy: the server sends no CORS headers), DNS
+rebinding meets the Host check, there's no write to forge, and no
+other computer reaches 127.0.0.1; what's left open is other accounts
+on the same computer, which can open the page while `htt gui` runs.
+If the GUI ever writes, its writes need guarding then, by Origin and
+Sec-Fetch-Site, not by a token in the address.
 
 The API (`view.go`, versioned there in `apiVersion`): `api/week?date=`
 any day of the week, `api/month?month=YYYY-MM`, each today's by
@@ -497,17 +501,17 @@ runs `htt gui --no-open --port 0`, reads the address from stdout, and
 stops it with an interrupt (not on Windows, where Go can't send one).
 `test/e2e/gui_opener_test.go` puts a stand-in `xdg-open`/`open` on
 `PATH` (not on Windows, where ShellExecute opens the browser) and
-checks what it's given: a private file, not the token; and that the
-terminal's Ctrl-C, sent to htt's process group, leaves it running.
+checks that it's given the address htt printed, and nothing else; that
+one that fails is reported; and that the terminal's Ctrl-C, sent to
+htt's process group, leaves it running.
 `test/e2e/gui_browser_test.go` loads the page in headless Chrome
 (chromedp) and fails on a JavaScript exception or a console error:
 both views; the corners a review found (categories named after
 `Object.prototype`'s members, a pinned entry and another week, an
-average week above every bar, the hour that repeats); and the opener's
-file redirecting to the page. It finds Chrome in `$HTT_TEST_CHROME`
-(which may be a script that sets up the browser's environment and
-execs it), on `PATH`, or where macOS and Windows install it, and is
-skipped without one.
+average week above every bar, the hour that repeats). It finds Chrome
+in `$HTT_TEST_CHROME` (which may be a script that sets up the
+browser's environment and execs it), on `PATH`, or where macOS and
+Windows install it, and is skipped without one.
 
 ## Update check
 

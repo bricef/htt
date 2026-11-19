@@ -12,36 +12,32 @@ import (
 	"syscall"
 )
 
-// openers are the programs that open a file with the desktop's program
-// for it, in the order htt tries them, outside macOS: xdg-open, then
-// Debian's alternatives, then WSL's wslview (from wslu), which turns a
-// Linux path into a Windows one.
+// openers are the programs that open an address in the default browser,
+// in the order htt tries them, outside macOS: xdg-open, then Debian's
+// alternatives, then WSL's wslview (from wslu), which opens it in
+// Windows' default browser.
 var openers = []string{"xdg-open", "x-www-browser", "www-browser", "wslview"}
 
-// openFile opens the file at path with the program the desktop opens
-// such files with, a web browser for a page: with open on macOS, else
+// openURL opens url in the default browser: with open on macOS, else
 // with the first of openers on PATH, else, on WSL without wslu, with
-// Windows' explorer.exe, given the file's Windows path.
+// Windows' explorer.exe, which hands an address to Windows' default
+// browser.
 //
 // The opener runs in a process group of its own, as Ctrl-C in the
 // terminal goes to htt gui's, and the opener may be the browser itself
 // (xdg-open starting one that wasn't running), which outlives htt gui.
 // Its output (xdg-open is chatty) is dropped.
-func openFile(path string) error {
+func openURL(url string) error {
 	if runtime.GOOS == "darwin" {
-		return runOpener(exec.Command("open", path))
+		return runOpener(exec.Command("open", url))
 	}
 	for _, name := range openers {
 		if _, err := exec.LookPath(name); err == nil {
-			return runOpener(exec.Command(name, path))
+			return runOpener(exec.Command(name, url))
 		}
 	}
 	if explorer, err := exec.LookPath("explorer.exe"); err == nil {
-		win, err := exec.Command("wslpath", "-w", path).Output()
-		if err != nil {
-			return fmt.Errorf("wslpath -w: %w", err)
-		}
-		return runOpener(exec.Command(explorer, strings.TrimSpace(string(win))))
+		return runOpener(exec.Command(explorer, url))
 	}
 	return errors.New("found none of " + strings.Join(append(openers, "explorer.exe"), ", ") + " on PATH")
 }

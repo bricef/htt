@@ -24,48 +24,64 @@ func request(t *testing.T, s *Server, method, host, path string) *httptest.Respo
 	return w
 }
 
-func TestServer_EveryPathStartsWithTheToken(t *testing.T) {
+func TestServer_Paths(t *testing.T) {
+	// The page at the root, the API under /api/, the assets at their
+	// paths; nothing else.
 	s := testServer(t)
 	host := "127.0.0.1:8123"
 	cases := []struct {
 		path string
 		code int
 	}{
-		{"/" + testToken + "/", http.StatusOK},
-		{"/" + testToken + "/api/week", http.StatusOK},
-		{"/" + testToken + "/api/month?month=2026-10", http.StatusOK},
-		{"/" + testToken, http.StatusFound}, // to the page, with its slash
-		{"/", http.StatusNotFound},
-		{"/api/week", http.StatusNotFound},
-		{"/index.html", http.StatusNotFound},
-		{"/" + strings.ToUpper(testToken) + "/", http.StatusNotFound},
-		{"/" + testToken[:31] + "/", http.StatusNotFound},          // a character short
-		{"/" + testToken[:31] + "0/api/week", http.StatusNotFound}, // one wrong
-		{"/" + testToken + "x/", http.StatusNotFound},
-		{"/x" + testToken + "/", http.StatusNotFound},
-		{"/" + testToken + "/../" + testToken + "/api/week", http.StatusNotFound}, // not a clean path
-		{"/" + testToken + "//api/week", http.StatusNotFound},
-		{"/" + testToken + "/./api/week", http.StatusNotFound},
+		{"/", http.StatusOK},
+		{"/index.html", http.StatusOK},
+		{"/app.js", http.StatusOK},
+		{"/api/week", http.StatusOK},
+		{"/api/week?date=2026-11-04", http.StatusOK},
+		{"/api/month", http.StatusOK},
+		{"/api/month?month=2026-10", http.StatusOK},
+		{"/api", http.StatusNotFound},
+		{"/api/", http.StatusNotFound},
+		{"/api/weeks", http.StatusNotFound},
+		{"/api/week/", http.StatusNotFound},
+		{"/favicon.ico", http.StatusNotFound},
+		{"/0123456789abcdef0123456789abcdef/", http.StatusNotFound}, // where a token was
+		{"/0123456789abcdef0123456789abcdef/api/week", http.StatusNotFound},
+		{"/../api/week", http.StatusNotFound}, // not a clean path
+		{"//api/week", http.StatusNotFound},
+		{"/./api/week", http.StatusNotFound},
+		{"/x/../api/week", http.StatusNotFound},
 	}
 	for _, c := range cases {
 		w := request(t, s, http.MethodGet, host, c.path)
 		if w.Code != c.code {
 			t.Errorf("GET %s: %d, want %d", c.path, w.Code, c.code)
 		}
-		if c.code == http.StatusNotFound && strings.Contains(w.Body.String(), "version") {
-			t.Errorf("GET %s answered from the API: %s", c.path, w.Body)
+		if c.code == http.StatusNotFound && strings.Contains(w.Body.String(), `"period"`) {
+			t.Errorf("GET %s answered with a view: %s", c.path, w.Body)
 		}
 	}
-	if loc := request(t, s, http.MethodGet, host, "/"+testToken).Header().Get("Location"); loc != "/"+testToken+"/" {
-		t.Errorf("the redirect goes to %q", loc)
+	// The page and the API answer at the root as they should: the page
+	// with its scripts, the API with its view.
+	if body := request(t, s, http.MethodGet, host, "/").Body.String(); !strings.Contains(body, `<script src="app.js"`) {
+		t.Errorf("GET /: not the page\n%.200s", body)
+	}
+	for _, path := range []string{"/api/week", "/api/month"} {
+		if body := request(t, s, http.MethodGet, host, path).Body.String(); !strings.Contains(body, `"period"`) {
+			t.Errorf("GET %s: not a view\n%.200s", path, body)
+		}
+	}
+	// Another path under api/ says it's not an API.
+	if w := request(t, s, http.MethodGet, host, "/api/day"); w.Code != http.StatusNotFound || !strings.Contains(w.Body.String(), "no such API") {
+		t.Errorf("GET /api/day: %d %s", w.Code, w.Body)
 	}
 }
 
 func TestServer_HostMustBeLocal(t *testing.T) {
 	// DNS rebinding: a page at evil.example whose name now resolves to
-	// 127.0.0.1 sends Host: evil.example:8123. Refused, token or not.
+	// 127.0.0.1 sends Host: evil.example:8123. Refused.
 	s := testServer(t)
-	path := "/" + testToken + "/api/week"
+	path := "/api/week"
 	for host, code := range map[string]int{
 		"127.0.0.1:8123":    http.StatusOK,
 		"localhost:8123":    http.StatusOK,
@@ -88,7 +104,7 @@ func TestServer_HostMustBeLocal(t *testing.T) {
 func TestServer_HostOnPort80(t *testing.T) {
 	// On port 80, the default, a browser leaves the port out of Host.
 	s := testServer(t)
-	path := "/" + testToken + "/api/week"
+	path := "/api/week"
 	for host, code := range map[string]int{
 		"127.0.0.1":       http.StatusOK,
 		"localhost":       http.StatusOK,
@@ -112,7 +128,7 @@ func TestServer_HostOnPort80(t *testing.T) {
 func TestServer_OnlyReads(t *testing.T) {
 	s := testServer(t)
 	host := "127.0.0.1:8123"
-	for _, path := range []string{"/" + testToken + "/", "/" + testToken + "/api/week", "/" + testToken + "/style.css"} {
+	for _, path := range []string{"/", "/api/week", "/style.css", "/nothing.js", "/api/day"} {
 		for _, m := range []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodOptions, "PROPFIND"} {
 			w := request(t, s, m, host, path)
 			if w.Code != http.StatusMethodNotAllowed || w.Header().Get("Allow") != "GET, HEAD" {
@@ -121,14 +137,10 @@ func TestServer_OnlyReads(t *testing.T) {
 		}
 	}
 	// HEAD answers as GET does, without the body.
-	get := request(t, s, http.MethodGet, host, "/"+testToken+"/api/week")
-	head := request(t, s, http.MethodHead, host, "/"+testToken+"/api/week")
+	get := request(t, s, http.MethodGet, host, "/api/week")
+	head := request(t, s, http.MethodHead, host, "/api/week")
 	if head.Code != http.StatusOK || head.Body.Len() != 0 || head.Header().Get("Content-Length") != get.Header().Get("Content-Length") {
 		t.Errorf("HEAD: %d, %d bytes, length %s; GET's %s", head.Code, head.Body.Len(), head.Header().Get("Content-Length"), get.Header().Get("Content-Length"))
-	}
-	// A wrong token is a 404 whatever the method.
-	if w := request(t, s, http.MethodPost, host, "/nottoken/api/week"); w.Code != http.StatusNotFound {
-		t.Errorf("POST with a wrong token: %d, want 404", w.Code)
 	}
 }
 
@@ -205,8 +217,8 @@ func TestPage_OnlyItsOwnAssets(t *testing.T) {
 }
 
 // TestPage_DeclaresItsIcon checks that the page names its own icon. A
-// page without one makes Chrome ask for /favicon.ico, outside the
-// token, which is a 404 and an error in the console.
+// page without one makes Chrome ask for /favicon.ico, which isn't
+// there: a 404, and an error in the console.
 func TestPage_DeclaresItsIcon(t *testing.T) {
 	s := testServer(t)
 	m := regexp.MustCompile(`<link rel="icon" href="([^"]+)"`).FindStringSubmatch(get(t, s, "").Body.String())
@@ -215,20 +227,6 @@ func TestPage_DeclaresItsIcon(t *testing.T) {
 	}
 	if w := get(t, s, m[1]); w.Code != http.StatusOK || w.Header().Get("Content-Type") != "image/svg+xml" {
 		t.Errorf("the icon %s: %d %s, want an SVG", m[1], w.Code, w.Header().Get("Content-Type"))
-	}
-}
-
-func TestNew_RandomTokens(t *testing.T) {
-	seen := map[string]bool{}
-	for range 20 {
-		s, err := New(Config{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !regexp.MustCompile(`^/[0-9a-f]{32}/$`).MatchString(s.Path()) || seen[s.Path()] {
-			t.Fatalf("path %s: want 128 random bits, new each time", s.Path())
-		}
-		seen[s.Path()] = true
 	}
 }
 
@@ -277,7 +275,7 @@ func serve(t *testing.T, s *Server) (url string, stop func(), done <-chan error)
 
 // hostOf is the host and port of url, an address htt gui printed.
 func hostOf(url string) string {
-	return strings.TrimPrefix(strings.TrimSuffix(url, "/"+testToken+"/"), "http://")
+	return strings.TrimPrefix(strings.TrimSuffix(url, "/"), "http://")
 }
 
 // stopped waits for ListenAndServe to return within limit, and says
@@ -295,12 +293,12 @@ func stopped(t *testing.T, done <-chan error, limit time.Duration) {
 }
 
 func TestListenAndServe(t *testing.T) {
-	// On 127.0.0.1, a free port; the address with the token; stopping
-	// when asked, letting a request under way finish.
+	// On 127.0.0.1, a free port; the address, the page's, at the root;
+	// stopping when asked, letting a request under way finish.
 	repo := newBlockingRepo(t)
-	s := newServer(Config{Timelogs: repo, Categories: testCategories(t), Now: func() time.Time { return testNow(t) }}, testToken)
+	s := New(Config{Timelogs: repo, Categories: testCategories(t), Now: func() time.Time { return testNow(t) }})
 	url, stop, done := serve(t, s)
-	if !regexp.MustCompile(`^http://127\.0\.0\.1:[0-9]+/` + testToken + `/$`).MatchString(url) {
+	if !regexp.MustCompile(`^http://127\.0\.0\.1:[0-9]+/$`).MatchString(url) {
 		t.Fatalf("address %s", url)
 	}
 	// localhost works as well as 127.0.0.1.
@@ -367,7 +365,7 @@ func TestListenAndServe_ClosesWhatsLeft(t *testing.T) {
 	// request that doesn't finish, it waits a moment, closes them, and
 	// returns nil.
 	repo := newBlockingRepo(t) // freed when the test ends
-	s := newServer(Config{Timelogs: repo, Categories: testCategories(t), Now: func() time.Time { return testNow(t) }}, testToken)
+	s := New(Config{Timelogs: repo, Categories: testCategories(t), Now: func() time.Time { return testNow(t) }})
 	url, stop, done := serve(t, s)
 	c, err := net.Dial("tcp", hostOf(url))
 	if err != nil {
@@ -398,7 +396,7 @@ func TestListenAndServe_ClosesWhatsLeft(t *testing.T) {
 func TestListenAndServe_StopsAtOnceWhenAskedTwice(t *testing.T) {
 	// A second Ctrl-C doesn't wait for the request under way.
 	repo := newBlockingRepo(t) // freed when the test ends
-	s := newServer(Config{Timelogs: repo, Categories: testCategories(t), Now: func() time.Time { return testNow(t) }}, testToken)
+	s := New(Config{Timelogs: repo, Categories: testCategories(t), Now: func() time.Time { return testNow(t) }})
 	s.grace = time.Minute
 	url, stop, done := serve(t, s)
 	go func() {

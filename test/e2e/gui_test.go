@@ -18,12 +18,12 @@ import (
 )
 
 // guiAddress is the line htt gui prints once it serves.
-var guiAddress = regexp.MustCompile(`^htt gui: (http://127\.0\.0\.1:[0-9]+/[0-9a-f]{32}/) \(Ctrl-C to stop\)$`)
+var guiAddress = regexp.MustCompile(`^htt gui: (http://127\.0\.0\.1:[0-9]+/) \(Ctrl-C to stop\)$`)
 
 // guiProcess is a running `htt gui`.
 type guiProcess struct {
 	cmd    *exec.Cmd
-	url    string // the page's address, as printed
+	url    string // the page's address, as printed: http://127.0.0.1:<port>/
 	mu     sync.Mutex
 	stdout bytes.Buffer // after the address line
 	stderr bytes.Buffer
@@ -223,8 +223,8 @@ func TestGUI_ServesTheTimeLog(t *testing.T) {
 	}
 }
 
-func TestGUI_PrivateAndStopsOnInterrupt(t *testing.T) {
-	// Runs everywhere, Windows too: the token, the Host and the methods,
+func TestGUI_GuardsAndStopsOnInterrupt(t *testing.T) {
+	// Runs everywhere, Windows too: the paths, the Host and the methods,
 	// then Ctrl-C. Today's week, whatever today is.
 	e := newEnv(t)
 	e.writeConfig("check_for_updates: false\n")
@@ -233,19 +233,12 @@ func TestGUI_PrivateAndStopsOnInterrupt(t *testing.T) {
 	if v := getView(t, g.url+"api/week"); v.Period.Kind != "week" || len(v.Days) != 7 {
 		t.Errorf("this week: %+v", v.Period)
 	}
-	base := strings.TrimSuffix(g.url, "/")
-	root := base[:strings.LastIndex(base, "/")]
-	token := base[strings.LastIndex(base, "/")+1:]
-	wrong := strings.Repeat("0", len(token))
-	if wrong == token {
-		wrong = strings.Repeat("1", len(token))
-	}
-	for _, url := range []string{root + "/", root + "/" + wrong + "/", root + "/" + wrong + "/api/week", root + "/api/week", g.url + "../" + wrong + "/"} {
-		if code, _ := fetch(t, http.MethodGet, url, ""); code != http.StatusNotFound {
-			t.Errorf("GET %s: %d, want 404", url, code)
+	for _, path := range []string{"api/day", "nothing.js", "0123456789abcdef0123456789abcdef/"} {
+		if code, _ := fetch(t, http.MethodGet, g.url+path, ""); code != http.StatusNotFound {
+			t.Errorf("GET %s: %d, want 404", g.url+path, code)
 		}
 	}
-	host := strings.TrimPrefix(root, "http://")
+	host := strings.TrimSuffix(strings.TrimPrefix(g.url, "http://"), "/")
 	port := host[strings.LastIndex(host, ":"):]
 	if code, _ := fetch(t, http.MethodGet, g.url+"api/week", "evil.example"+port); code != http.StatusForbidden {
 		t.Errorf("Host evil.example%s: %d, want 403", port, code)

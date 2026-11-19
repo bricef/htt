@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -181,10 +180,11 @@ timelog:
 	e.writeTimelog(loc, "2026-11-03", "09:30 answer mail", "10:00 fix +smoke")
 	g := e.startGUI()
 
-	// The week: the timeline's legend and labels, the totals' labels;
-	// the zoom out to the whole day.
+	// The week, at the root htt gui printed: the timeline's legend and
+	// labels, the totals' labels; the zoom out to the whole day.
 	b.do(g,
 		chromedp.Navigate(g.url+"#week/2026-11-04"),
+		waitFor("the page at the root", `location.pathname === "/"`),
 		waitFor("the week's timeline", svgText("timeline")+`.includes("smoke-test") && `+svgText("timeline")+`.includes("no @end")`),
 		waitFor("the week's totals", svgText("summary")+`.includes("7h 0m")`),
 		waitFor("the week's title", `document.querySelector("#title").textContent === "2–8 November 2026"`),
@@ -324,25 +324,5 @@ timelog:
 			})()`),
 		)
 	}
-	b.checkConsole()
-}
-
-// TestGUI_InTheBrowser_RedirectFile opens the file htt gui hands the
-// opener in Chrome, and checks it sends the browser on to the page.
-func TestGUI_InTheBrowser_RedirectFile(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("htt opens the browser with ShellExecute on Windows, which no program on PATH can stand in for")
-	}
-	b := newBrowser(t, 1180, 900)
-	e := newEnv(t)
-	e.writeConfig("check_for_updates: false\n")
-	rec := t.TempDir()
-	e.useFakeOpener(`printf '%s\n' "$1" > '` + rec + `/file.tmp' && mv '` + rec + `/file.tmp' '` + rec + `/file'`)
-	g := e.startGUIWith(nil)
-	file := strings.TrimSpace(waitForFile(t, filepath.Join(rec, "file")))
-	b.do(g,
-		chromedp.Navigate("file://"+file),
-		waitFor("the page", `location.href.startsWith(`+strconv.Quote(g.url)+`) && `+svgText("timeline")+` !== ""`),
-	)
 	b.checkConsole()
 }

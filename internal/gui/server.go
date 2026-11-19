@@ -1,13 +1,15 @@
 // Package gui serves htt's GUI: a local web page that draws the time
 // log, and the JSON it draws from. `htt gui` runs it.
 //
-// The server is local and private. It listens on 127.0.0.1 only; every
-// path starts with a random token, new each run, that the address htt
-// prints and opens carries, and anything else is a 404; a request whose
-// Host isn't 127.0.0.1:<port> or localhost:<port> (or, on port 80,
-// either without the port) is refused, so a page elsewhere can't reach
-// it through DNS rebinding; and it only reads, answering GET and HEAD
-// and nothing else.
+// The server is local. It listens on 127.0.0.1 only, so no other
+// computer reaches it, though any account on this one can while it
+// runs: the page is at http://127.0.0.1:<port>/, with no token, as Go's
+// own `go tool pprof -http` serves its UI. A request whose Host isn't
+// 127.0.0.1:<port> or localhost:<port> (or, on port 80, either without
+// the port) is refused, so a page elsewhere can't reach it through DNS
+// rebinding; it sends no CORS headers, so a page elsewhere can't read
+// what it answers; and it only reads, answering GET and HEAD and
+// nothing else.
 //
 // Go computes, the page draws: the API's handlers read each day's
 // timesheet and add them up with the domain's period aggregates (see
@@ -19,9 +21,6 @@ package gui
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/subtle"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -51,10 +50,9 @@ type Config struct {
 	Now func() time.Time
 }
 
-// Server serves the GUI under a token.
+// Server serves the GUI.
 type Server struct {
 	cfg   Config
-	token string
 	grace time.Duration // how long requests under way have to finish once it's stopped
 }
 
@@ -62,25 +60,12 @@ type Server struct {
 // server is stopped: a moment, as the API answers in milliseconds.
 const shutdownGrace = time.Second
 
-// New returns a server for cfg under a new random token of 128 bits.
-func New(cfg Config) (*Server, error) {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		return nil, fmt.Errorf("make a token: %w", err)
-	}
-	return newServer(cfg, hex.EncodeToString(b)), nil
-}
-
-func newServer(cfg Config, token string) *Server {
+// New returns a server for cfg.
+func New(cfg Config) *Server {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
-	return &Server{cfg: cfg, token: token, grace: shutdownGrace}
-}
-
-// Path is the path the GUI's page is at: its token, between slashes.
-func (s *Server) Path() string {
-	return "/" + s.token + "/"
+	return &Server{cfg: cfg, grace: shutdownGrace}
 }
 
 // ListenAndServe serves the GUI on 127.0.0.1:port, port 0 picking a free
@@ -88,7 +73,7 @@ func (s *Server) Path() string {
 // stops taking requests, gives those under way a moment to finish (a
 // second, cut short by a second signal), closes the connections left (a
 // browser's idle ones among them), and returns nil. Once it listens, it
-// calls ready with the page's address, http://127.0.0.1:<port>/<token>/.
+// calls ready with the page's address, http://127.0.0.1:<port>/.
 func (s *Server) ListenAndServe(stop <-chan os.Signal, port int, ready func(url string)) error {
 	l, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
 	if err != nil {
@@ -102,7 +87,7 @@ func (s *Server) ListenAndServe(stop <-chan os.Signal, port int, ready func(url 
 	served := make(chan error, 1)
 	go func() { served <- srv.Serve(l) }()
 	if ready != nil {
-		ready("http://" + l.Addr().String() + s.Path()) // the address it listens on
+		ready("http://" + l.Addr().String() + "/") // the address it listens on
 	}
 	select {
 	case err := <-served: // it stopped by itself
@@ -129,28 +114,14 @@ func (s *Server) ListenAndServe(stop <-chan os.Signal, port int, ready func(url 
 
 // Handler serves the GUI to requests addressed to 127.0.0.1:port or
 // localhost:port (without the port, too, when it's 80, as browsers
-// leave the default port out), under the server's token: the page and
-// its assets, and the API under api/.
+// leave the default port out): the page at /, its assets at their
+// paths, and the API under /api/.
 func (s *Server) Handler(port int) http.Handler {
 	files := assets()
-	route := func(w http.ResponseWriter, r *http.Request) {
-		switch p := r.URL.Path; {
-		case p == "/api/week":
-			s.handleWeek(w, r)
-		case p == "/api/month":
-			s.handleMonth(w, r)
-		case p == "/api" || strings.HasPrefix(p, "/api/"):
-			writeError(w, r, http.StatusNotFound, errors.New("no such API: want api/week or api/month"))
-		default:
-			files.ServeHTTP(w, r)
-		}
-	}
-
 	hosts := []string{"127.0.0.1:" + strconv.Itoa(port), "localhost:" + strconv.Itoa(port)}
 	if port == 80 { // the default, which a browser leaves out of Host
 		hosts = append(hosts, "127.0.0.1", "localhost")
 	}
-	prefix := s.Path()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("X-Content-Type-Options", "nosniff")
@@ -162,27 +133,24 @@ func (s *Server) Handler(port int) http.Handler {
 			http.Error(w, "htt gui answers to "+hosts[0]+" and "+hosts[1]+" only", http.StatusForbidden)
 			return
 		}
-		path := r.URL.Path
-		if subtle.ConstantTimeCompare([]byte(path), []byte(strings.TrimSuffix(prefix, "/"))) == 1 {
-			http.Redirect(w, r, prefix, http.StatusFound)
-			return
-		}
-		if len(path) < len(prefix) || subtle.ConstantTimeCompare([]byte(path[:len(prefix)]), []byte(prefix)) != 1 {
-			http.NotFound(w, r)
-			return
-		}
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			h.Set("Allow", "GET, HEAD")
 			http.Error(w, "htt gui only reads: GET and HEAD", http.StatusMethodNotAllowed)
 			return
 		}
-		// The rest of the path, from its slash, as it is: the API's paths
-		// are matched exactly, and a file's must be a valid fs path, so
-		// "..", "." and empty elements reach nothing.
-		r2 := r.Clone(r.Context())
-		r2.URL.Path = path[len(prefix)-1:]
-		r2.URL.RawPath = ""
-		route(w, r2)
+		// The path as it is: the API's paths are matched exactly, and a
+		// file's must be a valid fs path, so "..", "." and empty elements
+		// reach nothing.
+		switch p := r.URL.Path; {
+		case p == "/api/week":
+			s.handleWeek(w, r)
+		case p == "/api/month":
+			s.handleMonth(w, r)
+		case p == "/api" || strings.HasPrefix(p, "/api/"):
+			writeError(w, r, http.StatusNotFound, errors.New("no such API: want api/week or api/month"))
+		default:
+			files.ServeHTTP(w, r)
+		}
 	})
 }
 

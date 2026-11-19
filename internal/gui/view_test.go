@@ -21,10 +21,7 @@ import (
 
 var update = flag.Bool("update", false, "rewrite the golden files in testdata")
 
-const (
-	testToken = "0123456789abcdef0123456789abcdef"
-	testPort  = 8123
-)
+const testPort = 8123
 
 // testZone is the zone the tests run htt in: London's clocks go back
 // on 25 October 2026.
@@ -114,17 +111,17 @@ func testRepo(t *testing.T, loc *time.Location, logs map[string][]string) domain
 // testServer serves testLogs with the test categories and clock.
 func testServer(t *testing.T) *Server {
 	t.Helper()
-	return newServer(Config{
+	return New(Config{
 		Timelogs:   testRepo(t, testZone(t), testLogs),
 		Categories: testCategories(t),
 		Now:        func() time.Time { return testNow(t) },
-	}, testToken)
+	})
 }
 
-// get asks s's handler for path, under the token, as the browser would.
+// get asks s's handler for path, as the browser would.
 func get(t *testing.T, s *Server, path string) *httptest.ResponseRecorder {
 	t.Helper()
-	r := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8123/"+testToken+"/"+path, nil)
+	r := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8123/"+path, nil)
 	w := httptest.NewRecorder()
 	s.Handler(testPort).ServeHTTP(w, r)
 	return w
@@ -372,13 +369,13 @@ func TestWeek_TheHourThatRepeats(t *testing.T) {
 	// 01:00 GMT. An entry from 01:50 BST to 01:10 GMT is 20 minutes long,
 	// and its wall clock runs backwards, minute 110 to minute 70: it's
 	// drawn for its 20 minutes, to 02:10, and the timeline opens on it.
-	s := newServer(Config{
+	s := New(Config{
 		Timelogs: testRepo(t, testZone(t), map[string][]string{
 			"2026-10-25": {"2026-10-25T00:50:00Z late fix +htt", "2026-10-25T01:10:00Z @end"},
 		}),
 		Categories: testCategories(t),
 		Now:        func() time.Time { return testNow(t) },
-	}, testToken)
+	})
 	v := getView(t, s, "api/week?date=2026-10-25")
 	ivs := v.Days[6].Intervals
 	if len(ivs) != 1 {
@@ -398,13 +395,13 @@ func TestWeek_TheHourThatRepeats(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s = newServer(Config{
+	s = New(Config{
 		Timelogs: testRepo(t, scl, map[string][]string{
 			"2026-04-04": {"2026-04-05T02:50:00Z late fix +htt", "2026-04-05T03:10:00Z @end"},
 		}),
 		Categories: testCategories(t),
 		Now:        func() time.Time { return testNow(t).In(scl) },
-	}, testToken)
+	})
 	sat := getView(t, s, "api/week?date=2026-04-04").Days[5]
 	if len(sat.Intervals) != 1 || sat.Intervals[0].StartMinute != 1430 || sat.Intervals[0].EndMinute != 1390 || sat.Intervals[0].DrawnEndMinute != 1440 {
 		t.Errorf("Santiago, 4 April 2026: %+v", sat)
@@ -420,11 +417,11 @@ func TestAPI_DatesAreCalendarDates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := newServer(Config{
+	s := New(Config{
 		Timelogs:   testRepo(t, loc, map[string][]string{"2023-10-02": {"09:00 work +htt", "10:00 @end"}}),
 		Categories: testCategories(t),
 		Now:        func() time.Time { return time.Date(2023, 11, 15, 12, 0, 0, 0, loc) },
-	}, testToken)
+	})
 	m := getView(t, s, "api/month?month=2023-10")
 	want := period{Kind: "month", Key: "2023-10", Start: "2023-10-01", End: "2023-10-31", Previous: "2023-09", Next: "2023-11", Current: "2023-11"}
 	if m.Period != want {
@@ -448,11 +445,11 @@ func TestAPI_DatesAreCalendarDates(t *testing.T) {
 func TestAPI_BadConfig(t *testing.T) {
 	// A config htt can't use: the API says so, naming the key, and the
 	// page still loads, to show it.
-	s := newServer(Config{
+	s := New(Config{
 		Timelogs:  testRepo(t, testZone(t), testLogs),
 		ConfigErr: errors.New(`config: timelog.categories: category 2 (htt): "htt" isn't a tag (want +project, @context or #tag)`),
 		Now:       func() time.Time { return testNow(t) },
-	}, testToken)
+	})
 	for _, path := range []string{"api/week", "api/month"} {
 		w := get(t, s, path)
 		var e apiError
@@ -478,7 +475,7 @@ func TestAPI_UnreadableLog(t *testing.T) {
 	if err := repo.Save(l); err != nil {
 		t.Fatal(err)
 	}
-	s := newServer(Config{Timelogs: repo, Now: func() time.Time { return testNow(t) }}, testToken)
+	s := New(Config{Timelogs: repo, Now: func() time.Time { return testNow(t) }})
 	w := get(t, s, "api/week")
 	if w.Code != http.StatusInternalServerError || !strings.Contains(w.Body.String(), "2026-11-17") {
 		t.Errorf("%d %s, want 500 naming the day", w.Code, w.Body)
@@ -487,7 +484,7 @@ func TestAPI_UnreadableLog(t *testing.T) {
 
 func TestAPI_NoCategories(t *testing.T) {
 	// Without categories everything is uncategorised, in working.
-	s := newServer(Config{Timelogs: testRepo(t, testZone(t), testLogs), Now: func() time.Time { return testNow(t) }}, testToken)
+	s := New(Config{Timelogs: testRepo(t, testZone(t), testLogs), Now: func() time.Time { return testNow(t) }})
 	v := getView(t, s, "api/week?date=2026-11-16")
 	if len(v.Categories) != 1 || v.Categories[0].Name != "uncategorised" || !v.Categories[0].Work || v.Categories[0].CountedAs != "working" {
 		t.Errorf("categories %+v", v.Categories)

@@ -1,8 +1,7 @@
 package e2e
 
 import (
-	"errors"
-	"io/fs"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -12,10 +11,8 @@ import (
 )
 
 // useFakeOpener puts a shell script first on htt's PATH, standing in for
-// the program htt gui opens the browser with (xdg-open; open on macOS),
-// and gives htt a TMPDIR of the test's own, which it returns: htt makes
-// the file it opens there.
-func (e *env) useFakeOpener(script string) (tmp string) {
+// the program htt gui opens the browser with (xdg-open; open on macOS).
+func (e *env) useFakeOpener(script string) {
 	e.t.Helper()
 	bin := e.t.TempDir()
 	for _, name := range []string{"xdg-open", "open"} {
@@ -23,9 +20,7 @@ func (e *env) useFakeOpener(script string) (tmp string) {
 			e.t.Fatal(err)
 		}
 	}
-	tmp = e.t.TempDir()
-	e.extraEnv = append(e.extraEnv, "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"), "TMPDIR="+tmp)
-	return tmp
+	e.extraEnv = append(e.extraEnv, "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 }
 
 // waitForFile waits for the file at path, which a fake opener writes,
@@ -43,53 +38,21 @@ func waitForFile(t *testing.T, path string) string {
 	}
 }
 
-// tokenOf is the token in the address htt gui printed.
-func tokenOf(url string) string {
-	base := strings.TrimSuffix(url, "/")
-	return base[strings.LastIndex(base, "/")+1:]
-}
-
-func TestGUI_OpensTheBrowserWithoutTheToken(t *testing.T) {
-	// A program's arguments are there for any user of the computer to
-	// read (ps, /proc/<pid>/cmdline), and the token is the key to the
-	// time log. So htt gui hands the opener a file, readable by you
-	// alone, that sends the browser on to the address; and removes it
-	// when it stops.
+func TestGUI_OpensTheBrowserAtTheAddress(t *testing.T) {
+	// htt gui hands the opener the address it printed, and nothing else;
+	// stopped, it exits cleanly and says nothing about the opener.
 	if runtime.GOOS == "windows" {
 		t.Skip("htt opens the browser with ShellExecute on Windows, which no program on PATH can stand in for")
 	}
 	e := newEnv(t)
 	e.writeConfig("check_for_updates: false\n")
 	rec := t.TempDir()
-	tmp := e.useFakeOpener(`printf '%s\n' "$@" > '` + rec + `/args.tmp' && mv '` + rec + `/args.tmp' '` + rec + `/args'`)
+	e.useFakeOpener(`printf '%s\n' "$@" > '` + rec + `/args.tmp' && mv '` + rec + `/args.tmp' '` + rec + `/args'`)
 	g := e.startGUIWith(nil)
 
 	args := strings.Split(strings.TrimSuffix(waitForFile(t, filepath.Join(rec, "args")), "\n"), "\n")
-	if strings.Contains(strings.Join(args, " "), tokenOf(g.url)) {
-		t.Fatalf("the opener's arguments carry the token: %q", args)
-	}
-	if len(args) != 1 || !filepath.IsAbs(args[0]) {
-		t.Fatalf("the opener got %q, want a file's path", args)
-	}
-	file, dir := args[0], filepath.Dir(args[0])
-	if filepath.Dir(dir) != tmp {
-		t.Errorf("the file is %s, want it in a directory of its own in TMPDIR (%s)", file, tmp)
-	}
-	for path, want := range map[string]fs.FileMode{file: 0o600, dir: 0o700} {
-		if info, err := os.Stat(path); err != nil || info.Mode().Perm() != want {
-			t.Errorf("%s: %v %v, want mode %v", path, info.Mode(), err, want)
-		}
-	}
-	body, err := os.ReadFile(file)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, want := range []string{
-		`<meta http-equiv="refresh" content="0; url=` + g.url + `">`,
-		`location.replace("` + g.url + `")`,
-		`<a href="` + g.url + `">`,
-	} {
-		assertContains(t, "the redirect file", string(body), want)
+	if len(args) != 1 || args[0] != g.url {
+		t.Errorf("the opener got %q, want the address htt gui printed, %q", args, g.url)
 	}
 
 	if err := g.cmd.Process.Signal(os.Interrupt); err != nil {
@@ -104,7 +67,26 @@ func TestGUI_OpensTheBrowserWithoutTheToken(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("htt gui still running 10s after an interrupt")
 	}
-	if _, err := os.Stat(dir); !errors.Is(err, fs.ErrNotExist) {
-		t.Errorf("htt gui stopped, and %s is still there (%v)", dir, err)
+}
+
+func TestGUI_SaysWhenItCantOpenABrowser(t *testing.T) {
+	// An opener that fails: htt gui says so, and serves all the same.
+	if runtime.GOOS == "windows" {
+		t.Skip("htt opens the browser with ShellExecute on Windows, which no program on PATH can stand in for")
+	}
+	e := newEnv(t)
+	e.writeConfig("check_for_updates: false\n")
+	e.useFakeOpener("exit 3")
+	g := e.startGUIWith(nil)
+	var stderr string
+	for deadline := time.Now().Add(10 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+		if _, stderr = g.output(); strings.Contains(stderr, "\n") {
+			break
+		}
+	}
+	assertContains(t, "stderr", stderr, "htt gui: couldn't open a browser (")
+	assertContains(t, "stderr", stderr, " exited 3); open the address above yourself")
+	if code, _ := fetch(t, http.MethodGet, g.url, ""); code != http.StatusOK {
+		t.Errorf("GET %s: %d, want 200", g.url, code)
 	}
 }

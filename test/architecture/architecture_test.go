@@ -20,9 +20,11 @@ const modulePath = "github.com/bricef/htt"
 //   - domain imports nothing from storage, cli, tui
 //   - storage may import domain
 //   - tui imports storage, domain — but NOT cli
-//   - cli imports tui (to register the `interactive` subcommand) and
-//     everything below. cli → tui is one-way: the CLI is the program's
-//     entry point and may launch the TUI as a mode.
+//   - gui imports domain — but NOT cli, tui, storage or the config
+//   - cli imports tui (to register the `interactive` subcommand), gui
+//     (for `htt gui`) and everything below. cli → tui and cli → gui are
+//     one-way: the CLI is the program's entry point and may launch the
+//     TUI or the GUI as a mode.
 //
 // If a future change pulls one of these boundaries the wrong way, this test
 // fails and forces the discussion before the dependency lands.
@@ -70,6 +72,18 @@ func TestArchitecture_DependencyDirections(t *testing.T) {
 			"internal/update",
 			"internal/dates",
 			"internal/parseutils",
+		},
+		// The GUI's server reads through the domain's interfaces: the
+		// CLI hands it a timelog repository, the categories and a clock,
+		// so it needs neither the CLI, the config nor storage. cli may
+		// import gui, to run it as `htt gui`.
+		"internal/gui": {
+			"internal/cli",
+			"internal/tui",
+			"internal/storage",
+			"internal/vars",
+			"internal/utils",
+			"internal/update",
 		},
 		"internal/tui": {
 			"internal/cli",

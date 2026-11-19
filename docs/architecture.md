@@ -12,6 +12,7 @@ cmd/htt/                   main package: builds the binary, wires viper config
 internal/
   cli/                     cobra commands; one *.go per subcommand group
   tui/                     bubble tea interactive mode
+  gui/                     htt gui: the local web server, its JSON API, and the page it embeds (web/)
   domain/                  Context, Task, Timelog + Repository / TimelogRepository interfaces
   storage/                 MemoryRepository / FileRepository (and timelog impls) — satisfy the domain interfaces
   update/                  the once-a-day check for a newer GitHub release
@@ -21,7 +22,7 @@ internal/
   utils/                   small odds and ends (StringToFilename, EditFilePath, Fatal, …)
   vars/                    viper config keys + defaults
 test/
-  e2e/                     black-box tests that drive the compiled binary
+  e2e/                     black-box tests that drive the compiled binary (and the GUI in headless Chrome)
   tui/                     TUI tests that drive the model through Update/View
   architecture/            asserts the import rules below
 docs/
@@ -36,7 +37,7 @@ docs/
 The dependency graph runs one way:
 
 ```
-cli ─────────────► tui
+cli ─────────────► tui, gui
  │                  │
  ▼                  ▼
 storage ─────────► domain
@@ -59,14 +60,16 @@ and the layers below may use them, with the exceptions noted.
   `Editor.Command` builds the `*exec.Cmd` that opens a file in it;
   running it is the caller's: `utils.EditFilePath` runs it on the
   CLI's terminal, and the TUI's edit action hands it to Bubble Tea.
-- `cli` sits at the top and may import anything below (including `tui`,
-  to register the interactive subcommand).
+- `gui` imports `domain` only: never `cli`, `tui`, `storage`, `vars`,
+  `utils` or `update`. The CLI hands it what it reads (see [GUI](#gui)).
+- `cli` sits at the top and may import anything below (including `tui`
+  and `gui`, to register the `interactive` and `gui` subcommands).
 - `update` imports nothing else from `internal/`: it knows GitHub's
   release endpoint and its cache file, nothing about tasks or config.
   `cli` decides when it may run and passes the TUI a notice source.
 
 `test/architecture/architecture_test.go` enforces the `domain`,
-`storage`, `tui`, `dates`, `editor` and `update` rules by scanning
+`storage`, `tui`, `gui`, `dates`, `editor` and `update` rules by scanning
 imports in each package. If a future change breaks one, the test fails
 and forces the discussion before the dependency lands.
 
@@ -214,6 +217,24 @@ categoriser, as it builds the TUI's theme. `NewCategoriser` and
 the error. A bad config stops `htt report` before it prints; `htt log
 status`, `log active` and `htt status` warn on stderr and show the
 entry without categories (`Timesheet` with a nil categoriser).
+
+Days add up into periods in `timesheet_period.go`, pure functions over
+a day's `Timesheet` each, in date order; `htt gui` draws from them. A
+sheet's `Date` is its day at noon, since its `Start` (time.Date's
+midnight) can be on the day before where the clocks go forward at
+midnight. `Totals` is time added up: `Worked`, `Breaks` (the rest),
+`ByCategory`, `Uncategorised` and `ToMidnight` (the last entry of each
+day without `@end`, counted to 24:00); `Timesheet.Totals`, `Plus`,
+`Sum`, and `Scale(num, den)` for averages and rates per week. A
+`Period` is a run of calendar days, each a date at noon, so they're
+counted by date and not 24 hours apart: `WeekOf` (Monday to Sunday)
+and `MonthOf`. Over consecutive days, `Weeks` cuts Monday-to-Sunday
+weeks at the days' edges, `Halves` splits a month at the 15th,
+`Rolling(days, 7)` is each day's total of the 7 days up to it (pass the
+6 days before a period for its first days), `WeekdayAverages` averages
+each weekday, and `Summarise` gives the averages per week and per
+working day and the days without `@end`. Their property tests check
+them against direct sums of the intervals over generated months.
 
 ## Repositories
 
@@ -382,6 +403,131 @@ the program.
   `tea.ExecProcess`, which releases the terminal while the editor runs
   and sends `editorFinishedMsg` back to `Update` when it exits.
 
+## GUI
+
+`htt gui` (`internal/cli/gui.go`) serves the GUI from the binary: a
+local web page that draws the time log, and the JSON it draws from
+(`internal/gui`). The CLI builds a `gui.Config` (the timelog
+repository, without date warnings, as the page refreshes every
+minute; the `Categoriser`, or the config's error; and the clock),
+`gui.New` makes the server, and `ListenAndServe(stop, port, ready)`
+listens on 127.0.0.1, calls `ready` with the address,
+`http://127.0.0.1:<port>/` (which the CLI prints and opens), and serves
+until a signal on `stop`, the CLI's `signal.Notify` channel for Ctrl-C
+and SIGTERM. Then it stops taking requests, gives those under way a
+second to finish (a second signal cuts it short), closes the
+connections left, a browser's idle ones among them, and returns nil.
+The REPL refuses `gui`.
+
+`openBrowser` opens the address in the background, with htt's own
+opener (`opener_unix.go`, `opener_windows.go`): `open` on macOS;
+elsewhere the first of `xdg-open`, `x-www-browser`, `www-browser` and
+`wslview` on `PATH`, then, on WSL without wslu, `explorer.exe`, which
+hands an address to Windows' default browser (and exits 1 when it has,
+so its status is ignored); ShellExecute on Windows. On Unix it runs in
+a process group of its own: the terminal's Ctrl-C goes to htt's group,
+and the opener may be the browser itself. A failure to open is a line
+on stderr; an opener stopped by a signal isn't one.
+
+`Server.Handler(port)` is the server's guard, in this order:
+
+1. A `Host` that isn't `127.0.0.1:<port>` or `localhost:<port>` (or,
+   on port 80, either without the port, as browsers send it) is a 403
+   (DNS rebinding).
+2. A request from anywhere but the GUI's own page is a 403
+   (`foreign`): an `Origin` that isn't `http://` and one of those
+   hosts, `null` included; or, by its `Sec-Fetch-Site`, a request
+   another site's page makes (`same-site`, as a page on another port
+   of localhost is, or `cross-site`), unless it's a link followed to
+   open the page, a GET with `Sec-Fetch-Mode: navigate` and
+   `Sec-Fetch-Dest: document`. `same-origin` (the page's own
+   requests), `none` (an address typed, a bookmark, the opener) and no
+   `Sec-Fetch-Site` at all (curl) pass.
+3. A method other than GET or HEAD is a 405.
+
+Every answer, the 403s included, carries a Content-Security-Policy
+keeping the page to its own files, `nosniff`, `no-referrer` and `DENY`
+framing; the API's are `no-store`. The page is at `/`; `/api/week`
+and `/api/month` are matched exactly, anything else under `/api/` is a
+404 naming them, and anything else is a file of `web/`, served only if
+it's a regular file (a valid `fs` path, so `..`, `.` and empty
+elements reach nothing).
+
+There's no token or login, as in Go's own local read-only UIs (`go
+tool pprof -http`, `go tool trace`). A page elsewhere can't read the
+answers (same-origin policy: the server sends no CORS headers), nor
+have them loaded at all, as an image, a script, a style or a frame
+(Origin and Sec-Fetch-Site); DNS rebinding meets the Host check;
+there's no write to forge; and no other computer reaches 127.0.0.1.
+What's left open is other accounts on the same computer, which can
+open the page while `htt gui` runs. `http.CrossOriginProtection`
+isn't used: it leaves GET and HEAD alone, the only methods the server
+answers. If the GUI ever writes, it's the guard for the writes.
+
+The API (`view.go`, versioned there in `apiVersion`): `api/week?date=`
+any day of the week, `api/month?month=YYYY-MM`, each today's by
+default, read as days on the calendar (parsed in UTC, then noon in the
+local zone: where the clocks go forward at midnight, local midnight
+doesn't exist). Go computes, the page draws: the handlers read each
+day's log as a timesheet at the server's clock (to the second), add
+the days up
+with the domain's period functions, and answer a view: `now`, `today`,
+the `categories` (in the config's order, those with tags, then
+`uncategorised`; each with `work` and a colour index, its place among
+the work categories or among the others), the `period` (its key and
+those of the periods before, after and holding today), and the `days`:
+each one's status (`empty`, `ended`, `inProgress`, `unended`, or
+`future` for a day after today, whose log isn't read), worked time,
+breaks, time to midnight, time per category (uncategorised under
+`uncategorised`, a name no category can have) and intervals (the
+entry without its `ts:`, its category, `uncategorised`, `work`, start
+and end, `seconds`, and `open`: `now` or `midnight`). Durations are
+seconds; times are RFC 3339 with the local offset, each with its
+minutes since local midnight on the wall clock (`startMinute`, 1440
+at the day's end), for drawing, so a day the clocks change draws by
+its clock while durations stay true; where the wall clock runs
+backwards, in the hour that repeats when the clocks go back, an
+interval is drawn for its true length, to its `drawnEndMinute`. A
+`summary` comes with both; the week adds `hours`, the stretch its
+timeline opens on, and the month
+`weeks`, `weekdays`, `rolling`, `halves` and the `table` of
+categories. The figures (summary, averages, rolling totals, halves)
+are over the days so far, today included. A bad date is a 400; a
+config htt can't use, or a log it can't read, a 500 whose `error` the
+page shows.
+
+The page (`web/`: `index.html`, `style.css`, `app.js`) is plain HTML,
+CSS and JavaScript with no build step, embedded with `go:embed`. It
+routes on the hash (`#week/2026-11-16`, `#month/2026-10`), fetches the
+view, and draws it with ECharts (SVG renderer); it refetches when it
+is seen again and every minute while the period holds today. Colours
+are CSS custom properties, light and dark; the charts read them, so
+`app.js` draws again when the system's setting changes. The
+third-party files are in `web/vendor`, with their licences and a
+README giving each one's source, version and sha256: ECharts 6.1.0,
+and IBM Plex Sans and Mono (woff2, Latin1). Nothing is fetched from
+the network.
+
+Tests: `internal/gui` drives the handler with an in-memory repository
+and a fixed clock in London, and compares a week and a month with
+golden files in `testdata` (`go test ./internal/gui -update` rewrites
+them, to be read before they're committed). `test/e2e/gui_test.go`
+runs `htt gui --no-open --port 0`, reads the address from stdout, and
+stops it with an interrupt (not on Windows, where Go can't send one).
+`test/e2e/gui_opener_test.go` puts a stand-in `xdg-open`/`open` on
+`PATH` (not on Windows, where ShellExecute opens the browser) and
+checks that it's given the address htt printed, and nothing else; that
+one that fails is reported; and that the terminal's Ctrl-C, sent to
+htt's process group, leaves it running.
+`test/e2e/gui_browser_test.go` loads the page in headless Chrome
+(chromedp) and fails on a JavaScript exception or a console error:
+both views; the corners a review found (categories named after
+`Object.prototype`'s members, a pinned entry and another week, an
+average week above every bar, the hour that repeats). It finds Chrome
+in `$HTT_TEST_CHROME` (which may be a script that sets up the
+browser's environment and execs it), on `PATH`, or where macOS and
+Windows install it, and is skipped without one.
+
 ## Update check
 
 `internal/update` asks GitHub for the latest release
@@ -446,6 +592,9 @@ Worth reading if you're touching the relevant area:
   are a list matched by exact tags.
 - `2026-11-18-timelog-at.md` — what `--at` takes, where an entry
   logged at a time goes, and what a time the clocks skip becomes.
+- `2026-11-19-gui-time-log.md` — why the GUI is a local web page
+  served by htt (no cgo), how it stays private, and what its JSON
+  contract promises.
 - `2026-11-02-tui-log-file.md` — why the TUI has its own logger and
   how actions report errors.
 - `2026-11-02-tui-editor-exec.md` — how the editor gets the terminal,

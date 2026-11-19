@@ -20,7 +20,8 @@ Each confirmed against `main` on 2026-11-03.
   (an entry at 22:00 ended at 23:30 counts 1h), and `htt report`'s day
   walk lands on 2026-09-05 twice, listing it twice (2h in all). Zones
   whose clocks change at 01:00 or later, as in Europe and the US,
-  aren't affected.
+  aren't affected. `htt gui` walks days by date, so it lists that day
+  once, but its timesheet ends at the same wrong time.
 
 ## Wishlist
 
@@ -35,7 +36,6 @@ Each confirmed against `main` on 2026-11-03.
   - [ ] More `show` views: multi-key sort, negated filters, created-date
         ranges, saved views
 - Time log
-  - [ ] Interval output
   - [ ] Review jrnl for inspiration
 - Reports
   - [ ] Calendar modes (`--week`, `--month`)
@@ -62,10 +62,23 @@ Each confirmed against `main` on 2026-11-03.
 
 ## Future
 
-- [ ] Create a GUI app layer (https://github.com/avelino/awesome-go#gui, https://github.com/murlokswarm/app)
+- [ ] GUI: a native window around `htt gui`'s page (Wails v3 can wrap
+      it); colours for categories in the config (a `color` key); push
+      updates (SSE) rather than the page's refresh every minute; the
+      config read again without a restart; task views and editing
+      entries. Left out of the GUI plan
 
 ## Done
 
+- [x] The GUI: the time log in the browser (2026-11-19): `htt gui`
+      serves a page from the binary on 127.0.0.1 and opens it: each
+      day as a timeline coloured by category, the week's totals, and a
+      month's report (a calendar, weeks, the average week, rolling
+      category trends, halves). Go computes the figures (period
+      aggregates in the domain), the page draws them with ECharts; no
+      cgo, nothing fetched from the network. Was the wishlist's
+      "Interval output" and the Future's "Create a GUI app layer";
+      see `docs/plans/complete/2026-11-19-gui-time-log.md`
 - [x] Windows (2026-11-18): htt builds for Windows with goterm
       v1.0.4, CI builds, vets and tests it there, and releases after
       v0.4.0 have Windows binaries, a zip holding `htt.exe` for amd64

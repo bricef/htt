@@ -176,13 +176,14 @@ func classifyReplInput(line string) (replInputKind, []string) {
 
 // isDisabledInRepl rejects commands that don't make sense inside
 // the REPL — `interactive` (would launch the TUI on top of the
-// REPL's terminal) and `repl` itself (recursive REPL).
+// REPL's terminal), `gui` (serves until Ctrl-C, which would end the
+// REPL too) and `repl` itself (recursive REPL).
 func isDisabledInRepl(args []string) bool {
 	if len(args) == 0 {
 		return false
 	}
 	switch args[0] {
-	case "interactive", "repl":
+	case "interactive", "gui", "repl":
 		return true
 	}
 	return false
@@ -205,6 +206,8 @@ func resetReplFlags() {
 	showFilters = nil
 	tuiLogFile = ""
 	tuiLogLevel = "debug"
+	guiPort = 0
+	guiNoOpen = false
 }
 
 // ansiClearScreen homes the cursor and clears the entire visible

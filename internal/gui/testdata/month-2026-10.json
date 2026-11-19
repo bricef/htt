@@ -1,0 +1,1165 @@
+{
+  "version": 1,
+  "now": "2026-11-19T15:20:00Z",
+  "nowMinute": 920,
+  "today": "2026-11-19",
+  "categories": [
+    {
+      "name": "break",
+      "work": false,
+      "colour": 0
+    },
+    {
+      "name": "htt",
+      "work": true,
+      "colour": 0
+    },
+    {
+      "name": "admin",
+      "work": true,
+      "colour": 1
+    },
+    {
+      "name": "meetings",
+      "work": true,
+      "colour": 2
+    },
+    {
+      "name": "uncategorised",
+      "work": true,
+      "colour": 0,
+      "uncategorised": true,
+      "countedAs": "working"
+    }
+  ],
+  "period": {
+    "kind": "month",
+    "key": "2026-10",
+    "start": "2026-10-01",
+    "end": "2026-10-31",
+    "previous": "2026-09",
+    "next": "2026-11",
+    "current": "2026-11",
+    "includesToday": false
+  },
+  "days": [
+    {
+      "date": "2026-10-01",
+      "status": "ended",
+      "worked": 26100,
+      "breaks": 2700,
+      "toMidnight": 0,
+      "categories": {
+        "admin": 1800,
+        "break": 2700,
+        "htt": 24300
+      },
+      "endedAt": "2026-10-01T17:00:00+01:00",
+      "endedAtMinute": 1020,
+      "intervals": [
+        {
+          "entry": "triage @email",
+          "category": "admin",
+          "uncategorised": false,
+          "work": true,
+          "start": "2026-10-01T09:00:00+01:00",
+          "startMinute": 540,
+          "end": "2026-10-01T09:30:00+01:00",
+          "endMinute": 570,
+          "drawnEndMinute": 570,
+          "seconds": 1800
+        },
+        {
+          "entry": "parser +htt",
+          "category": "htt",
+          "uncategorised": false,
+          "work": true,
+          "start": "2026-10-01T09:30:00+01:00",
+          "startMinute": 570,
+          "end": "2026-10-01T12:00:00+01:00",
+          "endMinute": 720,
+          "drawnEndMinute": 720,
+          "seconds": 9000
+        },
+        {
+          "entry": "@lunch",
+          "category": "break",
+          "uncategorised": false,
+          "work": false,
+          "start": "2026-10-01T12:00:00+01:00",
+          "startMinute": 720,
+          "end": "2026-10-01T12:45:00+01:00",
+          "endMinute": 765,
+          "drawnEndMinute": 765,
+          "seconds": 2700
+        },
+        {
+          "entry": "parser +htt",
+          "category": "htt",
+          "uncategorised": false,
+          "work": true,
+          "start": "2026-10-01T12:45:00+01:00",
+          "startMinute": 765,
+          "end": "2026-10-01T17:00:00+01:00",
+          "endMinute": 1020,
+          "drawnEndMinute": 1020,
+          "seconds": 15300
+        }
+      ]
+    },
+    {
+      "date": "2026-10-02",
+      "status": "ended",
+      "worked": 21600,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {
+        "htt": 20700,
+        "meetings": 900
+      },
+      "endedAt": "2026-10-02T16:00:00+01:00",
+      "endedAtMinute": 960,
+      "intervals": [
+        {
+          "entry": "standup @meeting",
+          "category": "meetings",
+          "uncategorised": false,
+          "work": true,
+          "start": "2026-10-02T10:00:00+01:00",
+          "startMinute": 600,
+          "end": "2026-10-02T10:15:00+01:00",
+          "endMinute": 615,
+          "drawnEndMinute": 615,
+          "seconds": 900
+        },
+        {
+          "entry": "release +htt",
+          "category": "htt",
+          "uncategorised": false,
+          "work": true,
+          "start": "2026-10-02T10:15:00+01:00",
+          "startMinute": 615,
+          "end": "2026-10-02T16:00:00+01:00",
+          "endMinute": 960,
+          "drawnEndMinute": 960,
+          "seconds": 20700
+        }
+      ]
+    },
+    {
+      "date": "2026-10-03",
+      "status": "empty",
+      "worked": 0,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {},
+      "intervals": []
+    },
+    {
+      "date": "2026-10-04",
+      "status": "empty",
+      "worked": 0,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {},
+      "intervals": []
+    },
+    {
+      "date": "2026-10-05",
+      "status": "empty",
+      "worked": 0,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {},
+      "intervals": []
+    },
+    {
+      "date": "2026-10-06",
+      "status": "empty",
+      "worked": 0,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {},
+      "intervals": []
+    },
+    {
+      "date": "2026-10-07",
+      "status": "empty",
+      "worked": 0,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {},
+      "intervals": []
+    },
+    {
+      "date": "2026-10-08",
+      "status": "empty",
+      "worked": 0,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {},
+      "intervals": []
+    },
+    {
+      "date": "2026-10-09",
+      "status": "empty",
+      "worked": 0,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {},
+      "intervals": []
+    },
+    {
+      "date": "2026-10-10",
+      "status": "empty",
+      "worked": 0,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {},
+      "intervals": []
+    },
+    {
+      "date": "2026-10-11",
+      "status": "empty",
+      "worked": 0,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {},
+      "intervals": []
+    },
+    {
+      "date": "2026-10-12",
+      "status": "empty",
+      "worked": 0,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {},
+      "intervals": []
+    },
+    {
+      "date": "2026-10-13",
+      "status": "empty",
+      "worked": 0,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {},
+      "intervals": []
+    },
+    {
+      "date": "2026-10-14",
+      "status": "empty",
+      "worked": 0,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {},
+      "intervals": []
+    },
+    {
+      "date": "2026-10-15",
+      "status": "unended",
+      "worked": 54000,
+      "breaks": 0,
+      "toMidnight": 54000,
+      "categories": {
+        "htt": 54000
+      },
+      "intervals": [
+        {
+          "entry": "parser +htt",
+          "category": "htt",
+          "uncategorised": false,
+          "work": true,
+          "start": "2026-10-15T09:00:00+01:00",
+          "startMinute": 540,
+          "end": "2026-10-16T00:00:00+01:00",
+          "endMinute": 1440,
+          "drawnEndMinute": 1440,
+          "seconds": 54000,
+          "open": "midnight"
+        }
+      ]
+    },
+    {
+      "date": "2026-10-16",
+      "status": "ended",
+      "worked": 3600,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {
+        "uncategorised": 3600
+      },
+      "endedAt": "2026-10-16T10:00:00+01:00",
+      "endedAtMinute": 600,
+      "intervals": [
+        {
+          "entry": "reading the news",
+          "category": "working",
+          "uncategorised": true,
+          "work": true,
+          "start": "2026-10-16T09:00:00+01:00",
+          "startMinute": 540,
+          "end": "2026-10-16T10:00:00+01:00",
+          "endMinute": 600,
+          "drawnEndMinute": 600,
+          "seconds": 3600
+        }
+      ]
+    },
+    {
+      "date": "2026-10-17",
+      "status": "empty",
+      "worked": 0,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {},
+      "intervals": []
+    },
+    {
+      "date": "2026-10-18",
+      "status": "empty",
+      "worked": 0,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {},
+      "intervals": []
+    },
+    {
+      "date": "2026-10-19",
+      "status": "empty",
+      "worked": 0,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {},
+      "intervals": []
+    },
+    {
+      "date": "2026-10-20",
+      "status": "empty",
+      "worked": 0,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {},
+      "intervals": []
+    },
+    {
+      "date": "2026-10-21",
+      "status": "empty",
+      "worked": 0,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {},
+      "intervals": []
+    },
+    {
+      "date": "2026-10-22",
+      "status": "empty",
+      "worked": 0,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {},
+      "intervals": []
+    },
+    {
+      "date": "2026-10-23",
+      "status": "empty",
+      "worked": 0,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {},
+      "intervals": []
+    },
+    {
+      "date": "2026-10-24",
+      "status": "empty",
+      "worked": 0,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {},
+      "intervals": []
+    },
+    {
+      "date": "2026-10-25",
+      "status": "ended",
+      "worked": 7200,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {
+        "htt": 7200
+      },
+      "endedAt": "2026-10-25T02:30:00Z",
+      "endedAtMinute": 150,
+      "intervals": [
+        {
+          "entry": "late fix +htt",
+          "category": "htt",
+          "uncategorised": false,
+          "work": true,
+          "start": "2026-10-25T01:30:00+01:00",
+          "startMinute": 90,
+          "end": "2026-10-25T02:30:00Z",
+          "endMinute": 150,
+          "drawnEndMinute": 150,
+          "seconds": 7200
+        }
+      ]
+    },
+    {
+      "date": "2026-10-26",
+      "status": "empty",
+      "worked": 0,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {},
+      "intervals": []
+    },
+    {
+      "date": "2026-10-27",
+      "status": "empty",
+      "worked": 0,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {},
+      "intervals": []
+    },
+    {
+      "date": "2026-10-28",
+      "status": "empty",
+      "worked": 0,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {},
+      "intervals": []
+    },
+    {
+      "date": "2026-10-29",
+      "status": "empty",
+      "worked": 0,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {},
+      "intervals": []
+    },
+    {
+      "date": "2026-10-30",
+      "status": "empty",
+      "worked": 0,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {},
+      "intervals": []
+    },
+    {
+      "date": "2026-10-31",
+      "status": "ended",
+      "worked": 5400,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {
+        "htt": 5400
+      },
+      "endedAt": "2026-10-31T11:30:00Z",
+      "endedAtMinute": 690,
+      "intervals": [
+        {
+          "entry": "docs +htt",
+          "category": "htt",
+          "uncategorised": false,
+          "work": true,
+          "start": "2026-10-31T10:00:00Z",
+          "startMinute": 600,
+          "end": "2026-10-31T11:30:00Z",
+          "endMinute": 690,
+          "drawnEndMinute": 690,
+          "seconds": 5400
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "days": 31,
+    "workingDays": 6,
+    "totals": {
+      "worked": 117900,
+      "breaks": 2700,
+      "toMidnight": 54000,
+      "categories": {
+        "admin": 1800,
+        "break": 2700,
+        "htt": 111600,
+        "meetings": 900,
+        "uncategorised": 3600
+      }
+    },
+    "averageWeek": 26623,
+    "averageWorkingDay": 19650,
+    "uncategorisedShare": 0.030534351145038167,
+    "unended": [
+      "2026-10-15"
+    ]
+  },
+  "weeks": [
+    {
+      "start": "2026-10-01",
+      "end": "2026-10-04",
+      "days": 4,
+      "totals": {
+        "worked": 47700,
+        "breaks": 2700,
+        "toMidnight": 0,
+        "categories": {
+          "admin": 1800,
+          "break": 2700,
+          "htt": 45000,
+          "meetings": 900
+        }
+      }
+    },
+    {
+      "start": "2026-10-05",
+      "end": "2026-10-11",
+      "days": 7,
+      "totals": {
+        "worked": 0,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {}
+      }
+    },
+    {
+      "start": "2026-10-12",
+      "end": "2026-10-18",
+      "days": 7,
+      "totals": {
+        "worked": 57600,
+        "breaks": 0,
+        "toMidnight": 54000,
+        "categories": {
+          "htt": 54000,
+          "uncategorised": 3600
+        }
+      }
+    },
+    {
+      "start": "2026-10-19",
+      "end": "2026-10-25",
+      "days": 7,
+      "totals": {
+        "worked": 7200,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {
+          "htt": 7200
+        }
+      }
+    },
+    {
+      "start": "2026-10-26",
+      "end": "2026-10-31",
+      "days": 6,
+      "totals": {
+        "worked": 5400,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {
+          "htt": 5400
+        }
+      }
+    }
+  ],
+  "weekdays": [
+    {
+      "weekday": "Mon",
+      "days": 4,
+      "totals": {
+        "worked": 0,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {}
+      },
+      "average": {
+        "worked": 0,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {}
+      }
+    },
+    {
+      "weekday": "Tue",
+      "days": 4,
+      "totals": {
+        "worked": 0,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {}
+      },
+      "average": {
+        "worked": 0,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {}
+      }
+    },
+    {
+      "weekday": "Wed",
+      "days": 4,
+      "totals": {
+        "worked": 0,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {}
+      },
+      "average": {
+        "worked": 0,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {}
+      }
+    },
+    {
+      "weekday": "Thu",
+      "days": 5,
+      "totals": {
+        "worked": 80100,
+        "breaks": 2700,
+        "toMidnight": 54000,
+        "categories": {
+          "admin": 1800,
+          "break": 2700,
+          "htt": 78300
+        }
+      },
+      "average": {
+        "worked": 16020,
+        "breaks": 540,
+        "toMidnight": 10800,
+        "categories": {
+          "admin": 360,
+          "break": 540,
+          "htt": 15660
+        }
+      }
+    },
+    {
+      "weekday": "Fri",
+      "days": 5,
+      "totals": {
+        "worked": 25200,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {
+          "htt": 20700,
+          "meetings": 900,
+          "uncategorised": 3600
+        }
+      },
+      "average": {
+        "worked": 5040,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {
+          "htt": 4140,
+          "meetings": 180,
+          "uncategorised": 720
+        }
+      }
+    },
+    {
+      "weekday": "Sat",
+      "days": 5,
+      "totals": {
+        "worked": 5400,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {
+          "htt": 5400
+        }
+      },
+      "average": {
+        "worked": 1080,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {
+          "htt": 1080
+        }
+      }
+    },
+    {
+      "weekday": "Sun",
+      "days": 4,
+      "totals": {
+        "worked": 7200,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {
+          "htt": 7200
+        }
+      },
+      "average": {
+        "worked": 1800,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {
+          "htt": 1800
+        }
+      }
+    }
+  ],
+  "rolling": [
+    {
+      "date": "2026-10-01",
+      "totals": {
+        "worked": 54900,
+        "breaks": 2700,
+        "toMidnight": 0,
+        "categories": {
+          "admin": 1800,
+          "break": 2700,
+          "htt": 53100
+        }
+      }
+    },
+    {
+      "date": "2026-10-02",
+      "totals": {
+        "worked": 76500,
+        "breaks": 2700,
+        "toMidnight": 0,
+        "categories": {
+          "admin": 1800,
+          "break": 2700,
+          "htt": 73800,
+          "meetings": 900
+        }
+      }
+    },
+    {
+      "date": "2026-10-03",
+      "totals": {
+        "worked": 76500,
+        "breaks": 2700,
+        "toMidnight": 0,
+        "categories": {
+          "admin": 1800,
+          "break": 2700,
+          "htt": 73800,
+          "meetings": 900
+        }
+      }
+    },
+    {
+      "date": "2026-10-04",
+      "totals": {
+        "worked": 76500,
+        "breaks": 2700,
+        "toMidnight": 0,
+        "categories": {
+          "admin": 1800,
+          "break": 2700,
+          "htt": 73800,
+          "meetings": 900
+        }
+      }
+    },
+    {
+      "date": "2026-10-05",
+      "totals": {
+        "worked": 47700,
+        "breaks": 2700,
+        "toMidnight": 0,
+        "categories": {
+          "admin": 1800,
+          "break": 2700,
+          "htt": 45000,
+          "meetings": 900
+        }
+      }
+    },
+    {
+      "date": "2026-10-06",
+      "totals": {
+        "worked": 47700,
+        "breaks": 2700,
+        "toMidnight": 0,
+        "categories": {
+          "admin": 1800,
+          "break": 2700,
+          "htt": 45000,
+          "meetings": 900
+        }
+      }
+    },
+    {
+      "date": "2026-10-07",
+      "totals": {
+        "worked": 47700,
+        "breaks": 2700,
+        "toMidnight": 0,
+        "categories": {
+          "admin": 1800,
+          "break": 2700,
+          "htt": 45000,
+          "meetings": 900
+        }
+      }
+    },
+    {
+      "date": "2026-10-08",
+      "totals": {
+        "worked": 21600,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {
+          "htt": 20700,
+          "meetings": 900
+        }
+      }
+    },
+    {
+      "date": "2026-10-09",
+      "totals": {
+        "worked": 0,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {}
+      }
+    },
+    {
+      "date": "2026-10-10",
+      "totals": {
+        "worked": 0,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {}
+      }
+    },
+    {
+      "date": "2026-10-11",
+      "totals": {
+        "worked": 0,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {}
+      }
+    },
+    {
+      "date": "2026-10-12",
+      "totals": {
+        "worked": 0,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {}
+      }
+    },
+    {
+      "date": "2026-10-13",
+      "totals": {
+        "worked": 0,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {}
+      }
+    },
+    {
+      "date": "2026-10-14",
+      "totals": {
+        "worked": 0,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {}
+      }
+    },
+    {
+      "date": "2026-10-15",
+      "totals": {
+        "worked": 54000,
+        "breaks": 0,
+        "toMidnight": 54000,
+        "categories": {
+          "htt": 54000
+        }
+      }
+    },
+    {
+      "date": "2026-10-16",
+      "totals": {
+        "worked": 57600,
+        "breaks": 0,
+        "toMidnight": 54000,
+        "categories": {
+          "htt": 54000,
+          "uncategorised": 3600
+        }
+      }
+    },
+    {
+      "date": "2026-10-17",
+      "totals": {
+        "worked": 57600,
+        "breaks": 0,
+        "toMidnight": 54000,
+        "categories": {
+          "htt": 54000,
+          "uncategorised": 3600
+        }
+      }
+    },
+    {
+      "date": "2026-10-18",
+      "totals": {
+        "worked": 57600,
+        "breaks": 0,
+        "toMidnight": 54000,
+        "categories": {
+          "htt": 54000,
+          "uncategorised": 3600
+        }
+      }
+    },
+    {
+      "date": "2026-10-19",
+      "totals": {
+        "worked": 57600,
+        "breaks": 0,
+        "toMidnight": 54000,
+        "categories": {
+          "htt": 54000,
+          "uncategorised": 3600
+        }
+      }
+    },
+    {
+      "date": "2026-10-20",
+      "totals": {
+        "worked": 57600,
+        "breaks": 0,
+        "toMidnight": 54000,
+        "categories": {
+          "htt": 54000,
+          "uncategorised": 3600
+        }
+      }
+    },
+    {
+      "date": "2026-10-21",
+      "totals": {
+        "worked": 57600,
+        "breaks": 0,
+        "toMidnight": 54000,
+        "categories": {
+          "htt": 54000,
+          "uncategorised": 3600
+        }
+      }
+    },
+    {
+      "date": "2026-10-22",
+      "totals": {
+        "worked": 3600,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {
+          "uncategorised": 3600
+        }
+      }
+    },
+    {
+      "date": "2026-10-23",
+      "totals": {
+        "worked": 0,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {}
+      }
+    },
+    {
+      "date": "2026-10-24",
+      "totals": {
+        "worked": 0,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {}
+      }
+    },
+    {
+      "date": "2026-10-25",
+      "totals": {
+        "worked": 7200,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {
+          "htt": 7200
+        }
+      }
+    },
+    {
+      "date": "2026-10-26",
+      "totals": {
+        "worked": 7200,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {
+          "htt": 7200
+        }
+      }
+    },
+    {
+      "date": "2026-10-27",
+      "totals": {
+        "worked": 7200,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {
+          "htt": 7200
+        }
+      }
+    },
+    {
+      "date": "2026-10-28",
+      "totals": {
+        "worked": 7200,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {
+          "htt": 7200
+        }
+      }
+    },
+    {
+      "date": "2026-10-29",
+      "totals": {
+        "worked": 7200,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {
+          "htt": 7200
+        }
+      }
+    },
+    {
+      "date": "2026-10-30",
+      "totals": {
+        "worked": 7200,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {
+          "htt": 7200
+        }
+      }
+    },
+    {
+      "date": "2026-10-31",
+      "totals": {
+        "worked": 12600,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {
+          "htt": 12600
+        }
+      }
+    }
+  ],
+  "halves": [
+    {
+      "start": "2026-10-01",
+      "end": "2026-10-15",
+      "days": 15,
+      "totals": {
+        "worked": 101700,
+        "breaks": 2700,
+        "toMidnight": 54000,
+        "categories": {
+          "admin": 1800,
+          "break": 2700,
+          "htt": 99000,
+          "meetings": 900
+        }
+      },
+      "perWeek": {
+        "worked": 47460,
+        "breaks": 1260,
+        "toMidnight": 25200,
+        "categories": {
+          "admin": 840,
+          "break": 1260,
+          "htt": 46200,
+          "meetings": 420
+        }
+      }
+    },
+    {
+      "start": "2026-10-16",
+      "end": "2026-10-31",
+      "days": 16,
+      "totals": {
+        "worked": 16200,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {
+          "htt": 12600,
+          "uncategorised": 3600
+        }
+      },
+      "perWeek": {
+        "worked": 7088,
+        "breaks": 0,
+        "toMidnight": 0,
+        "categories": {
+          "htt": 5513,
+          "uncategorised": 1575
+        }
+      }
+    }
+  ],
+  "table": [
+    {
+      "category": "break",
+      "total": 2700,
+      "shareOfWorked": null,
+      "perWeek": [
+        1260,
+        0
+      ],
+      "change": -1
+    },
+    {
+      "category": "htt",
+      "total": 111600,
+      "shareOfWorked": 0.9465648854961832,
+      "perWeek": [
+        46200,
+        5513
+      ],
+      "change": -0.8806818181818181
+    },
+    {
+      "category": "admin",
+      "total": 1800,
+      "shareOfWorked": 0.015267175572519083,
+      "perWeek": [
+        840,
+        0
+      ],
+      "change": -1
+    },
+    {
+      "category": "meetings",
+      "total": 900,
+      "shareOfWorked": 0.007633587786259542,
+      "perWeek": [
+        420,
+        0
+      ],
+      "change": -1
+    },
+    {
+      "category": "uncategorised",
+      "total": 3600,
+      "shareOfWorked": 0.030534351145038167,
+      "perWeek": [
+        0,
+        1575
+      ],
+      "change": null
+    }
+  ]
+}

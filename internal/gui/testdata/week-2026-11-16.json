@@ -1,0 +1,287 @@
+{
+  "version": 1,
+  "now": "2026-11-19T15:20:00Z",
+  "nowMinute": 920,
+  "today": "2026-11-19",
+  "categories": [
+    {
+      "name": "break",
+      "work": false,
+      "colour": 0
+    },
+    {
+      "name": "htt",
+      "work": true,
+      "colour": 0
+    },
+    {
+      "name": "admin",
+      "work": true,
+      "colour": 1
+    },
+    {
+      "name": "meetings",
+      "work": true,
+      "colour": 2
+    },
+    {
+      "name": "uncategorised",
+      "work": true,
+      "colour": 0,
+      "uncategorised": true,
+      "countedAs": "working"
+    }
+  ],
+  "period": {
+    "kind": "week",
+    "key": "2026-11-16",
+    "start": "2026-11-16",
+    "end": "2026-11-22",
+    "previous": "2026-11-09",
+    "next": "2026-11-23",
+    "current": "2026-11-16",
+    "includesToday": true
+  },
+  "days": [
+    {
+      "date": "2026-11-16",
+      "status": "ended",
+      "worked": 27900,
+      "breaks": 2700,
+      "toMidnight": 0,
+      "categories": {
+        "break": 2700,
+        "htt": 24300,
+        "meetings": 1800,
+        "uncategorised": 1800
+      },
+      "endedAt": "2026-11-16T17:30:00Z",
+      "endedAtMinute": 1050,
+      "intervals": [
+        {
+          "entry": "planning @meeting",
+          "category": "meetings",
+          "uncategorised": false,
+          "work": true,
+          "start": "2026-11-16T09:00:00Z",
+          "startMinute": 540,
+          "end": "2026-11-16T09:30:00Z",
+          "endMinute": 570,
+          "drawnEndMinute": 570,
+          "seconds": 1800
+        },
+        {
+          "entry": "Windows build +htt",
+          "category": "htt",
+          "uncategorised": false,
+          "work": true,
+          "start": "2026-11-16T09:30:00Z",
+          "startMinute": 570,
+          "end": "2026-11-16T12:30:00Z",
+          "endMinute": 750,
+          "drawnEndMinute": 750,
+          "seconds": 10800
+        },
+        {
+          "entry": "@lunch",
+          "category": "break",
+          "uncategorised": false,
+          "work": false,
+          "start": "2026-11-16T12:30:00Z",
+          "startMinute": 750,
+          "end": "2026-11-16T13:15:00Z",
+          "endMinute": 795,
+          "drawnEndMinute": 795,
+          "seconds": 2700
+        },
+        {
+          "entry": "reading the news",
+          "category": "working",
+          "uncategorised": true,
+          "work": true,
+          "start": "2026-11-16T13:15:00Z",
+          "startMinute": 795,
+          "end": "2026-11-16T13:45:00Z",
+          "endMinute": 825,
+          "drawnEndMinute": 825,
+          "seconds": 1800
+        },
+        {
+          "entry": "Windows build +htt",
+          "category": "htt",
+          "uncategorised": false,
+          "work": true,
+          "start": "2026-11-16T13:45:00Z",
+          "startMinute": 825,
+          "end": "2026-11-16T17:30:00Z",
+          "endMinute": 1050,
+          "drawnEndMinute": 1050,
+          "seconds": 13500
+        }
+      ]
+    },
+    {
+      "date": "2026-11-17",
+      "status": "unended",
+      "worked": 53100,
+      "breaks": 0,
+      "toMidnight": 51300,
+      "categories": {
+        "admin": 1800,
+        "htt": 51300
+      },
+      "intervals": [
+        {
+          "entry": "answer mail @email",
+          "category": "admin",
+          "uncategorised": false,
+          "work": true,
+          "start": "2026-11-17T09:15:00Z",
+          "startMinute": 555,
+          "end": "2026-11-17T09:45:00Z",
+          "endMinute": 585,
+          "drawnEndMinute": 585,
+          "seconds": 1800
+        },
+        {
+          "entry": "status flags +htt",
+          "category": "htt",
+          "uncategorised": false,
+          "work": true,
+          "start": "2026-11-17T09:45:00Z",
+          "startMinute": 585,
+          "end": "2026-11-18T00:00:00Z",
+          "endMinute": 1440,
+          "drawnEndMinute": 1440,
+          "seconds": 51300,
+          "open": "midnight"
+        }
+      ]
+    },
+    {
+      "date": "2026-11-18",
+      "status": "empty",
+      "worked": 0,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {},
+      "intervals": []
+    },
+    {
+      "date": "2026-11-19",
+      "status": "inProgress",
+      "worked": 19800,
+      "breaks": 2700,
+      "toMidnight": 0,
+      "categories": {
+        "break": 2700,
+        "htt": 19500,
+        "uncategorised": 300
+      },
+      "intervals": [
+        {
+          "entry": "@start",
+          "category": "working",
+          "uncategorised": true,
+          "work": true,
+          "start": "2026-11-19T09:05:00Z",
+          "startMinute": 545,
+          "end": "2026-11-19T09:10:00Z",
+          "endMinute": 550,
+          "drawnEndMinute": 550,
+          "seconds": 300
+        },
+        {
+          "entry": "prototype +htt",
+          "category": "htt",
+          "uncategorised": false,
+          "work": true,
+          "start": "2026-11-19T09:10:00Z",
+          "startMinute": 550,
+          "end": "2026-11-19T12:30:00Z",
+          "endMinute": 750,
+          "drawnEndMinute": 750,
+          "seconds": 12000
+        },
+        {
+          "entry": "@lunch",
+          "category": "break",
+          "uncategorised": false,
+          "work": false,
+          "start": "2026-11-19T12:30:00Z",
+          "startMinute": 750,
+          "end": "2026-11-19T13:15:00Z",
+          "endMinute": 795,
+          "drawnEndMinute": 795,
+          "seconds": 2700
+        },
+        {
+          "entry": "(A) review the plan +htt due:2026-11-20",
+          "category": "htt",
+          "uncategorised": false,
+          "work": true,
+          "start": "2026-11-19T13:15:00Z",
+          "startMinute": 795,
+          "end": "2026-11-19T15:20:00Z",
+          "endMinute": 920,
+          "drawnEndMinute": 920,
+          "seconds": 7500,
+          "open": "now"
+        }
+      ]
+    },
+    {
+      "date": "2026-11-20",
+      "status": "future",
+      "worked": 0,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {},
+      "intervals": []
+    },
+    {
+      "date": "2026-11-21",
+      "status": "future",
+      "worked": 0,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {},
+      "intervals": []
+    },
+    {
+      "date": "2026-11-22",
+      "status": "future",
+      "worked": 0,
+      "breaks": 0,
+      "toMidnight": 0,
+      "categories": {},
+      "intervals": []
+    }
+  ],
+  "summary": {
+    "days": 4,
+    "workingDays": 3,
+    "totals": {
+      "worked": 100800,
+      "breaks": 5400,
+      "toMidnight": 51300,
+      "categories": {
+        "admin": 1800,
+        "break": 5400,
+        "htt": 95100,
+        "meetings": 1800,
+        "uncategorised": 2100
+      }
+    },
+    "averageWeek": 176400,
+    "averageWorkingDay": 33600,
+    "uncategorisedShare": 0.020833333333333332,
+    "unended": [
+      "2026-11-17"
+    ]
+  },
+  "hours": {
+    "from": 480,
+    "to": 1440
+  }
+}

@@ -81,6 +81,8 @@ func TestIsDisabledInRepl(t *testing.T) {
 		{"empty args", nil, false},
 		{"interactive blocked", []string{"interactive"}, true},
 		{"repl blocked", []string{"repl"}, true},
+		{"gui blocked", []string{"gui"}, true},
+		{"gui with flags blocked", []string{"gui", "--no-open"}, true},
 		{"todo allowed", []string{"todo", "add", "foo"}, false},
 		{"log allowed", []string{"log", "start"}, false},
 		{"report allowed", []string{"report"}, false},
@@ -136,6 +138,8 @@ func TestResetReplFlags_ClearsBleedingState(t *testing.T) {
 	showFilters = []string{"overdue"}
 	tuiLogFile = "tui.log"
 	tuiLogLevel = "error"
+	guiPort = 8080
+	guiNoOpen = true
 
 	resetReplFlags()
 
@@ -162,6 +166,9 @@ func TestResetReplFlags_ClearsBleedingState(t *testing.T) {
 	}
 	if tuiLogLevel != "debug" {
 		t.Errorf("tuiLogLevel = %q, want debug", tuiLogLevel)
+	}
+	if guiPort != 0 || guiNoOpen {
+		t.Errorf("guiPort = %d, guiNoOpen = %v, want 0 and false", guiPort, guiNoOpen)
 	}
 }
 

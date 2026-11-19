@@ -61,6 +61,7 @@ func (iv Interval) Duration() time.Duration {
 // Timesheet is a day's time log read as intervals: what ran when, and
 // in which category.
 type Timesheet struct {
+	Date       time.Time  // the day's date: the log's, at noon in the local zone
 	Start, End time.Time  // the day: local midnight to the next local midnight
 	Intervals  []Interval // in time order, one per entry that isn't an @end
 	Status     DayStatus
@@ -90,7 +91,11 @@ func (l *Timelog) Timesheet(c *Categoriser, now time.Time) (*Timesheet, error) {
 	loc := now.Location()
 	start := time.Date(l.Date.Year(), l.Date.Month(), l.Date.Day(), 0, 0, 0, 0, loc)
 	end := start.AddDate(0, 0, 1) // 23 or 25 hours away on a day the clocks change
-	sheet := &Timesheet{Start: start, End: end}
+	// The date at noon: where the clocks go forward at midnight,
+	// time.Date puts that midnight, which doesn't exist, on the day
+	// before, so start's date isn't always the log's.
+	date := time.Date(l.Date.Year(), l.Date.Month(), l.Date.Day(), 12, 0, 0, 0, loc)
+	sheet := &Timesheet{Date: date, Start: start, End: end}
 	if len(l.Entries) == 0 {
 		return sheet, nil
 	}

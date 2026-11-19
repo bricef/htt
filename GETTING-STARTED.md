@@ -2,7 +2,8 @@
 
 A fifteen-minute tour. By the end you'll have added a few tasks,
 prioritised them, completed one, organised the rest into contexts,
-logged some work against them, and seen the rollup status. The later
+logged some work against them, seen it in a report and in your
+browser, and seen the rollup status. The later
 sections double as the reference for every command.
 
 If you just want the install + overview, [`README.md`](README.md) has
@@ -687,6 +688,90 @@ A task added and completed in the period counts under both Added and
 Completed, by the context it was in; a deleted task is listed only
 under Deleted.
 
+## The time log in your browser
+
+`htt gui` draws the time log in your browser: each day as a timeline
+coloured by category, the week's totals, and a report for the month.
+htt serves the page itself, from the binary, on your computer only:
+
+```
+$ htt gui
+htt gui: http://127.0.0.1:41731/ (Ctrl-C to stop)
+```
+
+It opens that address in your default browser and serves until you
+press Ctrl-C, which stops it within a second (press it again not to
+wait); the browser stays open. `--no-open` only prints the address,
+for you to open (in another browser, say), and `--port 8080` serves on
+that port rather than on a free one. The address is plain, with
+nothing secret in it: with `--port` it's the same every time, so you
+can bookmark it. htt listens on 127.0.0.1 only, so no other computer
+can reach it, and it only reads your logs.
+
+While `htt gui` runs, anyone with an account on your computer can open
+that address and see your time log, as they could any page served on
+127.0.0.1. On a computer you share with others, stop it when you're
+done.
+
+The page has two views, **Week** and **Month**, each with ‹ Previous,
+This week (or month) and Next ›. The address keeps the one you're on,
+`#week/2026-11-16` for the week holding that day or `#month/2026-10`
+for October, so you can bookmark it; with `--port`, the bookmark works
+whenever `htt gui` runs.
+
+**Week**, Monday to Sunday:
+
+- The figures: worked time, breaks, the average working day, the time
+  counted to midnight on days without `@end`, and those days.
+- *Day by day*: a timeline per day, each entry from its start to the
+  next one, in its category's colour. A day without `@end` is drawn to
+  midnight, faded, dashed and labelled `no @end`; today's running
+  entry ends at a mark for now; an empty day says `nothing logged`,
+  and the days to come `not yet`. It opens on the hours you logged;
+  *Whole day* zooms out to midnight to midnight and back, and the
+  slider or Ctrl + scroll zoom, dragging pans. Hover an entry for its
+  text, times, duration and category; click to pin it under the chart.
+- *Week totals*: a bar per day, its time stacked by category, labelled
+  with worked time and breaks; then the week's time per category.
+
+**Month**, a calendar month:
+
+- The figures: worked time; the average week (worked time ÷ days ×
+  7); the average working day (worked time ÷ days with worked time);
+  breaks; uncategorised time as a share of worked time; and the days
+  without `@end`.
+- *Worked per day*: a calendar, darker for more, a day without `@end`
+  outlined.
+- *Weeks*: each Monday-to-Sunday week's time by category, the first
+  and the last cut at the month's edges (their days are under them),
+  and the average week, dashed.
+- *Average week*: each weekday's average day over the month.
+- *Category trends*: for each day, each category's time in the 7 days
+  up to it, so its hours per week; the first days reach into the month
+  before.
+- A table of the categories: each one's time in the month, its share
+  of worked time, its hours per week from the 1st to the 15th and from
+  the 16th to the end, and the change.
+
+For this week or month, the figures are over the days so far, today
+included, and the page refreshes itself every minute; any page
+refreshes when you come back to it.
+
+The categories are your `timelog.categories` (see
+[Categories](#categories)), in their order. The ones that count as
+work get strong colours (teal, amber, violet, …), the others muted
+ones, and uncategorised time is grey. The page follows your system's
+light or dark setting. htt reads the config when `htt gui` starts, so
+restart it after changing your categories. A config htt can't use
+shows its error in the page, naming the key as `htt report` does, and
+on stderr:
+
+```
+$ htt gui
+htt gui: http://127.0.0.1:41731/ (Ctrl-C to stop)
+warning: config: timelog.categories: category 2 (htt): "htt" isn't a tag (want +project, @context or #tag); the page shows it until you fix it and restart htt gui
+```
+
 ## The rollup
 
 `htt status` (alias `htt ?`) is the one command that combines both:
@@ -957,8 +1042,9 @@ scrolls back, as in any shell.
 Commands without a prefix dispatch as `todo <cmd>`: `add foo`,
 `delete 0`, `+ 1`, `do 0`, `context home`. Prefix a line with `/`
 to escape to a full CLI command: `/log start`, `/report --since 7d`.
-`/interactive` and `/repl` are disabled inside the REPL (no nested
-screens / recursive prompts). `/help` shows the REPL's own help.
+`/interactive`, `/gui` and `/repl` are disabled inside the REPL (no
+nested screens, no server waiting for a Ctrl-C that would end the
+REPL too, no recursive prompts). `/help` shows the REPL's own help.
 Quotes group words as they do in a shell, so a line means the same
 in the REPL as in a terminal: `/log end --at "yesterday 17:30"`,
 `/log add --at='2026-11-17 9:00' filing`, or `add "buy milk"` (the

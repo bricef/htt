@@ -171,6 +171,20 @@ func TestPage_OnlyItsOwnAssets(t *testing.T) {
 	}
 }
 
+// TestPage_DeclaresItsIcon checks that the page names its own icon. A
+// page without one makes Chrome ask for /favicon.ico, outside the
+// token, which is a 404 and an error in the console.
+func TestPage_DeclaresItsIcon(t *testing.T) {
+	s := testServer(t)
+	m := regexp.MustCompile(`<link rel="icon" href="([^"]+)"`).FindStringSubmatch(get(t, s, "").Body.String())
+	if m == nil {
+		t.Fatal(`index.html has no <link rel="icon" href="…">`)
+	}
+	if w := get(t, s, m[1]); w.Code != http.StatusOK || w.Header().Get("Content-Type") != "image/svg+xml" {
+		t.Errorf("the icon %s: %d %s, want an SVG", m[1], w.Code, w.Header().Get("Content-Type"))
+	}
+}
+
 func TestNew_RandomTokens(t *testing.T) {
 	seen := map[string]bool{}
 	for range 20 {

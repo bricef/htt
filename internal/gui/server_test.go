@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -515,6 +516,14 @@ func TestListenAndServe_ClosesWhatsLeft(t *testing.T) {
 	stopped(t, done, 10*time.Second)
 	if took := time.Since(start); took > 3*time.Second {
 		t.Errorf("it took %v to stop, want a moment", took.Round(time.Millisecond))
+	}
+	// The half-sent request's connection is closed, not left open.
+	if err := c.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	var timeout net.Error
+	if _, err := c.Read(make([]byte, 1)); errors.As(err, &timeout) && timeout.Timeout() {
+		t.Error("the connection that hadn't sent its request is still open after stopping")
 	}
 }
 

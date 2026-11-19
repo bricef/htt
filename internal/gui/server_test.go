@@ -125,6 +125,122 @@ func TestServer_HostOnPort80(t *testing.T) {
 	}
 }
 
+func TestServer_OnlyItsOwnPage(t *testing.T) {
+	// Only the GUI's own page, or a person opening it, gets an answer:
+	// an Origin must be the GUI's own, and a request another site's page
+	// makes (Sec-Fetch-Site same-site or cross-site) is refused unless
+	// it's a link followed to open the page. Each case as a browser
+	// sends it, with a few that isolate one rule.
+	s := testServer(t)
+	type headers map[string]string
+	nav := func(site string) headers {
+		return headers{"Sec-Fetch-Site": site, "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "document"}
+	}
+	cases := []struct {
+		name         string
+		port         int
+		host, method string
+		path         string
+		headers      headers
+		want         int
+	}{
+		{"same-origin fetch, its own Origin", 0, "", "", "/api/week",
+			headers{"Origin": "http://127.0.0.1:8123", "Sec-Fetch-Site": "same-origin", "Sec-Fetch-Mode": "cors", "Sec-Fetch-Dest": "empty"}, http.StatusOK},
+		{"same-origin fetch, no Origin", 0, "", "", "/api/week",
+			headers{"Sec-Fetch-Site": "same-origin", "Sec-Fetch-Mode": "cors", "Sec-Fetch-Dest": "empty"}, http.StatusOK},
+		{"same-origin script", 0, "", "", "/app.js",
+			headers{"Sec-Fetch-Site": "same-origin", "Sec-Fetch-Mode": "no-cors", "Sec-Fetch-Dest": "script"}, http.StatusOK},
+		{"none: an address typed, a bookmark, htt's opener", 0, "", "", "/", nav("none"), http.StatusOK},
+		{"none, not a navigation", 0, "", http.MethodHead, "/api/week",
+			headers{"Sec-Fetch-Site": "none", "Sec-Fetch-Mode": "no-cors", "Sec-Fetch-Dest": "empty"}, http.StatusOK},
+		{"no fetch metadata (curl)", 0, "", "", "/api/week", nil, http.StatusOK},
+		{"cross-site top-level navigation", 0, "", "", "/", nav("cross-site"), http.StatusOK},
+		{"same-site top-level navigation", 0, "", "", "/", nav("same-site"), http.StatusOK},
+		{"cross-site fetch (mode cors)", 0, "", "", "/api/week",
+			headers{"Origin": "https://evil.example", "Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "cors", "Sec-Fetch-Dest": "empty"}, http.StatusForbidden},
+		{"cross-site fetch without an Origin (mode no-cors)", 0, "", "", "/api/week",
+			headers{"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "no-cors", "Sec-Fetch-Dest": "empty"}, http.StatusForbidden},
+		{"cross-site no-cors image", 0, "", "", "/icon.svg",
+			headers{"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "no-cors", "Sec-Fetch-Dest": "image"}, http.StatusForbidden},
+		{"cross-site script", 0, "", "", "/app.js",
+			headers{"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "no-cors", "Sec-Fetch-Dest": "script"}, http.StatusForbidden},
+		{"cross-site style", 0, "", "", "/style.css",
+			headers{"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "no-cors", "Sec-Fetch-Dest": "style"}, http.StatusForbidden},
+		{"cross-site iframe", 0, "", "", "/",
+			headers{"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "iframe"}, http.StatusForbidden},
+		{"cross-site object", 0, "", "", "/",
+			headers{"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "navigate", "Sec-Fetch-Dest": "object"}, http.StatusForbidden},
+		{"cross-site, a document but not a navigation", 0, "", "", "/",
+			headers{"Sec-Fetch-Site": "cross-site", "Sec-Fetch-Mode": "no-cors", "Sec-Fetch-Dest": "document"}, http.StatusForbidden},
+		{"cross-site form POST, a navigation", 0, "", http.MethodPost, "/api/week", nav("cross-site"), http.StatusForbidden},
+		{"cross-site HEAD navigation", 0, "", http.MethodHead, "/", nav("cross-site"), http.StatusForbidden},
+		{"same-site fetch (another localhost port)", 0, "", "", "/api/week",
+			headers{"Origin": "http://localhost:9000", "Sec-Fetch-Site": "same-site", "Sec-Fetch-Mode": "cors", "Sec-Fetch-Dest": "empty"}, http.StatusForbidden},
+		{"same-site image (another localhost port)", 0, "", "", "/icon.svg",
+			headers{"Sec-Fetch-Site": "same-site", "Sec-Fetch-Mode": "no-cors", "Sec-Fetch-Dest": "image"}, http.StatusForbidden},
+		{"a Sec-Fetch-Site no browser sends", 0, "", "", "/api/week", headers{"Sec-Fetch-Site": "same-origin, cross-site"}, http.StatusForbidden},
+		{"a foreign Origin, no fetch metadata", 0, "", "", "/api/week", headers{"Origin": "https://evil.example"}, http.StatusForbidden},
+		{"a foreign Origin, same-origin claimed", 0, "", "", "/api/week",
+			headers{"Origin": "https://evil.example", "Sec-Fetch-Site": "same-origin"}, http.StatusForbidden},
+		{"Origin: null (a sandboxed frame, a file)", 0, "", "", "/api/week", headers{"Origin": "null"}, http.StatusForbidden},
+		{"an empty Origin", 0, "", "", "/api/week", headers{"Origin": ""}, http.StatusForbidden},
+		{"another port's Origin", 0, "", "", "/api/week", headers{"Origin": "http://127.0.0.1:8124"}, http.StatusForbidden},
+		{"https at its address", 0, "", "", "/api/week", headers{"Origin": "https://127.0.0.1:8123"}, http.StatusForbidden},
+		{"an Origin with a path", 0, "", "", "/api/week", headers{"Origin": "http://127.0.0.1:8123/"}, http.StatusForbidden},
+		{"its own Origin via localhost", 0, "localhost:8123", "", "/api/week",
+			headers{"Origin": "http://localhost:8123", "Sec-Fetch-Site": "same-origin"}, http.StatusOK},
+		{"its own Origin, the other name", 0, "127.0.0.1:8123", "", "/api/week", headers{"Origin": "http://localhost:8123"}, http.StatusOK},
+		{"port 80, the bare host's Origin", 80, "127.0.0.1", "", "/api/week",
+			headers{"Origin": "http://127.0.0.1", "Sec-Fetch-Site": "same-origin"}, http.StatusOK},
+		{"port 80, localhost's", 80, "localhost", "", "/api/week", headers{"Origin": "http://localhost"}, http.StatusOK},
+		{"port 80, another port's Origin", 80, "127.0.0.1", "", "/api/week", headers{"Origin": "http://127.0.0.1:8123"}, http.StatusForbidden},
+	}
+	for _, c := range cases {
+		port, host, method := c.port, c.host, c.method
+		if port == 0 {
+			port = testPort
+		}
+		if host == "" {
+			host = "127.0.0.1:8123"
+		}
+		if method == "" {
+			method = http.MethodGet
+		}
+		r := httptest.NewRequest(method, "http://"+host+c.path, nil)
+		for k, v := range c.headers {
+			r.Header.Set(k, v)
+		}
+		w := httptest.NewRecorder()
+		s.Handler(port).ServeHTTP(w, r)
+		if w.Code != c.want {
+			t.Errorf("%s: %d, want %d (%.60q)", c.name, w.Code, c.want, w.Body.String())
+			continue
+		}
+		if c.want == http.StatusForbidden {
+			if !strings.HasPrefix(w.Body.String(), "htt gui answers its own page only") {
+				t.Errorf("%s: says %q", c.name, w.Body)
+			}
+			checkSecurityHeaders(t, c.name, w)
+		}
+	}
+
+	// Two of a header where browsers send one: refused, whichever comes
+	// first.
+	for _, twice := range [][3]string{
+		{"Origin", "http://127.0.0.1:8123", "https://evil.example"},
+		{"Sec-Fetch-Site", "same-origin", "cross-site"},
+	} {
+		r := httptest.NewRequest(http.MethodGet, "http://127.0.0.1:8123/api/week", nil)
+		r.Header.Add(twice[0], twice[1])
+		r.Header.Add(twice[0], twice[2])
+		w := httptest.NewRecorder()
+		s.Handler(testPort).ServeHTTP(w, r)
+		if w.Code != http.StatusForbidden {
+			t.Errorf("%s twice: %d, want 403", twice[0], w.Code)
+		}
+	}
+}
+
 func TestServer_OnlyReads(t *testing.T) {
 	s := testServer(t)
 	host := "127.0.0.1:8123"
@@ -144,22 +260,31 @@ func TestServer_OnlyReads(t *testing.T) {
 	}
 }
 
+// wantCSP is the Content-Security-Policy in full: the page's own files
+// only, styles inline too (the tooltips set them), and no script but
+// its own.
+const wantCSP = "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
+	"frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+
+// checkSecurityHeaders fails t unless w carries the headers every
+// answer does.
+func checkSecurityHeaders(t *testing.T, name string, w *httptest.ResponseRecorder) {
+	t.Helper()
+	h := w.Header()
+	if got := h.Get("Content-Security-Policy"); got != wantCSP {
+		t.Errorf("%s: Content-Security-Policy\n got %s\nwant %s", name, got, wantCSP)
+	}
+	if h.Get("X-Content-Type-Options") != "nosniff" || h.Get("Referrer-Policy") != "no-referrer" || h.Get("X-Frame-Options") != "DENY" {
+		t.Errorf("%s: headers %v", name, h)
+	}
+}
+
 func TestServer_Headers(t *testing.T) {
 	s := testServer(t)
 	api := get(t, s, "api/week")
 	page := get(t, s, "")
-	// The policy in full: the page's own files only, styles inline too
-	// (the tooltips set them), and no script but its own.
-	const csp = "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
-		"frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
 	for name, w := range map[string]*httptest.ResponseRecorder{"api": api, "page": page, "404": get(t, s, "nothing.js")} {
-		h := w.Header()
-		if got := h.Get("Content-Security-Policy"); got != csp {
-			t.Errorf("%s: Content-Security-Policy\n got %s\nwant %s", name, got, csp)
-		}
-		if h.Get("X-Content-Type-Options") != "nosniff" || h.Get("Referrer-Policy") != "no-referrer" || h.Get("X-Frame-Options") != "DENY" {
-			t.Errorf("%s: headers %v", name, h)
-		}
+		checkSecurityHeaders(t, name, w)
 	}
 	if api.Header().Get("Cache-Control") != "no-store" || api.Header().Get("Content-Type") != "application/json" {
 		t.Errorf("api: headers %v", api.Header())

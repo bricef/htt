@@ -429,25 +429,40 @@ a process group of its own: the terminal's Ctrl-C goes to htt's group,
 and the opener may be the browser itself. A failure to open is a line
 on stderr; an opener stopped by a signal isn't one.
 
-`Server.Handler(port)` is the server's guard, in this order: a `Host`
-that isn't `127.0.0.1:<port>` or `localhost:<port>` (or, on port 80,
-either without the port, as browsers send it) is a 403 (DNS
-rebinding); a method other than GET or HEAD is a 405. Every answer
-carries a Content-Security-Policy keeping the page to its own files,
-`nosniff`, `no-referrer` and `DENY` framing; the API's are
-`no-store`. The page is at `/`; `/api/week` and `/api/month` are
-matched exactly, anything else under `/api/` is a 404 naming them, and
-anything else is a file of `web/`, served only if it's a regular file
-(a valid `fs` path, so `..`, `.` and empty elements reach nothing).
+`Server.Handler(port)` is the server's guard, in this order:
+
+1. A `Host` that isn't `127.0.0.1:<port>` or `localhost:<port>` (or,
+   on port 80, either without the port, as browsers send it) is a 403
+   (DNS rebinding).
+2. A request from anywhere but the GUI's own page is a 403
+   (`foreign`): an `Origin` that isn't `http://` and one of those
+   hosts, `null` included; or, by its `Sec-Fetch-Site`, a request
+   another site's page makes (`same-site`, as a page on another port
+   of localhost is, or `cross-site`), unless it's a link followed to
+   open the page, a GET with `Sec-Fetch-Mode: navigate` and
+   `Sec-Fetch-Dest: document`. `same-origin` (the page's own
+   requests), `none` (an address typed, a bookmark, the opener) and no
+   `Sec-Fetch-Site` at all (curl) pass.
+3. A method other than GET or HEAD is a 405.
+
+Every answer, the 403s included, carries a Content-Security-Policy
+keeping the page to its own files, `nosniff`, `no-referrer` and `DENY`
+framing; the API's are `no-store`. The page is at `/`; `/api/week`
+and `/api/month` are matched exactly, anything else under `/api/` is a
+404 naming them, and anything else is a file of `web/`, served only if
+it's a regular file (a valid `fs` path, so `..`, `.` and empty
+elements reach nothing).
 
 There's no token or login, as in Go's own local read-only UIs (`go
 tool pprof -http`, `go tool trace`). A page elsewhere can't read the
-answers (same-origin policy: the server sends no CORS headers), DNS
-rebinding meets the Host check, there's no write to forge, and no
-other computer reaches 127.0.0.1; what's left open is other accounts
-on the same computer, which can open the page while `htt gui` runs.
-If the GUI ever writes, its writes need guarding then, by Origin and
-Sec-Fetch-Site, not by a token in the address.
+answers (same-origin policy: the server sends no CORS headers), nor
+have them loaded at all, as an image, a script, a style or a frame
+(Origin and Sec-Fetch-Site); DNS rebinding meets the Host check;
+there's no write to forge; and no other computer reaches 127.0.0.1.
+What's left open is other accounts on the same computer, which can
+open the page while `htt gui` runs. `http.CrossOriginProtection`
+isn't used: it leaves GET and HEAD alone, the only methods the server
+answers. If the GUI ever writes, it's the guard for the writes.
 
 The API (`view.go`, versioned there in `apiVersion`): `api/week?date=`
 any day of the week, `api/month?month=YYYY-MM`, each today's by

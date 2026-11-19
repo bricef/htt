@@ -185,6 +185,32 @@ Decided after review (Brice, 2026-11-19):
   the page while it runs, and that `--port` makes the address one to
   bookmark. If the GUI ever writes, protect the writes then with
   Origin / Sec-Fetch-Site checks, not a token in the address.
+- **Origin and Sec-Fetch-Site checks now**, for reads too (Brice asked
+  for them the same day, once the token was gone). Every request,
+  after the Host check: an `Origin`, when there is one, must be the
+  GUI's own, `http://127.0.0.1:<port>` or `http://localhost:<port>`
+  (either without the port on port 80, as the Host check allows);
+  anything else, `null` included, is a 403. By `Sec-Fetch-Site`
+  (Fetch Metadata resource isolation): absent (curl, an old browser),
+  `same-origin`, or `none` (an address typed, a bookmark, htt's
+  opener) passes; `same-site`, which a page on another port of
+  localhost is, and `cross-site` pass only as a plain top-level
+  navigation, a GET with `Sec-Fetch-Mode: navigate` and
+  `Sec-Fetch-Dest: document`, so a link to the GUI still opens it; any
+  other request (a fetch, an image, a script, a style, a frame, an
+  object) is a 403, "htt gui answers its own page only", with the
+  usual headers. Why: the same-origin policy keeps another site's page
+  from reading the answers, but not from having the browser make the
+  requests, loading the API or the page blind as an image, a script
+  or a frame and learning from what happens (an error, the time it
+  takes: a cross-site leak). Refusing them costs the GUI's own page
+  nothing, as its requests are all same-origin. Not added:
+  `http.CrossOriginProtection`, which acts on unsafe methods only,
+  and the server refuses those with a 405; it's the tool to use if the
+  GUI ever writes. Tested with a table of requests as browsers send
+  them, seen failing first; breaking each rule in turn (20 mutations)
+  failed it every time, and refusing `same-origin` failed the browser
+  tests too.
 
 ## Motivation
 
@@ -219,8 +245,10 @@ in the totals, and the month views.
    rebinding). It only reads: GET and HEAD only, nothing writes.
    (Amended after review: every path started with a random token,
    128 bits, new each run, and anything else was a 404; Brice dropped
-   it, as other accounts on the computer are all it kept out. See
-   "Decided after review" in the Outcome.)
+   it, as other accounts on the computer are all it kept out, and
+   added Origin and Sec-Fetch-Site checks: only the GUI's own page, or
+   a person opening it, gets an answer. See "Decided after review" in
+   the Outcome.)
 3. **Go computes, the page draws.** The days, weeks, weekday averages,
    rolling trends and half-month comparisons are computed in Go, in the
    domain (pure functions over timesheets), where htt's tests can hold

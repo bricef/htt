@@ -8,8 +8,10 @@
 // 127.0.0.1:<port> or localhost:<port> (or, on port 80, either without
 // the port) is refused, so a page elsewhere can't reach it through DNS
 // rebinding; it sends no CORS headers, so a page elsewhere can't read
-// what it answers; and it only reads, answering GET and HEAD and
-// nothing else.
+// what it answers; it answers the GUI's own page only, refusing a
+// request with another Origin or one another site's page makes (by its
+// Sec-Fetch-Site), but for a link followed to open the page; and it
+// only reads, answering GET and HEAD and nothing else.
 //
 // Go computes, the page draws: the API's handlers read each day's
 // timesheet and add them up with the domain's period aggregates (see
@@ -114,13 +116,18 @@ func (s *Server) ListenAndServe(stop <-chan os.Signal, port int, ready func(url 
 
 // Handler serves the GUI to requests addressed to 127.0.0.1:port or
 // localhost:port (without the port, too, when it's 80, as browsers
-// leave the default port out): the page at /, its assets at their
-// paths, and the API under /api/.
+// leave the default port out), from the GUI's own page or a person
+// opening it (see foreign): the page at /, its assets at their paths,
+// and the API under /api/.
 func (s *Server) Handler(port int) http.Handler {
 	files := assets()
 	hosts := []string{"127.0.0.1:" + strconv.Itoa(port), "localhost:" + strconv.Itoa(port)}
 	if port == 80 { // the default, which a browser leaves out of Host
 		hosts = append(hosts, "127.0.0.1", "localhost")
+	}
+	origins := make([]string, len(hosts)) // the GUI's own, as its page's requests carry them
+	for i, host := range hosts {
+		origins[i] = "http://" + host
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
@@ -131,6 +138,10 @@ func (s *Server) Handler(port int) http.Handler {
 
 		if !slicesContainsFold(hosts, r.Host) {
 			http.Error(w, "htt gui answers to "+hosts[0]+" and "+hosts[1]+" only", http.StatusForbidden)
+			return
+		}
+		if why := foreign(r, origins); why != "" {
+			http.Error(w, "htt gui answers its own page only: "+why, http.StatusForbidden)
 			return
 		}
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
@@ -154,14 +165,45 @@ func (s *Server) Handler(port int) http.Handler {
 	})
 }
 
+// foreign says why r is refused as another site's doing, or returns ""
+// when it's the GUI's own page asking, or a person opening it.
+//
+// An Origin, when r has one, must be the GUI's own, one of origins;
+// "null", from a sandboxed frame or a file, isn't. And by the fetch
+// metadata browsers send, a request another site's page makes
+// (Sec-Fetch-Site same-site, as a page on another port of localhost
+// is, or cross-site) is refused, fetches, images, scripts, styles and
+// frames alike, unless it's a link followed to open the page: a GET
+// navigating to a document at the top level. "same-origin" is the
+// page's own requests; "none" an address typed, a bookmark or htt's
+// opener. Without Sec-Fetch-Site (curl, an old browser) the Host and
+// Origin checks are all there is.
+//
+// It doesn't use http.CrossOriginProtection, which leaves GET and HEAD
+// alone, the only methods the server answers; should the GUI ever
+// write, that's the guard for its writes.
+func foreign(r *http.Request, origins []string) string {
+	if o, ok := r.Header["Origin"]; ok && (len(o) != 1 || !slicesContainsFold(origins, o[0])) {
+		return "the request comes from another origin"
+	}
+	sites := r.Header.Values("Sec-Fetch-Site")
+	if len(sites) == 0 || len(sites) == 1 && (sites[0] == "same-origin" || sites[0] == "none") {
+		return ""
+	}
+	if r.Method == http.MethodGet && r.Header.Get("Sec-Fetch-Mode") == "navigate" && r.Header.Get("Sec-Fetch-Dest") == "document" {
+		return "" // a link followed to open the page
+	}
+	return "another site's page asked for it"
+}
+
 // contentSecurityPolicy keeps the page to its own assets: no script,
 // style, font or connection from elsewhere. Styles may be inline, as
 // the charts' tooltips set them.
 const contentSecurityPolicy = "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
 	"frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
 
-// slicesContainsFold reports whether host is one of hosts, ignoring
-// case, as host names are.
+// slicesContainsFold reports whether host (or an origin) is one of
+// hosts, ignoring case, as host names are.
 func slicesContainsFold(hosts []string, host string) bool {
 	for _, h := range hosts {
 		if strings.EqualFold(h, host) {

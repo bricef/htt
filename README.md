@@ -24,6 +24,8 @@ also edit by hand.
   by priority, tag and date, colour themes (Monokai, VS Code, Dracula,
   Nord, Solarized, Gruvbox) and per-colour config.
 
+![htt gui's week view: each day's time log as a timeline coloured by category, then the week's totals with breaks](docs/screenshot/gui-week.png)
+
 New to `htt`? [`GETTING-STARTED.md`](GETTING-STARTED.md) is a
 fifteen-minute walkthrough of the realistic workflow — add a task,
 prioritise it, complete it, organise with contexts, log time against

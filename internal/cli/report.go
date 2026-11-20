@@ -333,10 +333,30 @@ type archivedTask struct {
 	deletedOn time.Time
 }
 
-// reportTimeLogged walks every calendar day in [since, until], reads
-// its time log as a timesheet (see domain.Timelog.Timesheet), and
-// prints each day's worked time and its time per category, then the
-// totals over the period:
+// reportTimeLogged reads every calendar day from since's to until's
+// (domain.ReadDays: each day's time log as a timesheet at until, now),
+// and prints each day's worked time and its time per category, then the
+// totals over the days (domain.Sum); see printDays.
+func reportTimeLogged(since, until time.Time, categories *domain.Categoriser) error {
+	fmt.Println("Time logged")
+	// Days by their dates in the local zone, until's, each at noon, as a
+	// domain.Period holds them: a day the clocks change isn't 24 hours
+	// long, and where they go forward at midnight, that midnight
+	// doesn't exist.
+	loc := until.Location()
+	days, err := domain.ReadDays(timelogRepo(), categories, domain.Period{
+		First: time.Date(since.Year(), since.Month(), since.Day(), 12, 0, 0, 0, loc),
+		Last:  time.Date(until.Year(), until.Month(), until.Day(), 12, 0, 0, 0, loc),
+	}.Dates(), until)
+	if err != nil {
+		return err
+	}
+	printDays(days, domain.Sum(days), categories)
+	return nil
+}
+
+// printDays prints each day's worked time and its time per category,
+// then total, the days' totals, under the section's heading:
 //
 //	Time logged
 //	  2026-11-02   7h 0m worked
@@ -354,76 +374,41 @@ type archivedTask struct {
 // A day without an @end counts its last entry to midnight, and says
 // so, with the command that ends it on a line of its own (the day's
 // line would be too long for a terminal with it); today's last entry
-// counts until now (until), in progress. A
+// counts until now, in progress. A
 // category's line is the time its tags matched; the time of entries no
 // category matched is on the uncategorised line, which names the
 // default category it counts as (whose work setting decides whether it
-// is worked). Days with no time logged are left out, and so are lines
-// with none. Categories are listed in the config's order, then
-// uncategorised.
-func reportTimeLogged(since, until time.Time, categories *domain.Categoriser) error {
-	fmt.Println("Time logged")
-
-	type dayTime struct {
-		date   time.Time
-		sheet  *domain.Timesheet
-		byName map[string]time.Duration
-		uncat  time.Duration
+// is worked). Days with no time logged are left out (today in progress
+// isn't), and so are lines with none; with no day left, it says so.
+// Categories are listed in the config's order, then uncategorised.
+func printDays(days []*domain.Timesheet, total domain.Totals, categories *domain.Categoriser) {
+	var shown []*domain.Timesheet
+	for _, d := range days {
+		if d.Totals().Logged() > 0 || d.Status == domain.DayInProgress {
+			shown = append(shown, d)
+		}
 	}
-	var days []dayTime
-	totals := map[string]time.Duration{}
-	var worked, totalUncat time.Duration
-
-	// Days by their dates in the local zone, a calendar day at a time
-	// (a day the clocks change isn't 24 hours long).
-	day := time.Date(since.Year(), since.Month(), since.Day(), 0, 0, 0, 0, time.Local)
-	last := time.Date(until.Year(), until.Month(), until.Day(), 0, 0, 0, 0, time.Local)
-	for ; !day.After(last); day = day.AddDate(0, 0, 1) {
-		tl, err := timelogRepo().Day(day)
-		if err != nil {
-			return fmt.Errorf("load timelog %s: %w", day.Format("2006-01-02"), err)
-		}
-		if tl.IsEmpty() {
-			continue
-		}
-		sheet, err := tl.Timesheet(categories, until)
-		if err != nil {
-			return fmt.Errorf("read timelog %s: %w", day.Format("2006-01-02"), err)
-		}
-		byName, uncat := sheet.ByCategory(), sheet.Uncategorised()
-		logged := uncat
-		for name, d := range byName {
-			logged += d
-			totals[name] += d
-		}
-		totalUncat += uncat
-		if logged == 0 && sheet.Status != domain.DayInProgress {
-			continue
-		}
-		days = append(days, dayTime{date: day, sheet: sheet, byName: byName, uncat: uncat})
-		worked += sheet.Worked()
-	}
-
-	if len(days) == 0 {
+	if len(shown) == 0 {
 		fmt.Println("  (no time logged)")
-		return nil
+		return
 	}
 
 	// Columns: category names, and durations lined up on the right.
 	nameWidth, durWidth, dayWidth := 0, 0, 0
 	for _, cat := range categories.Categories() {
-		if totals[cat.Name] > 0 {
+		if d := total.ByCategory[cat.Name]; d > 0 {
 			nameWidth = max(nameWidth, len(cat.Name))
-			durWidth = max(durWidth, len(formatReportDuration(totals[cat.Name])))
+			durWidth = max(durWidth, len(formatReportDuration(d)))
 		}
 	}
-	if totalUncat > 0 {
+	if total.Uncategorised > 0 {
 		nameWidth = max(nameWidth, len(uncategorisedLabel))
-		durWidth = max(durWidth, len(formatReportDuration(totalUncat)))
+		durWidth = max(durWidth, len(formatReportDuration(total.Uncategorised)))
 	}
-	for _, d := range days {
-		dayWidth = max(dayWidth, len(formatReportDuration(d.sheet.Worked())))
-		for _, dur := range d.byName {
+	for _, d := range shown {
+		t := d.Totals()
+		dayWidth = max(dayWidth, len(formatReportDuration(t.Worked)))
+		for _, dur := range t.ByCategory {
 			durWidth = max(durWidth, len(formatReportDuration(dur)))
 		}
 	}
@@ -439,25 +424,25 @@ func reportTimeLogged(since, until time.Time, categories *domain.Categoriser) er
 		}
 	}
 
-	for _, d := range days {
-		date := d.date.Format("2006-01-02")
+	for _, d := range shown {
+		t := d.Totals()
+		date := d.Date.Format("2006-01-02")
 		note := ""
-		switch d.sheet.Status {
+		switch d.Status {
 		case domain.DayUnended:
 			note = " (no @end: counted to 24:00)"
 		case domain.DayInProgress:
 			note = " (in progress)"
 		}
-		fmt.Printf("  %s  %*s worked%s\n", date, dayWidth, formatReportDuration(d.sheet.Worked()), note)
-		if d.sheet.Status == domain.DayUnended {
+		fmt.Printf("  %s  %*s worked%s\n", date, dayWidth, formatReportDuration(t.Worked), note)
+		if d.Status == domain.DayUnended {
 			// Under the day's time, how to end it.
 			fmt.Printf("  %*s  end the day with htt log end --at %q\n", len(date), "", date+" HH:MM")
 		}
-		printCategories(d.byName, d.uncat)
+		printCategories(t.ByCategory, t.Uncategorised)
 	}
-	fmt.Printf("  Total: %s worked\n", formatReportDuration(worked))
-	printCategories(totals, totalUncat)
-	return nil
+	fmt.Printf("  Total: %s worked\n", formatReportDuration(total.Worked))
+	printCategories(total.ByCategory, total.Uncategorised)
 }
 
 // formatReportDuration prints a duration as "Xh Ym" or "Ym" — easier

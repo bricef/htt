@@ -201,7 +201,7 @@ func (s *Server) handleWeek(w http.ResponseWriter, r *http.Request) {
 	now := s.now()
 	date := now
 	if q := r.URL.Query().Get("date"); q != "" {
-		d, err := calendarDate(dateLayout, q, now.Location())
+		d, err := domain.CalendarDate(dateLayout, q, now.Location())
 		if err != nil {
 			writeError(w, r, http.StatusBadRequest, fmt.Errorf("date: want YYYY-MM-DD, got %q", q))
 			return
@@ -216,7 +216,7 @@ func (s *Server) handleMonth(w http.ResponseWriter, r *http.Request) {
 	now := s.now()
 	date := now
 	if q := r.URL.Query().Get("month"); q != "" {
-		d, err := calendarDate(monthLayout, q, now.Location())
+		d, err := domain.CalendarDate(monthLayout, q, now.Location())
 		if err != nil {
 			writeError(w, r, http.StatusBadRequest, fmt.Errorf("month: want YYYY-MM, got %q", q))
 			return
@@ -225,18 +225,6 @@ func (s *Server) handleMonth(w http.ResponseWriter, r *http.Request) {
 	}
 	v, err := s.monthView(date, now)
 	s.answer(w, r, v, err)
-}
-
-// calendarDate reads s, a date in layout (a month's is its 1st), as a day
-// on the calendar: that day at noon in loc. It isn't read at midnight in
-// loc: where the clocks go forward at midnight, that midnight doesn't
-// exist, and Go puts it on the day before.
-func calendarDate(layout, s string, loc *time.Location) (time.Time, error) {
-	d, err := time.Parse(layout, s) // in UTC, where every midnight happens
-	if err != nil {
-		return time.Time{}, err
-	}
-	return time.Date(d.Year(), d.Month(), d.Day(), 12, 0, 0, 0, loc), nil
 }
 
 // now is the server's clock to the second: entries are logged to the
@@ -273,42 +261,6 @@ func writeJSON(w http.ResponseWriter, r *http.Request, status int, v any) {
 	}
 }
 
-// sheets reads each date's log as a timesheet at now. A date after
-// today is a day to come: its log isn't read, and it has no time.
-func (s *Server) sheets(dates []time.Time, now time.Time) ([]*domain.Timesheet, error) {
-	today := noon(now)
-	out := make([]*domain.Timesheet, len(dates))
-	for i, date := range dates {
-		l := &domain.Timelog{Date: date}
-		if !date.After(today) {
-			var err error
-			if l, err = s.cfg.Timelogs.Day(date); err != nil {
-				return nil, fmt.Errorf("load the timelog for %s: %w", date.Format(dateLayout), err)
-			}
-		}
-		sheet, err := l.Timesheet(s.cfg.Categories, now)
-		if err != nil {
-			return nil, fmt.Errorf("read the timelog for %s: %w", date.Format(dateLayout), err)
-		}
-		out[i] = sheet
-	}
-	return out, nil
-}
-
-func noon(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), t.Day(), 12, 0, 0, 0, t.Location())
-}
-
-// soFar is how many of the days are today or before.
-func soFar(days []*domain.Timesheet, now time.Time) int {
-	today := noon(now)
-	n := 0
-	for n < len(days) && !days[n].Date.After(today) {
-		n++
-	}
-	return n
-}
-
 // base is what every view carries: the version, the clock, and the
 // categories; or the config's error.
 func (s *Server) base(now time.Time) (*view, error) {
@@ -331,10 +283,7 @@ func (s *Server) base(now time.Time) (*view, error) {
 func categoriesOf(c *domain.Categoriser) []category {
 	var out []category
 	work, other := 0, 0
-	for _, cat := range c.Categories() {
-		if len(cat.Tags) == 0 {
-			continue
-		}
+	for _, cat := range c.Tagged() {
 		next := &other
 		if cat.Work {
 			next = &work
@@ -346,16 +295,19 @@ func categoriesOf(c *domain.Categoriser) []category {
 	return append(out, category{Name: domain.UncategorisedName, Work: def.Work, Uncategorised: true, CountedAs: def.Name})
 }
 
+// weekView and monthView answer the figures the domain adds up
+// (domain.Week and domain.Month), which `htt report --week` and
+// `--month` print too: every number here is theirs, in seconds.
 func (s *Server) weekView(date, now time.Time) (*view, error) {
 	v, err := s.base(now)
 	if err != nil {
 		return nil, err
 	}
-	p := domain.WeekOf(date)
-	days, err := s.sheets(p.Dates(), now)
+	w, err := domain.Week(s.cfg.Timelogs, s.cfg.Categories, date, now)
 	if err != nil {
 		return nil, err
 	}
+	p := w.Period
 	v.Period = period{
 		Kind:          "week",
 		Key:           p.First.Format(dateLayout),
@@ -366,8 +318,8 @@ func (s *Server) weekView(date, now time.Time) (*view, error) {
 		Current:       domain.WeekOf(now).First.Format(dateLayout),
 		IncludesToday: p.Contains(now),
 	}
-	v.Days = dayViews(days, now)
-	v.Summary = summaryOf(domain.Summarise(days[:soFar(days, now)]), s.cfg.Categories.Default())
+	v.Days = dayViews(w.Days, w.SoFar, now)
+	v.Summary = summaryOf(w.Summary, s.cfg.Categories.Default())
 	h := openingHours(v.Days)
 	v.Hours = &h
 	return v, nil
@@ -378,15 +330,11 @@ func (s *Server) monthView(date, now time.Time) (*view, error) {
 	if err != nil {
 		return nil, err
 	}
-	p := domain.MonthOf(date)
-	// The six days before the month, for its first days' rolling weeks.
-	dates := domain.Period{First: p.First.AddDate(0, 0, -6), Last: p.Last}.Dates()
-	all, err := s.sheets(dates, now)
+	m, err := domain.Month(s.cfg.Timelogs, s.cfg.Categories, date, now)
 	if err != nil {
 		return nil, err
 	}
-	days := all[6:]
-	n := soFar(days, now)
+	p := m.Period
 	v.Period = period{
 		Kind:          "month",
 		Key:           p.First.Format(monthLayout),
@@ -397,14 +345,13 @@ func (s *Server) monthView(date, now time.Time) (*view, error) {
 		Current:       now.Format(monthLayout),
 		IncludesToday: p.Contains(now),
 	}
-	v.Days = dayViews(days, now)
-	sum := domain.Summarise(days[:n])
-	v.Summary = summaryOf(sum, s.cfg.Categories.Default())
+	v.Days = dayViews(m.Days, m.SoFar, now)
+	v.Summary = summaryOf(m.Summary, s.cfg.Categories.Default())
 
-	for _, w := range domain.Weeks(days) {
+	for _, w := range m.Weeks {
 		v.Weeks = append(v.Weeks, stretchOf(w))
 	}
-	for _, a := range domain.WeekdayAverages(days[:n]) {
+	for _, a := range m.Weekdays {
 		wd := weekday{Weekday: a.Weekday.String()[:3], Days: a.Days, Totals: totalsOf(a.Totals)}
 		if a.Days > 0 {
 			avg := totalsOf(a.Average)
@@ -412,62 +359,54 @@ func (s *Server) monthView(date, now time.Time) (*view, error) {
 		}
 		v.Weekdays = append(v.Weekdays, wd)
 	}
-	for i, t := range domain.Rolling(all[:6+n], 7) {
-		v.Rolling = append(v.Rolling, rolling{Date: days[i].Date.Format(dateLayout), Totals: totalsOf(t)})
+	for i, t := range m.Rolling {
+		v.Rolling = append(v.Rolling, rolling{Date: m.Days[i].Date.Format(dateLayout), Totals: totalsOf(t)})
 	}
-	first, second := domain.Halves(days[:n])
-	for _, h := range []domain.Stretch{first, second} {
+	for _, h := range m.Halves {
 		hv := half{stretch: stretchOf(h)}
-		if h.Days > 0 {
-			pw := totalsOf(h.Totals.Scale(7, h.Days))
-			hv.PerWeek = &pw
+		if pw, ok := h.PerWeek(); ok {
+			t := totalsOf(pw)
+			hv.PerWeek = &t
 		}
 		v.Halves = append(v.Halves, hv)
 	}
-	v.Table = tableOf(v.Categories, sum, first, second)
+	v.Table = tableOf(m.Table)
 	return v, nil
 }
 
-// tableOf is the month's table: a line per category, in the
-// categories' order.
-func tableOf(categories []category, sum domain.Summary, first, second domain.Stretch) []categoryRow {
-	timeIn := func(t domain.Totals, c category) time.Duration {
-		if c.Uncategorised {
-			return t.Uncategorised
-		}
-		return t.ByCategory[c.Name]
-	}
-	var rows []categoryRow
-	for _, c := range categories {
-		row := categoryRow{Category: c.Name, Total: seconds(timeIn(sum.Totals, c))}
-		if c.Work && sum.Totals.Worked > 0 {
-			share := float64(timeIn(sum.Totals, c)) / float64(sum.Totals.Worked)
+// tableOf is the month's table, the domain's (domain.CategoryTable): a
+// line per category, in the categories' order.
+func tableOf(rows []domain.CategoryRow) []categoryRow {
+	var out []categoryRow
+	for _, r := range rows {
+		row := categoryRow{Category: r.Name, Total: seconds(r.Total)}
+		if r.HasShare {
+			share := r.Share
 			row.ShareOfWorked = &share
 		}
-		var rates [2]time.Duration
-		for i, h := range []domain.Stretch{first, second} {
-			if h.Days > 0 {
-				rates[i] = timeIn(h.Totals.Scale(7, h.Days), c)
-				secs := seconds(rates[i])
+		for i := range r.PerWeek {
+			if r.HasPerWeek[i] {
+				secs := seconds(r.PerWeek[i])
 				row.PerWeek[i] = &secs
 			}
 		}
-		if first.Days > 0 && second.Days > 0 && rates[0] > 0 {
-			change := float64(rates[1])/float64(rates[0]) - 1
+		if r.HasChange {
+			change := r.Change
 			row.Change = &change
 		}
-		rows = append(rows, row)
+		out = append(out, row)
 	}
-	return rows
+	return out
 }
 
-func dayViews(days []*domain.Timesheet, now time.Time) []day {
-	today := noon(now)
+// dayViews is the days as the API gives them: the first soFar are
+// today or before, the rest to come.
+func dayViews(days []*domain.Timesheet, soFar int, now time.Time) []day {
 	out := make([]day, len(days))
 	for i, s := range days {
 		d := day{Date: s.Date.Format(dateLayout), totals: totalsOf(s.Totals()), Intervals: []interval{}}
 		switch {
-		case s.Date.After(today):
+		case i >= soFar:
 			d.Status = "future"
 		case s.Status == domain.DayEmpty:
 			d.Status = "empty"
@@ -567,8 +506,7 @@ func summaryOf(s domain.Summary, def domain.Category) summary {
 		avg := seconds(s.AverageWorkingDay)
 		out.AverageWorkingDay = &avg
 	}
-	if def.Work && s.Totals.Worked > 0 {
-		share := float64(s.Totals.Uncategorised) / float64(s.Totals.Worked)
+	if share, ok := s.UncategorisedShare(def); ok {
 		out.UncategorisedShare = &share
 	}
 	for _, d := range s.Unended {

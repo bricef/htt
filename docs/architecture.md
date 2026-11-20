@@ -334,7 +334,23 @@ builds the model from `Options` (a logger and a theme; the zero value
 means a discard logger and the default theme). `htt interactive`
 (`internal/cli/interact.go`) builds both, the logger from
 `--log-file` / `--log-level` and the theme from the config, then runs
-the program.
+the program through `runOnTerminal`, which just runs it.
+
+In the REPL (`internal/cli/repl.go`), `runOnTerminal` is the REPL's
+`replTerminal.handOver`, so `/interactive` runs the TUI on the REPL's
+terminal. readline reads the terminal on goroutines of its own, so
+`handOver` closes the REPL's readline instance, which stops them,
+runs the program, and opens a new instance on the same history file,
+even when the program fails. The REPL then draws its view as after any command; the TUI
+saves a context switch (`SetCurrent`) and every change, so the view
+is the context the TUI left. The REPL saves each line to the history
+itself (`replReader.Readline`) rather than leave it to readline,
+which saves after returning the line, on its own goroutine, and could
+lose the `/interactive` to the close. A REPL whose stdin or stdout
+isn't a terminal doesn't close anything: the program gets an error
+saying the TUI needs a terminal. The REPL refuses `repl` and `gui`,
+whatever alias names them (`refusedInRepl` asks cobra which command
+a line runs).
 
 - **Actions.** Each key binding maps to an `Action`: a description
   plus a `func(model) (tea.Model, tea.Cmd, error)`. The action decides

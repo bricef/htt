@@ -634,6 +634,29 @@ func TestRepl_PipedInputIsReadAsItIs(t *testing.T) {
 	assertEqual(t, "todo.txt", e.readData("todo.txt"), today()+" buy milk\n")
 }
 
+func TestRepl_TheTUINeedsATerminal(t *testing.T) {
+	// The REPL hands its terminal to the TUI; reading a pipe, it has
+	// none to hand over, so /interactive and its alias say so, and the
+	// REPL carries on.
+	e := newEnv(t)
+	r := e.mustRunWithInput("/interactive\n/i\nadd still here\nq\n", "repl")
+	if n := strings.Count(r.stderr, "the TUI needs a terminal"); n != 2 {
+		t.Errorf("want the TUI to need a terminal twice, for /interactive and /i; got %d:\n%s", n, r.stderr)
+	}
+	assertEqual(t, "todo.txt", e.readData("todo.txt"), today()+" still here\n")
+}
+
+func TestRepl_RefusesANestedREPLAndTheGUI(t *testing.T) {
+	// A REPL inside the REPL, and the GUI, which serves until a Ctrl-C
+	// that would end the REPL too, aren't run.
+	e := newEnv(t)
+	e.writeConfig("check_for_updates: false\n")
+	r := e.mustRunWithInput("/repl\n/gui --no-open\nadd still here\nq\n", "repl")
+	assertInOrder(t, "stderr", r.stderr,
+		`"repl" is not available inside the REPL`, `"gui" is not available inside the REPL`)
+	assertEqual(t, "todo.txt", e.readData("todo.txt"), today()+" still here\n")
+}
+
 // replScreens splits REPL output at each clear-screen sequence: the
 // last element is what the terminal shows when the REPL exits.
 func replScreens(t *testing.T, stdout string) []string {

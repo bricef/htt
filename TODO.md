@@ -70,6 +70,13 @@ Each confirmed against `main` on 2026-11-03.
 
 ## Done
 
+- [x] The REPL opens the TUI (2026-11-20): `/interactive` and `/i`
+      run the TUI on the REPL's terminal, which closes its readline
+      first and opens a new one, on the same history, when the TUI
+      quits; back at the prompt, the REPL shows the context the TUI
+      left current. Without a terminal (stdin or stdout a pipe) it
+      says the TUI needs one. `/repl` and `/gui` stay refused, aliases
+      included. `/i` used to slip past the refusal of `/interactive`
 - [x] The GUI: the time log in the browser (2026-11-19): `htt gui`
       serves a page from the binary on 127.0.0.1 and opens it: each
       day as a timeline coloured by category, the week's totals, and a

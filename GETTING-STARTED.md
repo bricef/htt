@@ -1042,9 +1042,14 @@ scrolls back, as in any shell.
 Commands without a prefix dispatch as `todo <cmd>`: `add foo`,
 `delete 0`, `+ 1`, `do 0`, `context home`. Prefix a line with `/`
 to escape to a full CLI command: `/log start`, `/report --since 7d`.
-`/interactive`, `/gui` and `/repl` are disabled inside the REPL (no
-nested screens, no server waiting for a Ctrl-C that would end the
-REPL too, no recursive prompts). `/help` shows the REPL's own help.
+`/interactive` (or `/i`) opens the TUI on the REPL's screen. Quit it
+(`q`, `Esc` or Ctrl-C, as outside the REPL) and you're back at the
+prompt, with the context redrawn as after any command: the one the
+TUI left current, with what you changed in it. Up/down arrows still
+walk your history. The TUI needs a terminal, so a REPL reading from a
+pipe says so instead. `/gui` and `/repl` are disabled inside the REPL
+(no server waiting for a Ctrl-C that would end the REPL too, no
+recursive prompts). `/help` shows the REPL's own help.
 Quotes group words as they do in a shell, so a line means the same
 in the REPL as in a terminal: `/log end --at "yesterday 17:30"`,
 `/log add --at='2026-11-17 9:00' filing`, or `add "buy milk"` (the

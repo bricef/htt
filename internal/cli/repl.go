@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/bricef/htt/internal/vars"
@@ -33,6 +34,8 @@ Inputs are dispatched as ` + "`todo <input>`" + ` by default — typing
 ` + "`add buy milk`" + ` runs ` + "`htt todo add buy milk`" + `. Prefix a
 line with ` + "`/`" + ` to escape to a full CLI command:
 ` + "`/log start review`" + ` runs ` + "`htt log start review`" + `.
+` + "`/interactive`" + ` (or ` + "`/i`" + `) opens the TUI; quitting it comes
+back to the REPL, in the context the TUI left current.
 
 A command's output stays on screen, above the current context, until
 the next command. Up/down arrows walk the commands typed, kept in
@@ -47,6 +50,7 @@ Exit with Ctrl-D, Ctrl-C, or by typing quit / exit / q.`,
 
 func init() {
 	RootCmd.AddCommand(Repl)
+	replRefused = []*cobra.Command{Repl, GUI}
 }
 
 // runRepl owns the readline loop. Errors from individual commands
@@ -62,27 +66,20 @@ func init() {
 // after, so the command's output stays on screen until the next
 // line; the view is drawn after the command, so it shows the
 // command's effect. An empty line just redraws the view.
+//
+// `/interactive` runs the TUI on the REPL's terminal, which the REPL
+// hands over for the run (replTerminal.handOver).
 func runRepl() error {
-	config := &readline.Config{
-		Prompt:          replPrompt(),
-		HistoryFile:     replHistoryPath(),
-		InterruptPrompt: "^C",
-		EOFPrompt:       "exit",
-	}
-	if !isatty.IsTerminal(os.Stdin.Fd()) {
-		// Lines from a pipe or a file: read them as they are, with no
-		// prompt or echo. readline does this by itself on Unix. On
-		// Windows it reads key presses from the console and takes
-		// stdin to be one, so a pipe ended the REPL before its first
-		// line.
-		config.Stdin = readline.NewCancelableStdin(os.Stdin)
-		config.FuncIsTerminal = func() bool { return false }
-	}
-	rl, err := readline.NewEx(config)
+	rt := &replTerminal{open: openReplReader, isTerminal: replOnTerminal}
+	lines, err := rt.open()
 	if err != nil {
-		return fmt.Errorf("init readline: %w", err)
+		return err
 	}
-	defer func() { _ = rl.Close() }()
+	rt.lines = lines
+	defer func() { _ = rt.lines.Close() }()
+	prevRunOnTerminal := runOnTerminal
+	runOnTerminal = rt.handOver
+	defer func() { runOnTerminal = prevRunOnTerminal }()
 
 	showHelp := false
 	renderView := func() {
@@ -97,8 +94,8 @@ func runRepl() error {
 	renderView()
 	for {
 		prompt := replPrompt()
-		rl.SetPrompt(prompt)
-		line, err := rl.Readline()
+		rt.lines.SetPrompt(prompt)
+		line, err := rt.lines.Readline()
 		if errors.Is(err, io.EOF) || errors.Is(err, readline.ErrInterrupt) {
 			fmt.Println()
 			return nil
@@ -118,8 +115,8 @@ func runRepl() error {
 		case replInputDispatch:
 			showHelp = false
 			fmt.Println(prompt + strings.TrimSpace(line))
-			if isDisabledInRepl(parsed) {
-				fmt.Fprintf(os.Stderr, "%q is not available inside the REPL\n", parsed[0])
+			if name := refusedInRepl(parsed); name != "" {
+				fmt.Fprintf(os.Stderr, "%q is not available inside the REPL\n", name)
 			} else {
 				resetReplFlags()
 				RootCmd.SetArgs(parsed)
@@ -174,19 +171,138 @@ func classifyReplInput(line string) (replInputKind, []string) {
 	return replInputDispatch, append([]string{"todo"}, replWords(s)...)
 }
 
-// isDisabledInRepl rejects commands that don't make sense inside
-// the REPL — `interactive` (would launch the TUI on top of the
-// REPL's terminal), `gui` (serves until Ctrl-C, which would end the
-// REPL too) and `repl` itself (recursive REPL).
-func isDisabledInRepl(args []string) bool {
-	if len(args) == 0 {
-		return false
+// replRefused holds the commands that don't make sense inside the
+// REPL: `repl` itself (a REPL inside the REPL) and `gui` (it serves
+// until Ctrl-C, which would end the REPL too). init fills it: naming
+// Repl here would be an initialization cycle, as Repl's RunE leads to
+// refusedInRepl.
+var replRefused []*cobra.Command
+
+// refusedInRepl returns the name of the command args run when the REPL
+// refuses it, or "". Cobra finds the command, as it would to run it, so
+// an alias is refused with its command.
+func refusedInRepl(args []string) string {
+	cmd, _, err := RootCmd.Find(args)
+	if err != nil || !slices.Contains(replRefused, cmd) {
+		return ""
 	}
-	switch args[0] {
-	case "interactive", "gui", "repl":
-		return true
+	return cmd.Name()
+}
+
+// lineReader is what the REPL uses of readline: replReader, or a
+// stand-in in tests.
+type lineReader interface {
+	Readline() (string, error)
+	SetPrompt(prompt string)
+	Close() error
+}
+
+// replTerminal is the REPL's hold on its terminal: the line reader
+// reading it, and what opens another.
+type replTerminal struct {
+	lines      lineReader
+	open       func() (lineReader, error)
+	isTerminal func() bool // whether the REPL reads and writes a terminal
+}
+
+// handOver lends the terminal to run, the TUI, for as long as it runs.
+// It closes the line reader first, which stops the goroutines readline
+// reads the terminal on, so nothing but the TUI reads it while it
+// runs. After run, even when it fails, a new line reader opens on the
+// same history file. The REPL then draws its view and prompt, as after any command:
+// the context the TUI left current, with its tasks as the TUI left
+// them. When no new reader opens, the REPL ends at its next read, with
+// the reason.
+//
+// A REPL reading a pipe has no terminal to lend: the TUI doesn't run,
+// and gets an error saying why.
+func (rt *replTerminal) handOver(run func() error) error {
+	if !rt.isTerminal() {
+		return errors.New("the TUI needs a terminal, and the REPL's input or output isn't one")
 	}
-	return false
+	var closeErr error
+	if err := rt.lines.Close(); err != nil {
+		closeErr = fmt.Errorf("close readline: %w", err)
+	}
+	runErr := run()
+	lines, err := rt.open()
+	if err != nil {
+		lines = failedReader{fmt.Errorf("reopen after the TUI: %w", err)}
+	}
+	rt.lines = lines
+	return errors.Join(closeErr, runErr)
+}
+
+// failedReader stands in for a line reader that didn't open: reading
+// from it fails, which ends the REPL.
+type failedReader struct{ err error }
+
+func (f failedReader) Readline() (string, error) { return "", f.err }
+func (failedReader) SetPrompt(string)            {}
+func (failedReader) Close() error                { return nil }
+
+// replOnTerminal reports whether the REPL reads from and writes to a
+// terminal, as the TUI needs.
+func replOnTerminal() bool {
+	return isatty.IsTerminal(os.Stdin.Fd()) && isatty.IsTerminal(os.Stdout.Fd())
+}
+
+// openReplReader opens a readline instance on stdin, with its history
+// in repl-history.
+func openReplReader() (lineReader, error) {
+	stdin := readline.Stdin
+	config := &readline.Config{
+		Prompt:          replPrompt(),
+		HistoryFile:     replHistoryPath(),
+		InterruptPrompt: "^C",
+		EOFPrompt:       "exit",
+		// replReader.Readline saves each line.
+		DisableAutoSaveHistory: true,
+	}
+	if !isatty.IsTerminal(os.Stdin.Fd()) {
+		// Lines from a pipe or a file: read them as they are, with no
+		// prompt or echo. readline does this by itself on Unix. On
+		// Windows it reads key presses from the console and takes
+		// stdin to be one, so a pipe ended the REPL before its first
+		// line.
+		stdin = os.Stdin
+		config.FuncIsTerminal = func() bool { return false }
+	}
+	// readline wraps stdin in this reader itself when given none, and
+	// doesn't close it.
+	cancelable := readline.NewCancelableStdin(stdin)
+	config.Stdin = cancelable
+	rl, err := readline.NewEx(config)
+	if err != nil {
+		_ = cancelable.Close()
+		return nil, fmt.Errorf("init readline: %w", err)
+	}
+	return replReader{Instance: rl, stdin: cancelable}, nil
+}
+
+// replReader is a readline instance as the REPL reads with it.
+type replReader struct {
+	*readline.Instance
+	stdin io.Closer
+}
+
+// Readline reads a line and saves it to the history. readline saves a
+// line itself on a goroutine of its own, after returning it, which
+// could come after the reader is closed for the TUI, losing the
+// `/interactive` that started it.
+func (r replReader) Readline() (string, error) {
+	line, err := r.Instance.Readline()
+	if err == nil {
+		_ = r.SaveHistory(line) // an error writing the file; readline ignores it too
+	}
+	return line, err
+}
+
+// Close closes readline, then the stdin reader it read through.
+func (r replReader) Close() error {
+	err := r.Instance.Close()
+	_ = r.stdin.Close()
+	return err
 }
 
 // resetReplFlags zeroes the package-level Cobra flag globals so
@@ -259,8 +375,11 @@ Common commands (run implicitly as todo <command>):
 
 REPL controls:
   /<command> [args...]      run any htt command (e.g. /log start, /report)
+  /interactive, /i          open the TUI; quit it (q) to come back here
   /help                     this message
   quit, exit, q             leave the REPL (Ctrl-D / Ctrl-C also work)
+
+/repl and /gui don't run inside the REPL.
 
 Quotes group words, as in a shell: /log end --at "yesterday 17:30".
 An apostrophe in a word (Sam's) is kept as typed.

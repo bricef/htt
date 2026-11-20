@@ -83,15 +83,22 @@ Examples:
 			tea.WithMouseCellMotion(),
 		)
 
-		logger.Info("tui started", "context", ctx.Name)
-		if _, err := p.Run(); err != nil {
-			logger.Error("tui failed", "err", err)
-			return fmt.Errorf("tui exited: %w", err)
-		}
-		logger.Info("tui exited")
-		return nil
+		return runOnTerminal(func() error {
+			logger.Info("tui started", "context", ctx.Name)
+			if _, err := p.Run(); err != nil {
+				logger.Error("tui failed", "err", err)
+				return fmt.Errorf("tui exited: %w", err)
+			}
+			logger.Info("tui exited")
+			return nil
+		})
 	},
 }
+
+// runOnTerminal runs the TUI, run, once the terminal is the TUI's. Run
+// from a shell, htt has it already; the REPL lends it its own for the
+// run (replTerminal.handOver).
+var runOnTerminal = func(run func() error) error { return run() }
 
 // helpWidth is the width help text is wrapped to.
 const helpWidth = 72

@@ -11,6 +11,7 @@ require (
 	github.com/chromedp/cdproto v0.159.0
 	github.com/chromedp/chromedp v0.22.1
 	github.com/chzyer/readline v1.5.1
+	github.com/creack/pty v1.1.24
 	github.com/fatih/color v1.19.0
 	github.com/mattn/go-isatty v0.0.20
 	github.com/mitchellh/go-homedir v1.1.0

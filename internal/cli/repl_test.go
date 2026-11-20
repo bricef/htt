@@ -2,6 +2,9 @@ package cli
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"slices"
@@ -11,6 +14,7 @@ import (
 
 	"github.com/bricef/htt/internal/domain"
 	"github.com/bricef/htt/internal/vars"
+	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
@@ -72,30 +76,173 @@ func TestClassifyReplInput(t *testing.T) {
 	}
 }
 
-func TestIsDisabledInRepl(t *testing.T) {
+func TestRefusedInRepl(t *testing.T) {
 	cases := []struct {
 		name string
 		args []string
-		want bool
+		want string // the command refused, "" when it runs
 	}{
-		{"empty args", nil, false},
-		{"interactive blocked", []string{"interactive"}, true},
-		{"repl blocked", []string{"repl"}, true},
-		{"gui blocked", []string{"gui"}, true},
-		{"gui with flags blocked", []string{"gui", "--no-open"}, true},
-		{"todo allowed", []string{"todo", "add", "foo"}, false},
-		{"log allowed", []string{"log", "start"}, false},
-		{"report allowed", []string{"report"}, false},
-		{"status allowed", []string{"status"}, false},
+		{"empty args", nil, ""},
+		{"repl refused", []string{"repl"}, "repl"},
+		{"gui refused", []string{"gui"}, "gui"},
+		{"gui with flags refused", []string{"gui", "--no-open"}, "gui"},
+		// The TUI runs: the REPL hands it the terminal.
+		{"interactive runs", []string{"interactive"}, ""},
+		{"i runs", []string{"i"}, ""},
+		{"interactive with flags runs", []string{"i", "--log-file", "tui.log"}, ""},
+		{"todo runs", []string{"todo", "add", "foo"}, ""},
+		{"log runs", []string{"log", "start"}, ""},
+		{"report runs", []string{"report"}, ""},
+		{"status runs", []string{"status"}, ""},
 		// Subcommand of an allowed command stays allowed.
-		{"log status allowed", []string{"log", "status"}, false},
+		{"log status runs", []string{"log", "status"}, ""},
+		// Bare `i` in the REPL is `todo i`, which isn't the TUI.
+		{"todo i runs", []string{"todo", "i"}, ""},
+		{"unknown command runs, to fail", []string{"nonsense"}, ""},
+	}
+	// Each alias as its command: cobra finds them, so one added later
+	// is covered too.
+	for _, cmd := range []*cobra.Command{Interactive, Repl, GUI} {
+		want := ""
+		if cmd != Interactive {
+			want = cmd.Name()
+		}
+		for _, alias := range cmd.Aliases {
+			cases = append(cases, struct {
+				name string
+				args []string
+				want string
+			}{"alias " + alias + " of " + cmd.Name(), []string{alias}, want})
+		}
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := isDisabledInRepl(c.args); got != c.want {
-				t.Errorf("isDisabledInRepl(%v) = %v, want %v", c.args, got, c.want)
+			if got := refusedInRepl(c.args); got != c.want {
+				t.Errorf("refusedInRepl(%q) = %q, want %q", c.args, got, c.want)
 			}
 		})
+	}
+}
+
+// fakeLines is a line reader that records being closed in log.
+type fakeLines struct {
+	name string
+	log  *[]string
+}
+
+func (f *fakeLines) Readline() (string, error) { return "", io.EOF }
+func (f *fakeLines) SetPrompt(string)          {}
+func (f *fakeLines) Close() error {
+	*f.log = append(*f.log, "close "+f.name)
+	return nil
+}
+
+// TestReplHandOver_ClosesRunsReopens checks the order the REPL hands
+// its terminal to the TUI in: it closes its line reader, which would
+// otherwise read the terminal too, runs the TUI, then opens a new
+// reader, even when the TUI fails.
+func TestReplHandOver_ClosesRunsReopens(t *testing.T) {
+	for _, tuiErr := range []error{nil, errors.New("tui exited: boom")} {
+		t.Run(fmt.Sprintf("tui returns %v", tuiErr), func(t *testing.T) {
+			var log []string
+			first := &fakeLines{name: "first", log: &log}
+			second := &fakeLines{name: "second", log: &log}
+			rt := &replTerminal{
+				lines: first,
+				open: func() (lineReader, error) {
+					log = append(log, "open")
+					return second, nil
+				},
+				isTerminal: func() bool { return true },
+			}
+
+			err := rt.handOver(func() error {
+				log = append(log, "run the TUI")
+				return tuiErr
+			})
+
+			if !errors.Is(err, tuiErr) {
+				t.Errorf("handOver = %v, want the TUI's %v", err, tuiErr)
+			}
+			if want := []string{"close first", "run the TUI", "open"}; !slices.Equal(log, want) {
+				t.Errorf("steps = %q, want %q", log, want)
+			}
+			if rt.lines != second {
+				t.Errorf("the REPL reads with %v after the TUI, want the reader opened after it", rt.lines)
+			}
+		})
+	}
+}
+
+// TestReplHandOver_NeedsATerminal: on a REPL reading a pipe, the TUI
+// gets an error saying why it can't run, and the line reader is left
+// as it is.
+func TestReplHandOver_NeedsATerminal(t *testing.T) {
+	var log []string
+	first := &fakeLines{name: "first", log: &log}
+	rt := &replTerminal{
+		lines: first,
+		open: func() (lineReader, error) {
+			log = append(log, "open")
+			return nil, errors.New("unexpected open")
+		},
+		isTerminal: func() bool { return false },
+	}
+
+	err := rt.handOver(func() error {
+		log = append(log, "run the TUI")
+		return nil
+	})
+
+	if err == nil || !strings.Contains(err.Error(), "the TUI needs a terminal") {
+		t.Errorf("handOver = %v, want the TUI needs a terminal", err)
+	}
+	if len(log) != 0 || rt.lines != first {
+		t.Errorf("steps = %q, reader %v; want none, and the first reader kept", log, rt.lines)
+	}
+}
+
+// TestReplHandOver_ReopenFailureEndsTheREPL: when no new line reader
+// opens after the TUI, the REPL's next read fails with the reason, which
+// ends the REPL, rather than reading from the reader it closed.
+func TestReplHandOver_ReopenFailureEndsTheREPL(t *testing.T) {
+	var log []string
+	rt := &replTerminal{
+		lines: &fakeLines{name: "first", log: &log},
+		open: func() (lineReader, error) {
+			return nil, errors.New("no terminal left")
+		},
+		isTerminal: func() bool { return true },
+	}
+
+	if err := rt.handOver(func() error { return nil }); err != nil {
+		t.Errorf("handOver = %v, want the TUI's nil", err)
+	}
+	if _, err := rt.lines.Readline(); err == nil || !strings.Contains(err.Error(), "no terminal left") {
+		t.Errorf("Readline after a failed reopen = %v, want the open's error", err)
+	}
+}
+
+// TestInteractive_RunsOnTheTerminalItIsGiven: htt interactive runs the
+// TUI through runOnTerminal, which the REPL points at its handOver.
+func TestInteractive_RunsOnTheTerminalItIsGiven(t *testing.T) {
+	withMemoryRepo(t)
+	refused := errors.New("no terminal for you")
+	called := false
+	prev := runOnTerminal
+	runOnTerminal = func(run func() error) error {
+		called = true
+		return refused
+	}
+	t.Cleanup(func() { runOnTerminal = prev })
+
+	resetReplFlags()
+	RootCmd.SetArgs([]string{"i"})
+	if err := RootCmd.Execute(); !errors.Is(err, refused) {
+		t.Errorf("htt i = %v, want runOnTerminal's error", err)
+	}
+	if !called {
+		t.Error("htt i didn't run the TUI through runOnTerminal")
 	}
 }
 
@@ -110,8 +257,8 @@ func TestRepl_DispatchExecutesCommand(t *testing.T) {
 	if kind != replInputDispatch {
 		t.Fatalf("kind = %v, want dispatch", kind)
 	}
-	if isDisabledInRepl(args) {
-		t.Fatalf("dispatch unexpectedly disabled for %v", args)
+	if name := refusedInRepl(args); name != "" {
+		t.Fatalf("dispatch unexpectedly refused %q for %v", name, args)
 	}
 	resetReplFlags()
 	RootCmd.SetArgs(args)
@@ -262,6 +409,7 @@ func TestPrintReplHelp_MentionsKeyConcepts(t *testing.T) {
 	for _, want := range []string{
 		"todo-mode",
 		"/<command>",
+		"/interactive, /i",
 		"/help",
 		"quit",
 		"Ctrl-D",

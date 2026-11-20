@@ -13,15 +13,15 @@ Scoped work lives in [GitHub Issues](https://github.com/bricef/htt/issues).
 Each confirmed against `main` on 2026-11-03.
 
 - **`:` in the TUI keymap does nothing yet** (command mode).
-- **Where the clocks go forward at midnight, the report gets that night
-  wrong** (confirmed 2026-11-18, in `America/Santiago` on 2026-09-06):
-  that midnight doesn't exist, and `time.Date` puts it an hour early,
-  at 23:00 the day before. So `Timesheet` ends 2026-09-05 at 23:00
-  (an entry at 22:00 ended at 23:30 counts 1h), and `htt report`'s day
-  walk lands on 2026-09-05 twice, listing it twice (2h in all). Zones
-  whose clocks change at 01:00 or later, as in Europe and the US,
-  aren't affected. `htt gui` walks days by date, so it lists that day
-  once, but its timesheet ends at the same wrong time.
+- **Where the clocks go forward at midnight, a timesheet ends that
+  night an hour early** (confirmed 2026-11-18, in `America/Santiago`
+  on 2026-09-06): that midnight doesn't exist, and `time.Date` puts
+  it an hour early, at 23:00 the day before. So `Timesheet` ends
+  2026-09-05 at 23:00 (an entry at 22:00 ended at 23:30 counts 1h), in
+  `htt report` and `htt gui` alike. Zones whose clocks change at 01:00
+  or later, as in Europe and the US, aren't affected. (`htt report`
+  also listed 2026-09-05 twice; since 2026-11-20 it reads days by
+  date, as `htt gui` does, and lists it once.)
 
 ## Wishlist
 
@@ -38,7 +38,6 @@ Each confirmed against `main` on 2026-11-03.
 - Time log
   - [ ] Review jrnl for inspiration
 - Reports
-  - [ ] Calendar modes (`--week`, `--month`)
   - [ ] Time per task
 - Interactive mode
   - [ ] Fix help menu column balance
@@ -70,6 +69,16 @@ Each confirmed against `main` on 2026-11-03.
 
 ## Done
 
+- [x] Calendar modes (2026-11-20): `htt report --week [DATE]` and
+      `--month [MONTH]` report a week, Monday to Sunday, or a calendar
+      month, with `htt gui`'s figures: the week's days and summary;
+      the month's summary, weeks, average weekday and category table.
+      The GUI and the report take every figure from the domain
+      (`timesheet_figures.go`), and an e2e test checks the report
+      against the GUI's API field by field. `--since`'s time section
+      moved onto the same functions, its output unchanged but for the
+      night the clocks go forward at midnight, now one day; see
+      `docs/plans/complete/2026-11-20-report-periods.md`
 - [x] The REPL opens the TUI (2026-11-20): `/interactive` and `/i`
       run the TUI on the REPL's terminal, which closes its readline
       first and opens a new one, on the same history, when the TUI

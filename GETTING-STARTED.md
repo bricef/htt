@@ -631,7 +631,8 @@ tags each time, so changing them recounts past days too.
 `htt report` summarises a period: tasks completed, tasks added, tasks
 deleted, and time logged per day. `--since` takes a date
 (`YYYY-MM-DD`) or a duration counted back from now (`7d`, `2w`,
-`24h`); the default is `7d`.
+`24h`); the default is `7d`. For a week or a month, see
+[A week or a month](#a-week-or-a-month).
 
 ```
 $ htt report --since 2d
@@ -687,6 +688,136 @@ Today's last entry counts until now, in progress.
 A task added and completed in the period counts under both Added and
 Completed, by the context it was in; a deleted task is listed only
 under Deleted.
+
+### A week or a month
+
+`--week` reports a week, Monday to Sunday, and `--month` a calendar
+month, with the figures `htt gui` shows (see
+[The time log in your browser](#the-time-log-in-your-browser)), so
+the terminal and the browser agree. Without a date they report this
+week or this month; with one, the week holding that date (`--week
+2026-11-04`) or that month (`--month 2026-10`, or a date in it, such
+as `--month 2026-10-15`). The tasks are those of the period: from its
+first day to its last, or to now.
+
+```
+$ htt report --week
+Activity in the week 2026-11-16 to 2026-11-22 (so far: 5 of 7 days)
+
+Completed (1)
+  todo:
+    ship the GUI +htt                                  2026-11-18
+
+Added (1)
+  todo:
+    write the report periods plan +htt                 2026-11-17
+
+Deleted (0)
+  (none)
+
+Time logged
+  2026-11-16  7h 55m worked
+    break              45m
+    htt             7h 25m
+    admin              30m
+  2026-11-17  14h 5m worked (no @end: counted to 24:00)
+              end the day with htt log end --at "2026-11-17 HH:MM"
+    break              45m
+    htt             13h 5m
+    admin              30m
+    uncategorised      30m  (counted as working)
+  2026-11-18  7h 10m worked
+    break              40m
+    htt             6h 55m
+    uncategorised      15m  (counted as working)
+  2026-11-19  1h 30m worked
+    admin           1h 30m
+  2026-11-20   8h 5m worked
+    break              40m
+    htt             7h 45m
+    admin              20m
+  Total: 38h 45m worked
+    break           2h 50m
+    htt            35h 10m
+    admin           2h 50m
+    uncategorised      45m  (counted as working)
+
+  Worked               38h 45m
+  Breaks               2h 50m
+  Average working day  7h 45m
+  Counted to midnight  10h 45m
+  Days without @end    2026-11-17
+```
+
+The week lists each day as `--since` does, with the week's totals,
+then its figures: worked time, breaks, the average working day
+(worked time ÷ the days with worked time), the time counted to
+midnight on days without `@end`, and those days. The heading says how
+far into the week today is: this week's figures are over the days so
+far, today included.
+
+```
+$ htt report --month 2026-10
+Activity in October 2026
+
+Completed (1)
+  todo:
+    release v0.4.0 +htt                                2026-10-29
+
+Added (2)
+  todo:
+    release v0.4.0 +htt                                2026-10-06
+    answer the survey @email                           2026-10-12
+
+Deleted (0)
+  (none)
+
+Time logged
+  Worked               151h 20m
+  Average week         34h 10m
+  Average working day  6h 52m
+  Breaks               16h 43m
+  Uncategorised        3% of worked
+  Days without @end    2026-10-15
+
+  Week                      Days   Worked  Breaks
+  2026-10-01 to 2026-10-04     4  13h 19m  1h 16m
+  2026-10-05 to 2026-10-11     7   34h 2m   4h 9m
+  2026-10-12 to 2026-10-18     7   43h 6m  3h 57m
+  2026-10-19 to 2026-10-25     7  28h 21m  3h 30m
+  2026-10-26 to 2026-10-31     6  32h 32m  3h 51m
+
+  Weekday    Average worked  Days
+  Monday             6h 57m     4
+  Tuesday            6h 52m     4
+  Wednesday          4h 57m     4
+  Thursday           8h 16m     5
+  Friday             6h 40m     5
+  Saturday              18m     5
+  Sunday                 0m     4
+
+  Category          Total  Of worked  Per week 1-15  Per week 16-31  Change
+  break           16h 43m          -          4h 6m          3h 27m    -16%
+  htt            134h 36m        89%        34h 56m          26h 7m    -25%
+  admin            12h 4m         8%         2h 46m          2h 41m     -3%
+  uncategorised    4h 40m         3%            58m           1h 7m    +15%
+```
+
+The month has no line per day. Its figures come first: worked time,
+the average week (worked time ÷ the days × 7), the average working
+day, breaks, uncategorised time as a share of worked time (or, when
+your default category isn't work, its time and what it counts as),
+and the days without `@end`. Then its weeks, Monday to Sunday, the
+first and the last cut at the month's edges; each weekday's average
+worked time, and over how many days; and each category with time:
+its total, its share of worked time (`-` for one that isn't work),
+its time per week from the 1st to the 15th and from the 16th to the
+end, and the change. This month's figures are over the days so far,
+today included; its weeks are all listed, those to come empty. A
+figure there isn't, such as an average over no days, is `-`.
+
+`--week`, `--month` and `--since` exclude each other, and a date goes
+only after `--week` or `--month`.
 
 ## The time log in your browser
 
@@ -755,7 +886,9 @@ whenever `htt gui` runs.
 
 For this week or month, the figures are over the days so far, today
 included, and the page refreshes itself every minute; any page
-refreshes when you come back to it.
+refreshes when you come back to it. `htt report --week` and `--month`
+print the same figures in the terminal (see
+[A week or a month](#a-week-or-a-month)).
 
 The categories are your `timelog.categories` (see
 [Categories](#categories)), in their order. The ones that count as

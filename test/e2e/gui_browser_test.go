@@ -240,7 +240,7 @@ timelog:
       tags: ["+proto"]
 `)
 	// July 2026, 09:00 to 17:00 Monday to Friday: 23 days, 184h, so the
-	// average week, 184h ÷ 31 × 7, is 41h 33m, above every week's 40h at
+	// average week, 184h ÷ 31 × 7, is 41h 32m 54s, above every week's 40h at
 	// most. TZ sets htt's zone where Go reads it; Windows writes the logs
 	// in its own.
 	loc := time.Local
@@ -303,11 +303,23 @@ timelog:
 		waitFor("the pin gone", `document.querySelector("#detail").textContent === "Click an entry to see it here."`),
 	)
 	// The month: the average week drawn, dashed and labelled, though
-	// it's above every bar; no NaN in its table.
+	// it's above every bar; no NaN in its table. The page writes it as
+	// htt report does: 41h 32m 54s is "41h 32m" in both, not 41h 33m.
+	avgWeek := ""
+	for _, line := range strings.Split(e.mustRun("report", "--month", "2026-07").stdout, "\n") {
+		if f := strings.Fields(line); len(f) == 4 && f[0] == "Average" && f[1] == "week" {
+			avgWeek = f[2] + " " + f[3]
+		}
+	}
+	if avgWeek != "41h 32m" {
+		t.Fatalf("htt report --month 2026-07: average week %q, want 41h 32m", avgWeek)
+	}
 	b.do(g,
 		chromedp.Evaluate[chromedp.Void](`location.hash = "#month/2026-07"`),
 		waitFor("July", `document.querySelector("#title").textContent === "July 2026"`),
-		waitFor("the average week, 41h 33m, in the weeks chart", svgText("weeks")+`.includes("avg 41h 33m") && !!document.querySelector("#weeks svg path[stroke-dasharray]")`),
+		waitFor("the average week, as htt report writes it, in the weeks chart and the summary",
+			svgText("weeks")+`.includes("avg `+avgWeek+`") && !!document.querySelector("#weeks svg path[stroke-dasharray]")`+
+				` && document.querySelector("#month-stats").textContent.includes("`+avgWeek+`")`),
 		waitFor("no NaN in the month", `!document.body.textContent.includes("NaN")`),
 	)
 

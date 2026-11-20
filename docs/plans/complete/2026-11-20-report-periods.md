@@ -53,9 +53,11 @@ Choices made while building:
 - **Durations** are the report's: hours and minutes, the minutes
   rounded down. A period's figure is first rounded to the second, as
   the API gives it, so the report and the API agree to the minute
-  even for an average (`reportFigure`). The page rounds to the
-  nearest minute, so on screen the two can differ by a minute; the
-  figures behind them don't.
+  even for an average (`reportFigure`). The page writes durations the
+  same way (its `dur` rounds the minutes down too, changed at review),
+  so on screen the two read alike: July 2026's average week, 41h 32m
+  54s, is "41h 32m" in both, which the browser test checks against the
+  report's own output.
 - **The clock** is to the second for `--week` and `--month`, as
   `htt gui`'s.
 - **They read before they print**: an unreadable log or a config htt
@@ -129,10 +131,6 @@ Left open:
 
 - **`--week=DATE`** isn't taken; a flag that takes an optional value
   could take both forms, if wanted.
-- **The page rounds minutes, the report drops them**: the GUI's `dur`
-  rounds to the nearest minute, the report's format to the minute
-  below, so a figure can read a minute apart. Either could follow the
-  other; the report's format is decision 6's.
 - **The night the clocks go forward at midnight** still ends a
   timesheet an hour early (`TODO.md`).
 

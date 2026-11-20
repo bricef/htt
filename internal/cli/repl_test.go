@@ -272,6 +272,16 @@ func TestRepl_DispatchExecutesCommand(t *testing.T) {
 	}
 }
 
+func TestResetReplFlags_ClearsReportPeriods(t *testing.T) {
+	// --week, --month and whether --since was given: left set, the next
+	// /report would be a week again, or refuse --since as one.
+	reportWeek, reportMonth, reportSinceGiven = true, true, true
+	resetReplFlags()
+	if reportWeek || reportMonth || reportSinceGiven {
+		t.Errorf("reportWeek %v, reportMonth %v, reportSinceGiven %v; want none set", reportWeek, reportMonth, reportSinceGiven)
+	}
+}
+
 func TestResetReplFlags_ClearsBleedingState(t *testing.T) {
 	// Set flag globals to non-default values, then verify
 	// resetReplFlags restores them. This is the cycle-to-cycle

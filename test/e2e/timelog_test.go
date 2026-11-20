@@ -166,6 +166,35 @@ func TestReport_TheDayTheClocksGoBackIsOneDay(t *testing.T) {
 `)
 }
 
+func TestReport_TheNightTheClocksGoForwardAtMidnightIsOneDay(t *testing.T) {
+	// In Santiago, 2026-09-06 has no midnight: the clocks go from 23:59
+	// on the 5th to 01:00 on the 6th, and time.Date puts that midnight
+	// at 23:00 on the 5th. The report walked the days from each one's
+	// midnight, so it read the 5th twice, listed it twice and counted
+	// it twice. It reads the days by their dates, as htt gui does.
+	skipOnWindowsForTZ(t)
+	e := newEnv(t)
+	e.extraEnv = append(e.extraEnv, "TZ=America/Santiago")
+	loc, err := time.LoadLocation("America/Santiago")
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.writeTimelog(loc, "2026-09-05", "09:00 work", "10:00 @end")
+	e.writeTimelog(loc, "2026-09-06", "10:00 work", "12:00 @end")
+	e.writeTimelog(loc, "2026-09-07", "09:00 work", "12:00 @end")
+	r := e.mustRun("report", "--since", "2026-09-05")
+	assertEqual(t, "time section", timeSection(t, r.stdout), `Time logged
+  2026-09-05  1h 0m worked
+    uncategorised  1h 0m  (counted as working)
+  2026-09-06  2h 0m worked
+    uncategorised  2h 0m  (counted as working)
+  2026-09-07  3h 0m worked
+    uncategorised  3h 0m  (counted as working)
+  Total: 6h 0m worked
+    uncategorised  6h 0m  (counted as working)
+`)
+}
+
 func TestReport_UncategorisedTimeUnderEachDefault(t *testing.T) {
 	// The same day under each kind of default category. Time no
 	// category matched (a misspelt +HTT included) is on its own line,

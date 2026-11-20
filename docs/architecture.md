@@ -189,8 +189,9 @@ belongs to nothing; and the day's last entry runs to local midnight
 (`DayUnended`, which the report flags with the `htt log end --at`
 that ends it) unless it is an `@end` (`DayEnded`), or, today, until
 now (`DayInProgress`). Intervals never leave their day. `Timesheet` takes `now`, and `now`'s zone is the
-local one, so tests pin both. `htt report` sums the sheets (`Worked`,
-`ByCategory`, `Uncategorised`); `htt log status` reads `Status`,
+local one, so tests pin both. `htt report` reads the sheets with
+`ReadDays` and adds them up with the period functions (below); `htt
+log status` reads `Status`,
 `EndedAt` and `Current`, whose `Category` (its name, and whether it
 is work) and `Uncategorised` it shows. `log status` and `htt status`
 (not `log active`) then find the most recent day before today with
@@ -235,6 +236,28 @@ weeks at the days' edges, `Halves` splits a month at the 15th,
 each weekday, and `Summarise` gives the averages per week and per
 working day and the days without `@end`. Their property tests check
 them against direct sums of the intervals over generated months.
+
+A week's and a month's figures are put together once, in
+`timesheet_figures.go`, for both `htt gui` and `htt report --week`
+and `--month`, so the browser and the terminal show the same numbers.
+`CalendarDate` reads a date or a month as a day at noon in the local
+zone (where the clocks go forward at midnight, that midnight doesn't
+exist). `ReadDays(repo, categories, dates, now)` reads each date's log
+through `TimelogRepository.Day` as a timesheet at `now`; a day after
+today it doesn't read, so a log written by hand for tomorrow counts
+for nothing. It reads through the interface, as `LastLogBefore` does,
+so the domain needs no storage. `SoFar` is the days up to today.
+`Week` and `Month` read a period and add it up over its days so far,
+today included (`WeekFigures`: the days and the summary;
+`MonthFigures`: the summary, all the month's weeks, the weekday
+averages, the rolling weeks, reaching 6 days into the month before,
+the halves, and the category table). The table
+(`CategoryTable`: a row per category with tags, `Tagged`, then
+uncategorised) holds each category's total, its share of worked time
+for one that's work, its time per week in each half
+(`Stretch.PerWeek`) and the change; `Summary.UncategorisedShare` is
+the summary's share. The GUI turns these into JSON and the report
+into text; neither computes a figure of its own.
 
 ## Repositories
 
@@ -318,6 +341,20 @@ same form and with the same once-per-run record, naming the file
 past day (`printUnendedDay`) goes through `baseTimelogRepo()`, the
 repository unwrapped: it reads that day only for its `@end` and shows
 none of its entries, so their dates are the report's to warn about.
+
+`htt report` (`report.go`) prints the tasks completed, added and
+deleted in its period, then the time logged. `--since` reads its days
+with `ReadDays` and adds them up with `Sum`; `--week` and `--month`
+(`report_period.go`) ask the domain for `Week` or `Month` at the
+clock to the second, as `htt gui` does, read before anything is
+printed, and lay the figures out: `--week` its days as `--since`
+prints them (`printDays`) and its summary, `--month` its summary and
+tables. A period's figure is rounded to the second, as the GUI's API
+gives it, before the report's hours and minutes drop the seconds, so
+both show the same minute. Which of `--since`, `--week` and `--month`
+was given is read from the flags' own values (`--since`'s through
+`givenString`), never pflag's `Changed`, which stays set between the
+REPL's commands; `resetReplFlags` resets them.
 
 Commands that write a task the user typed (`todo add`, `add-to`,
 `replace`, `edit`, and `log add` for a time-log entry) warn about it
@@ -484,10 +521,10 @@ The API (`view.go`, versioned there in `apiVersion`): `api/week?date=`
 any day of the week, `api/month?month=YYYY-MM`, each today's by
 default, read as days on the calendar (parsed in UTC, then noon in the
 local zone: where the clocks go forward at midnight, local midnight
-doesn't exist). Go computes, the page draws: the handlers read each
-day's log as a timesheet at the server's clock (to the second), add
-the days up
-with the domain's period functions, and answer a view: `now`, `today`,
+doesn't exist). Go computes, the page draws: the handlers ask the
+domain for the week's or the month's figures (`domain.Week`,
+`domain.Month`) at the server's clock (to the second), the figures
+`htt report --week` and `--month` print, and answer a view: `now`, `today`,
 the `categories` (in the config's order, those with tags, then
 `uncategorised`; each with `work` and a colour index, its place among
 the work categories or among the others), the `period` (its key and
@@ -611,6 +648,8 @@ Worth reading if you're touching the relevant area:
 - `2026-11-19-gui-time-log.md` — why the GUI is a local web page
   served by htt (no cgo), how it stays private, and what its JSON
   contract promises.
+- `2026-11-20-report-periods.md` — `htt report --week` and `--month`,
+  and why the GUI and the report take their figures from one place.
 - `2026-11-02-tui-log-file.md` — why the TUI has its own logger and
   how actions report errors.
 - `2026-11-02-tui-editor-exec.md` — how the editor gets the terminal,

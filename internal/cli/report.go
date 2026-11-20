@@ -4,19 +4,31 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/bricef/htt/internal/domain"
 	"github.com/spf13/cobra"
 )
 
-var reportSince string
+// report's flags. reportSinceGiven says whether --since was given, to
+// refuse it with --week or --month: pflag's Changed would stay set
+// between the REPL's commands, as the flags' values would without
+// resetReplFlags.
+var (
+	reportSince      = "7d"
+	reportSinceGiven bool
+	reportWeek       bool
+	reportMonth      bool
+)
 
 var Report = &cobra.Command{
-	Use:   "report",
+	Use:   "report [--since WHEN | --week [DATE] | --month [MONTH]]",
 	Short: "Summarise activity in a time period.",
-	Long: `Show what happened since a given date or duration: tasks
-completed, tasks added, tasks deleted, and time logged per day.
+	Long: `Show what happened in a period: tasks completed, tasks added, tasks
+deleted, and time logged. The period is since a date or a duration
+(--since, the last 7 days unless given), a week (--week) or a calendar
+month (--month).
 
 Time logged gives each day's worked time and its time per category
 (timelog.categories in the config), then the totals. A category's
@@ -32,13 +44,37 @@ last entry counts until now, in progress.
 --since takes a date (YYYY-MM-DD) or a duration counted back from now
 in days, weeks or hours (7d, 2w, 24h).
 
+--week is a week, Monday to Sunday: this one, or the one holding the
+date after it (YYYY-MM-DD). It gives each day's time, as --since does,
+then the week's figures: worked, breaks, the average working day, the
+time counted to midnight on days without @end, and those days.
+
+--month is a calendar month: this one, or the one after it (YYYY-MM,
+or a date in it). It gives the month's figures (worked, the average
+week and working day, breaks, uncategorised time's share of worked,
+the days without @end), its weeks (Monday to Sunday, cut at the
+month's edges), the average weekday, and a line per category: its
+time, its share of worked, its time per week in the 1st to the 15th
+and in the 16th to the end, and the change between them.
+
+These are htt gui's figures. This week's and this month's are over the
+days so far, today included, and their tasks are those to now.
+--week, --month and --since exclude each other.
+
 Examples:
   htt report                 # defaults to --since 7d
   htt report --since 14d
   htt report --since 2w
-  htt report --since 2026-05-09`,
-	Args: cobra.NoArgs,
+  htt report --since 2026-05-09
+  htt report --week          # this week so far
+  htt report --week 2026-11-04
+  htt report --month         # this month so far
+  htt report --month 2026-10`,
+	Args: reportArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if reportWeek || reportMonth {
+			return reportPeriod(args)
+		}
 		since, err := parseSince(reportSince)
 		if err != nil {
 			return fmt.Errorf("parse --since: %w", err)
@@ -53,26 +89,79 @@ Examples:
 			since.Format("2006-01-02"),
 			formatReportDuration(now.Sub(since)))
 
-		if err := reportCompleted(since, now); err != nil {
+		if err := reportTasks(since, now); err != nil {
 			return err
 		}
-		fmt.Println()
-		if err := reportAdded(since, now); err != nil {
-			return err
-		}
-		fmt.Println()
-		if err := reportDeleted(since, now); err != nil {
-			return err
-		}
-		fmt.Println()
 		return reportTimeLogged(since, now, categories)
 	},
 }
 
 func init() {
-	Report.Flags().StringVar(&reportSince, "since", "7d",
+	Report.Flags().Var(givenString{&reportSince, &reportSinceGiven}, "since",
 		"starting point: YYYY-MM-DD or Nd/Nw/Nh (e.g. 7d, 2w, 24h)")
+	Report.Flags().BoolVar(&reportWeek, "week", false,
+		"a week, Monday to Sunday: this one, or the one holding the date after it (YYYY-MM-DD)")
+	Report.Flags().BoolVar(&reportMonth, "month", false,
+		"a calendar month: this one, or the one after it (YYYY-MM, or a date in it)")
 	RootCmd.AddCommand(Report)
+}
+
+// givenString is a string flag that says whether it was given.
+type givenString struct {
+	value *string
+	given *bool
+}
+
+func (f givenString) String() string {
+	if f.value == nil { // pflag's zero value, for its help
+		return ""
+	}
+	return *f.value
+}
+
+func (f givenString) Set(s string) error {
+	*f.value, *f.given = s, true
+	return nil
+}
+
+func (f givenString) Type() string { return "string" }
+
+// reportArgs checks report's flags and argument: --week, --month and
+// --since exclude each other, and a date goes only after --week or
+// --month, one at most.
+func reportArgs(cmd *cobra.Command, args []string) error {
+	var given []string
+	for _, f := range []struct {
+		name string
+		on   bool
+	}{{"--week", reportWeek}, {"--month", reportMonth}, {"--since", reportSinceGiven}} {
+		if f.on {
+			given = append(given, f.name)
+		}
+	}
+	if len(given) > 1 {
+		return fmt.Errorf("%s and %s exclude each other: give one", strings.Join(given[:len(given)-1], ", "), given[len(given)-1])
+	}
+	switch {
+	case len(args) == 0:
+	case !reportWeek && !reportMonth:
+		return fmt.Errorf("%q: htt report takes a date only after --week (YYYY-MM-DD) or --month (YYYY-MM)", args[0])
+	case len(args) > 1:
+		return fmt.Errorf("%s takes one date, got %d: %s", given[0], len(args), strings.Join(args, " "))
+	}
+	return nil
+}
+
+// reportTasks prints the tasks completed, added and deleted from
+// since's day to until, each section followed by a blank line.
+func reportTasks(since, until time.Time) error {
+	for _, section := range []func(since, until time.Time) error{reportCompleted, reportAdded, reportDeleted} {
+		if err := section(since, until); err != nil {
+			return err
+		}
+		fmt.Println()
+	}
+	return nil
 }
 
 // parseSince accepts either an absolute date (YYYY-MM-DD) or a
@@ -333,10 +422,30 @@ type archivedTask struct {
 	deletedOn time.Time
 }
 
-// reportTimeLogged walks every calendar day in [since, until], reads
-// its time log as a timesheet (see domain.Timelog.Timesheet), and
-// prints each day's worked time and its time per category, then the
-// totals over the period:
+// reportTimeLogged reads every calendar day from since's to until's
+// (domain.ReadDays: each day's time log as a timesheet at until, now),
+// and prints each day's worked time and its time per category, then the
+// totals over the days (domain.Sum); see printDays.
+func reportTimeLogged(since, until time.Time, categories *domain.Categoriser) error {
+	fmt.Println("Time logged")
+	// Days by their dates in the local zone, until's, each at noon, as a
+	// domain.Period holds them: a day the clocks change isn't 24 hours
+	// long, and where they go forward at midnight, that midnight
+	// doesn't exist.
+	loc := until.Location()
+	days, err := domain.ReadDays(timelogRepo(), categories, domain.Period{
+		First: time.Date(since.Year(), since.Month(), since.Day(), 12, 0, 0, 0, loc),
+		Last:  time.Date(until.Year(), until.Month(), until.Day(), 12, 0, 0, 0, loc),
+	}.Dates(), until)
+	if err != nil {
+		return err
+	}
+	printDays(days, domain.Sum(days), categories)
+	return nil
+}
+
+// printDays prints each day's worked time and its time per category,
+// then total, the days' totals, under the section's heading:
 //
 //	Time logged
 //	  2026-11-02   7h 0m worked
@@ -354,76 +463,41 @@ type archivedTask struct {
 // A day without an @end counts its last entry to midnight, and says
 // so, with the command that ends it on a line of its own (the day's
 // line would be too long for a terminal with it); today's last entry
-// counts until now (until), in progress. A
+// counts until now, in progress. A
 // category's line is the time its tags matched; the time of entries no
 // category matched is on the uncategorised line, which names the
 // default category it counts as (whose work setting decides whether it
-// is worked). Days with no time logged are left out, and so are lines
-// with none. Categories are listed in the config's order, then
-// uncategorised.
-func reportTimeLogged(since, until time.Time, categories *domain.Categoriser) error {
-	fmt.Println("Time logged")
-
-	type dayTime struct {
-		date   time.Time
-		sheet  *domain.Timesheet
-		byName map[string]time.Duration
-		uncat  time.Duration
+// is worked). Days with no time logged are left out (today in progress
+// isn't), and so are lines with none; with no day left, it says so.
+// Categories are listed in the config's order, then uncategorised.
+func printDays(days []*domain.Timesheet, total domain.Totals, categories *domain.Categoriser) {
+	var shown []*domain.Timesheet
+	for _, d := range days {
+		if d.Totals().Logged() > 0 || d.Status == domain.DayInProgress {
+			shown = append(shown, d)
+		}
 	}
-	var days []dayTime
-	totals := map[string]time.Duration{}
-	var worked, totalUncat time.Duration
-
-	// Days by their dates in the local zone, a calendar day at a time
-	// (a day the clocks change isn't 24 hours long).
-	day := time.Date(since.Year(), since.Month(), since.Day(), 0, 0, 0, 0, time.Local)
-	last := time.Date(until.Year(), until.Month(), until.Day(), 0, 0, 0, 0, time.Local)
-	for ; !day.After(last); day = day.AddDate(0, 0, 1) {
-		tl, err := timelogRepo().Day(day)
-		if err != nil {
-			return fmt.Errorf("load timelog %s: %w", day.Format("2006-01-02"), err)
-		}
-		if tl.IsEmpty() {
-			continue
-		}
-		sheet, err := tl.Timesheet(categories, until)
-		if err != nil {
-			return fmt.Errorf("read timelog %s: %w", day.Format("2006-01-02"), err)
-		}
-		byName, uncat := sheet.ByCategory(), sheet.Uncategorised()
-		logged := uncat
-		for name, d := range byName {
-			logged += d
-			totals[name] += d
-		}
-		totalUncat += uncat
-		if logged == 0 && sheet.Status != domain.DayInProgress {
-			continue
-		}
-		days = append(days, dayTime{date: day, sheet: sheet, byName: byName, uncat: uncat})
-		worked += sheet.Worked()
-	}
-
-	if len(days) == 0 {
+	if len(shown) == 0 {
 		fmt.Println("  (no time logged)")
-		return nil
+		return
 	}
 
 	// Columns: category names, and durations lined up on the right.
 	nameWidth, durWidth, dayWidth := 0, 0, 0
 	for _, cat := range categories.Categories() {
-		if totals[cat.Name] > 0 {
+		if d := total.ByCategory[cat.Name]; d > 0 {
 			nameWidth = max(nameWidth, len(cat.Name))
-			durWidth = max(durWidth, len(formatReportDuration(totals[cat.Name])))
+			durWidth = max(durWidth, len(formatReportDuration(d)))
 		}
 	}
-	if totalUncat > 0 {
+	if total.Uncategorised > 0 {
 		nameWidth = max(nameWidth, len(uncategorisedLabel))
-		durWidth = max(durWidth, len(formatReportDuration(totalUncat)))
+		durWidth = max(durWidth, len(formatReportDuration(total.Uncategorised)))
 	}
-	for _, d := range days {
-		dayWidth = max(dayWidth, len(formatReportDuration(d.sheet.Worked())))
-		for _, dur := range d.byName {
+	for _, d := range shown {
+		t := d.Totals()
+		dayWidth = max(dayWidth, len(formatReportDuration(t.Worked)))
+		for _, dur := range t.ByCategory {
 			durWidth = max(durWidth, len(formatReportDuration(dur)))
 		}
 	}
@@ -439,25 +513,25 @@ func reportTimeLogged(since, until time.Time, categories *domain.Categoriser) er
 		}
 	}
 
-	for _, d := range days {
-		date := d.date.Format("2006-01-02")
+	for _, d := range shown {
+		t := d.Totals()
+		date := d.Date.Format("2006-01-02")
 		note := ""
-		switch d.sheet.Status {
+		switch d.Status {
 		case domain.DayUnended:
 			note = " (no @end: counted to 24:00)"
 		case domain.DayInProgress:
 			note = " (in progress)"
 		}
-		fmt.Printf("  %s  %*s worked%s\n", date, dayWidth, formatReportDuration(d.sheet.Worked()), note)
-		if d.sheet.Status == domain.DayUnended {
+		fmt.Printf("  %s  %*s worked%s\n", date, dayWidth, formatReportDuration(t.Worked), note)
+		if d.Status == domain.DayUnended {
 			// Under the day's time, how to end it.
 			fmt.Printf("  %*s  end the day with htt log end --at %q\n", len(date), "", date+" HH:MM")
 		}
-		printCategories(d.byName, d.uncat)
+		printCategories(t.ByCategory, t.Uncategorised)
 	}
-	fmt.Printf("  Total: %s worked\n", formatReportDuration(worked))
-	printCategories(totals, totalUncat)
-	return nil
+	fmt.Printf("  Total: %s worked\n", formatReportDuration(total.Worked))
+	printCategories(total.ByCategory, total.Uncategorised)
 }
 
 // formatReportDuration prints a duration as "Xh Ym" or "Ym" — easier

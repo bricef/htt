@@ -10,8 +10,9 @@
     const m = Math.round(minute);
     return pad(Math.floor(m / 60)) + ":" + pad(m % 60);
   };
+  // A duration as htt report writes it: whole minutes, rounded down.
   const dur = (seconds) => {
-    const m = Math.round(seconds / 60);
+    const m = Math.floor(seconds / 60);
     const h = Math.floor(m / 60);
     return h > 0 ? h + "h " + (m % 60) + "m" : m + "m";
   };

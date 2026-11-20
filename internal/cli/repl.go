@@ -317,7 +317,8 @@ func resetReplFlags() {
 	addDue = ""
 	addToDue = ""
 	logAt = atFlag{}
-	reportSince = "7d"
+	reportSince, reportSinceGiven = "7d", false
+	reportWeek, reportMonth = false, false
 	showSortKey = ""
 	showFilters = nil
 	tuiLogFile = ""

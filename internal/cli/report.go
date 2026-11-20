@@ -4,19 +4,31 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/bricef/htt/internal/domain"
 	"github.com/spf13/cobra"
 )
 
-var reportSince string
+// report's flags. reportSinceGiven says whether --since was given, to
+// refuse it with --week or --month: pflag's Changed would stay set
+// between the REPL's commands, as the flags' values would without
+// resetReplFlags.
+var (
+	reportSince      = "7d"
+	reportSinceGiven bool
+	reportWeek       bool
+	reportMonth      bool
+)
 
 var Report = &cobra.Command{
-	Use:   "report",
+	Use:   "report [--since WHEN | --week [DATE] | --month [MONTH]]",
 	Short: "Summarise activity in a time period.",
-	Long: `Show what happened since a given date or duration: tasks
-completed, tasks added, tasks deleted, and time logged per day.
+	Long: `Show what happened in a period: tasks completed, tasks added, tasks
+deleted, and time logged. The period is since a date or a duration
+(--since, the last 7 days unless given), a week (--week) or a calendar
+month (--month).
 
 Time logged gives each day's worked time and its time per category
 (timelog.categories in the config), then the totals. A category's
@@ -32,13 +44,37 @@ last entry counts until now, in progress.
 --since takes a date (YYYY-MM-DD) or a duration counted back from now
 in days, weeks or hours (7d, 2w, 24h).
 
+--week is a week, Monday to Sunday: this one, or the one holding the
+date after it (YYYY-MM-DD). It gives each day's time, as --since does,
+then the week's figures: worked, breaks, the average working day, the
+time counted to midnight on days without @end, and those days.
+
+--month is a calendar month: this one, or the one after it (YYYY-MM,
+or a date in it). It gives the month's figures (worked, the average
+week and working day, breaks, uncategorised time's share of worked,
+the days without @end), its weeks (Monday to Sunday, cut at the
+month's edges), the average weekday, and a line per category: its
+time, its share of worked, its time per week in the 1st to the 15th
+and in the 16th to the end, and the change between them.
+
+These are htt gui's figures. This week's and this month's are over the
+days so far, today included, and their tasks are those to now.
+--week, --month and --since exclude each other.
+
 Examples:
   htt report                 # defaults to --since 7d
   htt report --since 14d
   htt report --since 2w
-  htt report --since 2026-05-09`,
-	Args: cobra.NoArgs,
+  htt report --since 2026-05-09
+  htt report --week          # this week so far
+  htt report --week 2026-11-04
+  htt report --month         # this month so far
+  htt report --month 2026-10`,
+	Args: reportArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if reportWeek || reportMonth {
+			return reportPeriod(args)
+		}
 		since, err := parseSince(reportSince)
 		if err != nil {
 			return fmt.Errorf("parse --since: %w", err)
@@ -53,26 +89,79 @@ Examples:
 			since.Format("2006-01-02"),
 			formatReportDuration(now.Sub(since)))
 
-		if err := reportCompleted(since, now); err != nil {
+		if err := reportTasks(since, now); err != nil {
 			return err
 		}
-		fmt.Println()
-		if err := reportAdded(since, now); err != nil {
-			return err
-		}
-		fmt.Println()
-		if err := reportDeleted(since, now); err != nil {
-			return err
-		}
-		fmt.Println()
 		return reportTimeLogged(since, now, categories)
 	},
 }
 
 func init() {
-	Report.Flags().StringVar(&reportSince, "since", "7d",
+	Report.Flags().Var(givenString{&reportSince, &reportSinceGiven}, "since",
 		"starting point: YYYY-MM-DD or Nd/Nw/Nh (e.g. 7d, 2w, 24h)")
+	Report.Flags().BoolVar(&reportWeek, "week", false,
+		"a week, Monday to Sunday: this one, or the one holding the date after it (YYYY-MM-DD)")
+	Report.Flags().BoolVar(&reportMonth, "month", false,
+		"a calendar month: this one, or the one after it (YYYY-MM, or a date in it)")
 	RootCmd.AddCommand(Report)
+}
+
+// givenString is a string flag that says whether it was given.
+type givenString struct {
+	value *string
+	given *bool
+}
+
+func (f givenString) String() string {
+	if f.value == nil { // pflag's zero value, for its help
+		return ""
+	}
+	return *f.value
+}
+
+func (f givenString) Set(s string) error {
+	*f.value, *f.given = s, true
+	return nil
+}
+
+func (f givenString) Type() string { return "string" }
+
+// reportArgs checks report's flags and argument: --week, --month and
+// --since exclude each other, and a date goes only after --week or
+// --month, one at most.
+func reportArgs(cmd *cobra.Command, args []string) error {
+	var given []string
+	for _, f := range []struct {
+		name string
+		on   bool
+	}{{"--week", reportWeek}, {"--month", reportMonth}, {"--since", reportSinceGiven}} {
+		if f.on {
+			given = append(given, f.name)
+		}
+	}
+	if len(given) > 1 {
+		return fmt.Errorf("%s and %s exclude each other: give one", strings.Join(given[:len(given)-1], ", "), given[len(given)-1])
+	}
+	switch {
+	case len(args) == 0:
+	case !reportWeek && !reportMonth:
+		return fmt.Errorf("%q: htt report takes a date only after --week (YYYY-MM-DD) or --month (YYYY-MM)", args[0])
+	case len(args) > 1:
+		return fmt.Errorf("%s takes one date, got %d: %s", given[0], len(args), strings.Join(args, " "))
+	}
+	return nil
+}
+
+// reportTasks prints the tasks completed, added and deleted from
+// since's day to until, each section followed by a blank line.
+func reportTasks(since, until time.Time) error {
+	for _, section := range []func(since, until time.Time) error{reportCompleted, reportAdded, reportDeleted} {
+		if err := section(since, until); err != nil {
+			return err
+		}
+		fmt.Println()
+	}
+	return nil
 }
 
 // parseSince accepts either an absolute date (YYYY-MM-DD) or a

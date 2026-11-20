@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Build htt's release archives: a binary for each platform, packed with
-# README.md (and LICENSE, if the tagged commit has one), plus a
+# README.md (and LICENSE, if the tagged commit has one) and the licences
+# of the third-party code and fonts the GUI embeds (third-party/), plus a
 # SHA256SUMS file. The release-binaries workflow runs this for every
 # published release and uploads the result. Locally:
 #
@@ -114,6 +115,19 @@ if [[ -f $src/LICENSE ]]; then
 else
 	echo "note: $version has no LICENSE file, so the archives hold the binary and README.md"
 fi
+# The GUI embeds third-party code and fonts (ECharts, IBM Plex) from
+# internal/gui/web/vendor. Their licences ask for a copy to go with every
+# copy of the software, so each archive carries every licence, notice and
+# README there under third-party/, keeping their paths. Releases before
+# the GUI have no vendor directory, and nothing changes for them.
+vendor=internal/gui/web/vendor
+third=()
+if [[ -d $src/$vendor ]]; then
+	while IFS= read -r file; do
+		third+=("third-party/${file#"$src/$vendor/"}")
+	done < <(find "$src/$vendor" -type f \( -iname 'LICENSE*' -o -iname 'NOTICE*' -o -iname 'README*' \) | LC_ALL=C sort)
+	[[ ${#third[@]} -gt 0 ]] || fail "$version vendors third-party files under $vendor but has no licence for them"
+fi
 
 host="$(go env GOHOSTOS)/$(go env GOHOSTARCH)"
 ran=""
@@ -145,13 +159,18 @@ for platform in $platforms; do
 		cp "$src/$doc" "$stage/$doc"
 		chmod 0644 "$stage/$doc"
 	done
+	for doc in ${third[@]+"${third[@]}"}; do # the guard keeps bash 3's set -u happy when empty
+		mkdir -p "$stage/$(dirname "$doc")"
+		cp "$src/$vendor/${doc#third-party/}" "$stage/$doc"
+		chmod 0644 "$stage/$doc"
+	done
 	chmod 0755 "$stage/$exe"
 	name=$(archive_name "$version" "$os" "$arch")
 	rm -f "$out/$name"
 	if [[ $os == windows ]]; then
-		(cd "$stage" && zip -q -X "$out/$name" "$exe" "${docs[@]}")
+		(cd "$stage" && zip -q -X "$out/$name" "$exe" "${docs[@]}" ${third[@]+"${third[@]}"})
 	else
-		(cd "$stage" && tar -cf - "$exe" "${docs[@]}" | gzip -9n >"$out/$name")
+		(cd "$stage" && tar -cf - "$exe" "${docs[@]}" ${third[@]+"${third[@]}"} | gzip -9n >"$out/$name")
 	fi
 	archives+=("$name")
 	echo "  $name"

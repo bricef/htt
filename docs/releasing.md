@@ -100,6 +100,10 @@ Windows on amd64 and arm64:
   `README.md` and `LICENSE`, a zip as Go's own Windows downloads are.
   Releases up to v0.4.0 have none: they don't build for Windows
   (goterm v1.0.3 used `unix.EOPNOTSUPP` on every platform);
+- in every archive from v0.6.0, `third-party/`: the licences, notices
+  and sources README of the code and fonts `htt gui` embeds (ECharts
+  with ZRender and d3, IBM Plex), copied from
+  `internal/gui/web/vendor` with their paths, as their licences ask;
 - `htt_vX.Y.Z_SHA256SUMS`, the SHA-256 of each archive;
 
 then makes a signed build-provenance attestation for the archives and

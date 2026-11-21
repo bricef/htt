@@ -51,6 +51,11 @@ On Windows, pick `htt_vX.Y.Z_windows_amd64.zip` for an Intel or AMD
 processor, or `htt_vX.Y.Z_windows_arm64.zip` for an ARM one. Settings
 › System › About says which you have, under "System type".
 
+Windows support is best effort: Linux and macOS are htt's primary
+targets. Windows builds are built and tested in CI, but htt isn't
+developed or used day to day there, so expect rough edges, and please
+report any you find.
+
 Download it and the checksums file, `htt_vX.Y.Z_SHA256SUMS`, from the
 release page, or with [gh](https://cli.github.com/) (v0.3.0 on an
 Apple silicon Mac, say):

@@ -14,7 +14,8 @@ Each confirmed against `main` on 2026-11-03.
 
 - **`:` in the TUI keymap does nothing yet** (command mode).
 - **Where the clocks go forward at midnight, a timesheet ends that
-  night an hour early** (confirmed 2026-11-18, in `America/Santiago`
+  night an hour early** ([#15](https://github.com/bricef/htt/issues/15),
+  with a reproduction and the zones affected; confirmed 2026-11-18, in `America/Santiago`
   on 2026-09-06): that midnight doesn't exist, and `time.Date` puts
   it an hour early, at 23:00 the day before. So `Timesheet` ends
   2026-09-05 at 23:00 (an entry at 22:00 ended at 23:30 counts 1h), in

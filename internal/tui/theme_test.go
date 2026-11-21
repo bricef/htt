@@ -249,7 +249,9 @@ func TestThemes_TheREADMEListsThemAll(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, section, ok := strings.Cut(string(readme), "\n### TUI themes\n")
+	// Git on Windows checks the README out with CRLF line endings.
+	text := strings.ReplaceAll(string(readme), "\r\n", "\n")
+	_, section, ok := strings.Cut(text, "\n### TUI themes\n")
 	if !ok {
 		t.Fatal(`README.md has no "### TUI themes" section`)
 	}

@@ -21,8 +21,8 @@ also edit by hand.
 - **Three ways in**: one-shot commands, a todo-mode shell (`htt repl`)
   and a full-screen TUI (`htt interactive`) with search, in-place
   editing with a live preview and tag completion, task lines coloured
-  by priority, tag and date, colour themes (Monokai, VS Code, Dracula,
-  Nord, Solarized, Gruvbox) and per-colour config.
+  by priority, tag and date, nine colour themes (see
+  [TUI themes](#tui-themes)) and per-colour config.
 
 ![htt gui's week view: each day's time log as a timeline coloured by category, then the week's totals with breaks](docs/screenshot/gui-week.png)
 
@@ -201,6 +201,33 @@ alias jnl="htt l"    # htt log
 `htt completion --help` explains how to install tab completion for
 bash, zsh, fish or PowerShell. `htt --version` prints the version you
 have.
+
+### TUI themes
+
+`htt interactive` colours its screen with a theme. Pick one by name in
+the config file (`htt config dir` says where it is):
+
+```yaml
+tui:
+  theme: nord
+```
+
+| Theme | What it is |
+| --- | --- |
+| `default` | htt's own palette, light text on dark teal; used when none is set |
+| `dracula` | Dracula |
+| `gruvbox` | Gruvbox, dark |
+| `monokai` | Monokai |
+| `nord` | Nord |
+| `solarized-dark` | Solarized, dark |
+| `solarized-light` | Solarized, light |
+| `vscode` | VS Code's Dark+ |
+| `vscode-light` | VS Code's Light+ |
+
+`htt interactive --help` lists them too. To change single colours,
+set them by role under `tui.colors`;
+[GETTING-STARTED](GETTING-STARTED.md#colours-and-themes) lists the
+roles.
 
 ## Online activity
 

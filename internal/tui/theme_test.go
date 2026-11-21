@@ -2,7 +2,9 @@ package tui
 
 import (
 	"math"
+	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -236,5 +238,27 @@ func TestView_ZeroOptionsUseTheDefaultTheme(t *testing.T) {
 
 	if view := m.View(); !hasColor(view, 48, "#40798c") {
 		t.Errorf("zero Options should render the default theme's selection colour")
+	}
+}
+
+// TestThemes_TheREADMEListsThemAll keeps the README's "TUI themes" table
+// in step with the built-in themes: one row per theme, by its config
+// name, in ThemeNames' order, so adding a theme means documenting it.
+func TestThemes_TheREADMEListsThemAll(t *testing.T) {
+	readme, err := os.ReadFile("../../README.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, section, ok := strings.Cut(string(readme), "\n### TUI themes\n")
+	if !ok {
+		t.Fatal(`README.md has no "### TUI themes" section`)
+	}
+	section, _, _ = strings.Cut(section, "\n#")
+	var listed []string
+	for _, m := range regexp.MustCompile("(?m)^\\| `([a-z0-9-]+)` \\|").FindAllStringSubmatch(section, -1) {
+		listed = append(listed, m[1])
+	}
+	if want := ThemeNames(); !slices.Equal(listed, want) {
+		t.Errorf("README.md's TUI themes table lists %q, want %q (ThemeNames)", listed, want)
 	}
 }

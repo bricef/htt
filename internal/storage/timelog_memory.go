@@ -23,8 +23,17 @@ import (
 // Without the deep copy, CLI display steps that mutate (e.g. the
 // RemoveAnnotation that strips ts: for the "Logging entry:" line)
 // silently corrupt later observations.
+//
+// Its transactions (Transact) hold their saves until the change
+// returns, and run it again when the store changed meanwhile, which
+// Underneath lets a test do, as MemoryRepository's do.
 type MemoryTimelogRepository struct {
 	entries map[string][]*domain.Task
+	changes int // the store's changes, for a transaction's check
+
+	// Underneath, when set, runs in each transaction after its change
+	// and before its check, as MemoryRepository.Underneath does.
+	Underneath func(run int)
 }
 
 func NewMemoryTimelogRepository() *MemoryTimelogRepository {
@@ -36,8 +45,13 @@ func (r *MemoryTimelogRepository) Today() (*domain.Timelog, error) {
 }
 
 func (r *MemoryTimelogRepository) Day(date time.Time) (*domain.Timelog, error) {
-	l := domain.NewTimelog(r, date)
-	stored := r.entries[timelogKey(date)]
+	return r.load(r, date, r.entries[timelogKey(date)])
+}
+
+// load makes date's timelog of stored, copied, wired to repo: r, or a
+// transaction of r's.
+func (r *MemoryTimelogRepository) load(repo domain.TimelogRepository, date time.Time, stored []*domain.Task) (*domain.Timelog, error) {
+	l := domain.NewTimelog(repo, date)
 	entries, err := cloneTasks(stored)
 	if err != nil {
 		return nil, fmt.Errorf("clone entries for %s: %w", timelogKey(date), err)
@@ -46,6 +60,8 @@ func (r *MemoryTimelogRepository) Day(date time.Time) (*domain.Timelog, error) {
 	return l, nil
 }
 
+// Save stores a copy of l's entries, at once: it changes the store
+// under any transaction running, as another htt's save would.
 func (r *MemoryTimelogRepository) Save(l *domain.Timelog) error {
 	if l == nil {
 		return errors.New("nil timelog")
@@ -55,7 +71,92 @@ func (r *MemoryTimelogRepository) Save(l *domain.Timelog) error {
 		return fmt.Errorf("clone entries for save: %w", err)
 	}
 	r.entries[timelogKey(l.Date)] = cp
+	r.changes++
 	return nil
+}
+
+// Transact runs change as one transaction
+// (domain.TimelogRepository.Transact), as MemoryRepository.Transact
+// does for contexts.
+func (r *MemoryTimelogRepository) Transact(change func(tx domain.TimelogRepository) error) error {
+	for run := 1; ; run++ {
+		before := r.changes
+		tx := &memoryTimelogTx{r: r, saved: map[string][]*domain.Task{}}
+		err := change(tx)
+		tx.over = true
+		if err != nil {
+			return err
+		}
+		if len(tx.order) == 0 {
+			return nil
+		}
+		if r.Underneath != nil {
+			r.Underneath(run)
+		}
+		if r.changes == before {
+			for _, day := range tx.order {
+				r.entries[day] = tx.saved[day]
+			}
+			r.changes++
+			return nil
+		}
+		if run == runs {
+			return fmt.Errorf("the memory store %w", domain.ErrKeepsChanging)
+		}
+	}
+}
+
+// memoryTimelogTx is a MemoryTimelogRepository within one run of a
+// transaction's change, as memoryTx is a MemoryRepository.
+type memoryTimelogTx struct {
+	r     *MemoryTimelogRepository
+	saved map[string][]*domain.Task
+	order []string // the days saved, in order
+	over  bool
+}
+
+var _ domain.TimelogRepository = (*memoryTimelogTx)(nil)
+
+func (tx *memoryTimelogTx) Today() (*domain.Timelog, error) { return tx.Day(time.Now()) }
+
+func (tx *memoryTimelogTx) Day(date time.Time) (*domain.Timelog, error) {
+	stored, ok := tx.saved[timelogKey(date)]
+	if !ok {
+		stored = tx.r.entries[timelogKey(date)]
+	}
+	return tx.r.load(tx, date, stored)
+}
+
+func (tx *memoryTimelogTx) Save(l *domain.Timelog) error {
+	if l == nil {
+		return errors.New("nil timelog")
+	}
+	if tx.over {
+		return errOver
+	}
+	cp, err := cloneTasks(l.Entries)
+	if err != nil {
+		return fmt.Errorf("clone entries for save: %w", err)
+	}
+	day := timelogKey(l.Date)
+	if _, ok := tx.saved[day]; !ok {
+		tx.order = append(tx.order, day)
+	}
+	tx.saved[day] = cp
+	return nil
+}
+
+func (tx *memoryTimelogTx) CurrentLogPath() string { return "" }
+
+func (tx *memoryTimelogTx) LogPath(time.Time) string { return "" }
+
+// Transact runs change as part of this transaction, while its change
+// runs; afterwards, as a transaction of its own.
+func (tx *memoryTimelogTx) Transact(change func(tx domain.TimelogRepository) error) error {
+	if tx.over {
+		return tx.r.Transact(change)
+	}
+	return change(tx)
 }
 
 // CurrentLogPath returns the empty string for the in-memory repo;

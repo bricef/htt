@@ -41,6 +41,14 @@ type TimelogRepository interface {
 	// repository without files. Pure path builder, like
 	// CurrentLogPath; the CLI names it in messages about an entry.
 	LogPath(date time.Time) string
+
+	// Transact runs change as one transaction, as
+	// Repository.Transact does for contexts: what change loads (Today,
+	// Day) is read from the store as it is now, what it saves is held
+	// until it returns, then written if nothing it read has changed,
+	// or change runs again. Timelog.Append and AppendAt run through
+	// it, so callers never call it.
+	Transact(change func(tx TimelogRepository) error) error
 }
 
 // LastLogBefore is the log of the most recent of the n days before

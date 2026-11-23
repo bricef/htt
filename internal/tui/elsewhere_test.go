@@ -151,24 +151,43 @@ func TestElsewhere_ActionsFollowTheTaskShown(t *testing.T) {
 	}
 }
 
-func TestShownAt(t *testing.T) {
-	tasks := []*domain.Task{mustTask(t, "a"), mustTask(t, "b"), mustTask(t, "b"), mustTask(t, "c")}
-	for _, tc := range []struct {
-		index int
-		raw   string
-		want  int
-	}{
-		{0, "a", 0},  // where it was
-		{2, "a", 0},  // moved: the one task with its line
-		{9, "c", 3},  // past the end of the list now
-		{1, "b", 1},  // two tasks with its line, one where it was
-		{2, "b", 2},  //
-		{0, "b", -1}, // two, neither where it was: can't say which
-		{0, "gone", -1},
-	} {
-		if got := shownAt(tasks, tc.index, tc.raw); got != tc.want {
-			t.Errorf("shownAt(%d, %q) = %d, want %d", tc.index, tc.raw, got, tc.want)
+// Another htt switching the current context (`htt todo context other`
+// in another terminal) doesn't switch the TUI's: its actions act on the
+// list it shows, and it goes on showing it. It used to reload through
+// the pointer after an action, and show the other list, which the next
+// action then changed.
+func TestElsewhere_AnotherHttSwitchingContextLeavesTheTUIsList(t *testing.T) {
+	m := fileTreeModel(t, "one", "two", "three")
+	elsewhere := m.repo
+	other, err := elsewhere.Context("other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range []string{"o-one", "o-two", "o-three"} {
+		if err := other.AddTask(mustTask(t, "2026-01-01 "+s)); err != nil {
+			t.Fatal(err)
 		}
+	}
+	if err := elsewhere.SetCurrent("other"); err != nil {
+		t.Fatal(err)
+	}
+	m = selectRow(t, m, 1) // two
+	m = keys(t, m, runes("++")...)
+	if m.context.Name != "todo" {
+		t.Errorf("the TUI shows %s", m.context.Name)
+	}
+	if got := shownLines(m); !slices.Equal(got, []string{"(B) two", "one", "three"}) {
+		t.Errorf("the list shows %q", got)
+	}
+	if got := lines(t, m, "todo"); !slices.Equal(got, []string{"(B) two", "one", "three"}) {
+		t.Errorf("todo: %q", got)
+	}
+	if got := lines(t, m, "other"); !slices.Equal(got, []string{"2026-01-01 o-one", "2026-01-01 o-two", "2026-01-01 o-three"}) {
+		t.Errorf("other: %q", got)
+	}
+	m = look(t, m)
+	if m.context.Name != "todo" {
+		t.Errorf("after a look, the TUI shows %s", m.context.Name)
 	}
 }
 

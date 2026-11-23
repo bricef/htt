@@ -1,7 +1,7 @@
 # Safe writes
 
 **Status:** Agreed, 2026-11-23 (Brice), with gofrs/flock for the lock.
-Not yet built.
+Built 2026-11-23, on `feat/safe-writes`.
 
 htt's files are plain text, and more than one thing writes them: two htt
 commands at once (a script, or the CLI beside the TUI), the TUI over
@@ -145,10 +145,15 @@ lives in the TUI, not in the mechanism.
 
 ## Limits
 
-- **Line numbers are read when a command runs.** `htt todo do 3` acts on
-  whatever task is line 3 at that moment, as now. If another process
+- **Line numbers are read when a command starts.** `htt todo do 3` acts
+  on whatever task is line 3 at that moment, as now. If another process
   changed the file since you last looked, that can be a different task.
-  The TUI acts on the task it showed, by its text.
+  A command that waits for you (`htt todo edit`, the question `htt todo
+  do` asks about open subtasks) then follows the task by its text, and
+  refuses if it changed meanwhile. The TUI acts on the task it showed,
+  by its text. (Decided 2026-11-23, after review: a waiting command
+  read the number again when you answered, so a task added or removed
+  above meanwhile moved the change to another task.)
 - **Other tools can still collide** in the instant between htt's check
   and its rename; htt narrows that to almost nothing but can't close it
   without their cooperation.

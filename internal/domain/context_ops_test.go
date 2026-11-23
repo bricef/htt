@@ -753,6 +753,10 @@ func (r *orderTrackingRepo) Save(c *domain.Context) error {
 
 func (r *orderTrackingRepo) ContextPath(string) string { return "" }
 
+// Transact runs change with r itself, every save made, and recorded, as
+// it is called.
+func (r *orderTrackingRepo) Transact(change func(domain.Repository) error) error { return change(r) }
+
 func TestContext_PersistentMethodsSaveThroughInjectedRepo(t *testing.T) {
 	// The Step 2 wiring invariant (TestNewContext_InjectsRepo) checks the
 	// field exists. This test verifies it's actually used: a fresh ctx

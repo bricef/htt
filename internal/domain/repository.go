@@ -64,6 +64,30 @@ type Repository interface {
 	// empty string; callers that depend on a usable path should
 	// check for it.
 	ContextPath(name string) string
+
+	// Transact runs change as one transaction
+	// (docs/design/safe-writes.md). change gets a Repository for the
+	// transaction: what it loads (Context, ContextLines, …) is read
+	// from the store as it is now, and what it saves (Save,
+	// SetCurrent) is held until change returns nil. Then, if nothing
+	// it read has changed in the store since, everything saved is
+	// written, in the order change saved it, so the context gaining
+	// tasks, saved first, is written first. If something has changed,
+	// change runs again on the store as it is then; a store that keeps
+	// changing gives ErrKeepsChanging. Since change may run more than
+	// once, it must decide from what it loads alone. An error from
+	// change saves nothing, and Transact returns it; ErrBusy says
+	// another htt held the store too long.
+	//
+	// The transaction's Repository is only for change while it runs.
+	// Transact on it runs a change as part of the same transaction.
+	//
+	// Context's persistent methods run through Transact (see
+	// Context.Transact), so callers never call it: every change they
+	// make is a transaction already. A repository without
+	// transactions, such as a test's fake, may run change with
+	// itself, every save made as it's called.
+	Transact(change func(tx Repository) error) error
 }
 
 // LineSource is a Repository that can also hand over a context's lines
@@ -74,6 +98,18 @@ type Repository interface {
 // Tree falls back to Context for any other.
 type LineSource interface {
 	ContextLines(name string) ([]string, error)
+}
+
+// Appender is a Repository that can add tasks to the end of a context
+// without loading it: the done file and the archive, which keep their
+// tasks flat and grow with every task completed or deleted, so that
+// completing a task doesn't parse the whole done file while a
+// transaction holds the store. Append adds a line per task, each task's
+// Raw, after the context's lines as the store holds them. The file
+// repository's transactions are one; Complete, Delete and Move load,
+// add to and save the context through any other.
+type Appender interface {
+	Append(name string, tasks []*Task) error
 }
 
 // SameFiler is a Repository that can tell whether two contexts are kept
@@ -89,6 +125,19 @@ type SameFiler interface {
 // ErrInvalidContextName is returned when a name fails validation (empty,
 // or sanitizes to empty).
 var ErrInvalidContextName = errors.New("invalid context name")
+
+// What a change to the files can meet that nothing resolves
+// (docs/design/safe-writes.md, "What a caller can see"). Repositories
+// return them; nothing was saved.
+var (
+	// ErrBusy: another htt held the files for longer than a change
+	// waits for them, a few seconds.
+	ErrBusy = errors.New("another htt is busy with your files; try again")
+	// ErrKeepsChanging: a file the change read changed under it, by
+	// another program, every time it ran. Repositories put the file's
+	// name in front: "<file> keeps changing; nothing was saved".
+	ErrKeepsChanging = errors.New("keeps changing; nothing was saved")
+)
 
 // ContextFileName is the name a context's file takes, without its
 // extension: the context's name with every character but an ASCII

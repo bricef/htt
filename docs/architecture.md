@@ -14,7 +14,7 @@ internal/
   tui/                     bubble tea interactive mode
   gui/                     htt gui: the local web server, its JSON API, and the page it embeds (web/)
   domain/                  Context, Task, Timelog + Repository / TimelogRepository interfaces
-  storage/                 MemoryRepository / FileRepository (and timelog impls) — satisfy the domain interfaces
+  storage/                 MemoryRepository / FileRepository (and timelog impls) — satisfy the domain interfaces; transaction.go is every write (safe writes)
   update/                  the once-a-day check for a newer GitHub release
   dates/                   date phrases ("next Friday") for --due and the TUI; --at's times
   editor/                  the user's editor and the command that opens a file in it, as git picks and runs one
@@ -356,6 +356,7 @@ type Repository interface {
     SetCurrent(name string) error
     Save(ctx *Context) error
     ContextPath(name string) string
+    Transact(change func(tx Repository) error) error
 }
 
 type TimelogRepository interface {
@@ -363,28 +364,132 @@ type TimelogRepository interface {
     Day(date time.Time) (*Timelog, error)
     Save(l *Timelog) error
     CurrentLogPath() string
+    LogPath(date time.Time) string
+    Transact(change func(tx TimelogRepository) error) error
 }
 ```
+
+`Transact` is how every change is made: see [Safe writes](#safe-writes).
 
 Two implementations of each in `storage`:
 
 - `MemoryRepository` / `MemoryTimelogRepository` — in-memory, for
-  tests. They deep-copy entries on Save and Day so mutations through a
-  returned pointer can't leak back into stored state. This matches the
-  file impl's serialize-then-reparse semantics.
+  tests. They deep-copy tasks and entries on load and save so
+  mutations through a returned pointer can't leak back into stored
+  state. This matches the file impl's serialize-then-reparse
+  semantics. Their transactions hold saves until the change returns
+  and run it again when the store changed meanwhile; their
+  `Underneath` hook, run between a change and its check, lets a
+  test change the store there. No lock.
 - `FileRepository` / `FileTimelogRepository` — todo.txt-format files
   on disk. Both task repositories arrange a context as they load it
   (`Context.Arrange`), so its tasks come in tree order, and both are
   `domain.LineSource`s (`ContextLines`: a context's lines, unparsed). The on-disk layout is byte-for-byte compatible with the
   pre-refactor format. Context names are sanitized
   (`utils.StringToFilename`) at the path boundary so a name like
-  `../escape` can't write outside `dataDir`. Save rotates the existing
-  file to `.bak` for one slot of crash recovery.
+  `../escape` can't write outside `dataDir`. Every write goes through
+  `transaction.go` (below); the previous version of a context file or
+  a log stays as `.bak`, one slot of crash recovery.
 
 `FileRepository` takes two directories: `dataDir` for per-context
 files and `pointerDir` for the `current-context` pointer. Default
 config maps both to the same directory, but users who set
 `tracker_path` independently of `data_path` keep their split.
+
+## Safe writes
+
+Several htt processes (the CLI, the REPL, a TUI, a script) and other
+programs (an editor, topydo, a sync tool) write the same files. The
+design is [docs/design/safe-writes.md](design/safe-writes.md); this is
+where it lives.
+
+**The mechanism is one file, `internal/storage/transaction.go`**, and
+nothing else in htt locks a file, writes a temporary one or renames
+one over another (an architecture test pins it). `transact(dirs,
+hooks, change)` runs a change as a transaction:
+
+1. **Lock** `.htt.lock` in each directory the transaction can write
+   (a `FileRepository`'s data and pointer directories, one lock when
+   they're the same; a `FileTimelogRepository`'s log directory), in
+   sorted order, with `github.com/gofrs/flock` (`flock` on Unix,
+   `LockFileEx` on Windows). An operating-system lock goes with its
+   process. It waits `lockWait` (5 s) at most, then gives up with
+   `domain.ErrBusy`.
+2. **Read** through the `transaction`: each file read once, fresh, its
+   bytes kept; a file the change has written reads as written.
+3. **Change:** writes are held, in order.
+4. **Write** (`stage`): each file the change wrote, and its previous
+   version for `<file>.bak` (not for the pointer), goes to a temporary
+   file beside it (`.<name>.<random>.tmp`, created exclusively, the
+   files' mode and the umask as always), written, synced and closed.
+   The `.bak` is the bytes read, which the check covers; a file written
+   unread is read now and checked too. A file that is a symlink (to a
+   file a sync tool keeps elsewhere, say) is followed (`realPath`): the
+   temporary file goes beside the file it points to, which is replaced,
+   and the link stays a link. Temporary files a crashed htt left in a
+   directory written, an hour old or more, are removed (`sweep`).
+5. **Check** that every file read still has the bytes read (or still
+   doesn't exist). If not, another program wrote it: remove the
+   temporary files and run the change again from 2, up to 5 runs, then
+   `domain.ErrKeepsChanging` ("<file> keeps changing; nothing was
+   saved"), writing nothing.
+6. **Replace:** rename each temporary file over its file (each `.bak`
+   just before its file): the files that keep every line they had
+   (gaining tasks) before those that lose one (`gainingFirst`), each
+   group in the order the change wrote them, so a composed change that
+   saved the losing file first still can't leave a task in neither. Only
+   renames follow the check, so the moment in which another program's
+   write can go unseen is the renames' alone, not the writes' and
+   syncs' too. On Windows a rename over a file another process has
+   open fails (Go opens files without `FILE_SHARE_DELETE`), so it's
+   tried again for up to two seconds.
+7. **Unlock.**
+
+Reads outside a transaction (showing a list) take no lock: a file is
+always whole.
+
+**The repositories** only parse and serialise. `FileRepository.Transact`
+hands the change a `fileTx`, a `domain.Repository` (and `LineSource`,
+`SameFiler`) whose `Context` parses what the transaction reads and
+whose `Save` and `SetCurrent` hold what they're given; `Transact` on it
+runs a change within the same transaction. `FileTimelogRepository`
+does the same with `fileTimelogTx`. `Save` and `SetCurrent` outside a
+transaction are transactions of one write. `hooks` are seams for
+storage's own tests: `writing` before each temporary file is written
+(to fail one), `underneath` between the written files and the check,
+`replacing` before each file is replaced (to fail one).
+
+**The domain** declares `Transact` on both repository interfaces, and
+its one save point runs through it: every persistent `Context` method
+calls `transact`, which runs the method's body as a transaction of the
+context's repository on the context as the store holds it then. The
+context's tasks become the file's, its own task objects for the lines
+it still holds, so a task the caller holds sees the change; its
+repository is the transaction's while the body runs, so the done file,
+the archive or a move's target the body loads and saves are part of
+it. The lock is held while the body runs, so it parses no more than it
+must: the context's lines come unparsed (`LineSource`) and are compared
+with those it holds, and only the lines it doesn't hold are parsed
+(`reread`), so a command's context isn't parsed a second time; and the
+done file and the archive are appended to (`domain.Appender`, which a
+`fileTx` is: the lines go after the bytes read), never parsed, however
+many tasks they hold. The body saves the file gaining
+tasks before the one losing them, and the storage writes the gaining
+file first whatever the order of the saves, so a failure part-way
+leaves a task in both, never in neither.
+A body may run again, so it decides from the context alone; a task
+number is read then (the design's Limits), and `AddSubtask` puts its
+task back as it was given before running again. `Context.Transact`
+runs several steps as one transaction, for the TUI. A command that
+waits for the user follows its task by the line it read
+(`follow.go`): `FindTask` finds it where it was or, moved, as the one
+task with that line; `ReplaceFound` (the CLI's `todo edit`) and
+`CompleteFound` (the answer to `todo do`'s question, in the CLI and the
+TUI, which also checks the open subtasks are the ones asked about)
+refuse with `ErrTaskChanged` or `ErrSubtasksChanged` otherwise. `Timelog.Append`
+and `AppendAt` run the same way. The CLI, the REPL and the GUI call
+the operations as before and see only `ErrBusy`, `ErrKeepsChanging`,
+or the disk's own errors.
 
 ## CLI wiring
 
@@ -502,15 +607,39 @@ a line runs).
   what happens next (carry on, `tea.Quit`, `tea.ClearScreen`, run a
   program); `Action.Act` is the one place that logs it: every action
   at debug, an error wrapping `errUnavailable` (the action can't run
-  right now) at warn, any other error at error. Mutating actions first
-  `reload` the list's file and find the selected task in it by the
-  line the TUI showed (`shownAt`), so they act on the file as it is,
-  saving nothing older than what another htt wrote; a task changed or
-  removed elsewhere is left alone, and the status line says so (Tab
-  also checks the task above it, and the answer to `x`'s question the
-  subtasks it counted). Then they call `m.context.X(...)`, which
-  persists through the repo, then `refresh` and `showTasks`;
-  context-switching actions call `m.repo.SetCurrent`.
+  right now) at warn, any other error at error. Mutating actions run
+  through `onShown`: one transaction (`domain.Context.Transact`) that
+  finds the selected task in the list's file as it is, by the line the
+  TUI showed (`shownAt`, the domain's `FindTask`), and acts on it
+  (`c.X(...)`), so nothing older
+  than what another htt wrote is saved, and a run again after another
+  program's write finds the task again. A task changed or removed
+  elsewhere is left alone (`errGone`), and the status line says so
+  (Tab also checks, inside the transaction, the task above it, and the
+  answer to `x`'s question the subtasks it counted). A save that fails
+  (another htt busy with the files, a file that keeps changing, a full
+  disk, a read-only directory) goes on the status line (`failed`) and
+  the TUI stays open, as for a tab switch that fails: nothing was
+  saved, and the next key works on the file as it is. Then `refresh`, which
+  reloads the list shown by its name, as the watch does (another htt
+  switching the current context doesn't switch the TUI's), and
+  `showTasks`. Context-switching actions (`switchTo`) load the tab's
+  context by its name, then call `m.repo.SetCurrent`.
+- **Watching** (`watch.go`). `Init` starts a tick (`watchMsg`) each
+  second for a list with a file (`ContextPath`); each tick stats it
+  (`look`) and, when it's another file (an atomic replacement), or
+  its size or modification time changed, since the last look
+  (`model.seen`), reloads the list (`reloadShown`) and shows it, the
+  selection on the same task by its text. What holds a task by its
+  number across the reload follows it by its text too: the task input
+  open for an edit or a subtask (`followInput`: its prompt, preview and
+  check name the task's number now; a task gone leaves the input open
+  with what was typed, saying it can't be saved, and Enter closes it)
+  and the question about open subtasks (`followQuestion`). A search
+  is applied again to the list reloaded. A reload that finds the
+  same lines changes nothing. After an action, `refresh` looks at the
+  file before reading it, so the TUI's own write isn't taken for a
+  change on the next tick.
 - **The task list** is a `bubbles/list` model (`tasklist.go`). Each
   item is a `taskItem`: a task and its index in the context. Actions
   take that index from `selectedTask()`, never the row on screen,
@@ -740,7 +869,11 @@ Most features touch one or two layers. The usual path:
 1. **Domain change.** If the feature needs a new operation, add it as
    a method on `Context` / `Timelog` (or as a new domain type). Pure
    methods are testable with struct literals; persistent methods are
-   testable through `MemoryRepository`.
+   testable through `MemoryRepository`. A persistent method runs its
+   body through `transact` and saves only with `save` (see [Safe
+   writes](#safe-writes)): the body may run again on fresher content,
+   so it decides from the context alone, and saves the file gaining
+   tasks first.
 2. **Repository contract.** If the feature needs new persistence (e.g.
    listing a new kind of entity), extend the interface and both impls.
    The contract test (`storage/contract_test.go`,
@@ -788,5 +921,9 @@ Worth reading if you're touching the relevant area:
 - `2026-11-23-subtasks.md` — how subtasks were built on
   `docs/design/subtasks.md`: where the tree lives, how the file order
   hooks into reads and writes, the prompt, the TUI's keys.
+- `2026-11-23-safe-writes.md` — how safe writes were built on
+  `docs/design/safe-writes.md`: the transaction's shape in the domain,
+  the lock files and the wait, the check, Windows' rename, and what
+  each concurrency test caught.
 - `2026-11-02-tui-editor-exec.md` — how the editor gets the terminal,
   and why editor failures never close the TUI.

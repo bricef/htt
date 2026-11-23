@@ -4,6 +4,7 @@
 package architecture
 
 import (
+	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
@@ -118,6 +119,101 @@ func TestArchitecture_TUIDoesNotUseTheGlobalLogger(t *testing.T) {
 		if imp == "log" {
 			t.Errorf("internal/tui must not import log; log through the model's *slog.Logger")
 		}
+	}
+}
+
+// TestArchitecture_OneFileWritesHttsFiles pins safe writes
+// (docs/design/safe-writes.md, "Where it lives"): the mechanism (the
+// transaction, the lock, the check, the atomic replacement) is one
+// file, internal/storage/transaction.go. No other code imports the
+// lock library, and no other file in storage writes, renames, removes
+// or creates a file or a directory: the repositories only parse what a
+// transaction reads and serialise what they save.
+func TestArchitecture_OneFileWritesHttsFiles(t *testing.T) {
+	const mechanism = "internal/storage/transaction.go"
+	const lockLibrary = "github.com/gofrs/flock"
+	writes := map[string]bool{
+		"Chmod": true, "Create": true, "CreateTemp": true, "Link": true,
+		"Mkdir": true, "MkdirAll": true, "MkdirTemp": true, "OpenFile": true,
+		"Remove": true, "RemoveAll": true, "Rename": true, "Symlink": true,
+		"Truncate": true, "WriteFile": true,
+	}
+	root := findRepoRoot(t)
+	fset := token.NewFileSet()
+	for _, dir := range []string{"cmd", "internal"} {
+		err := filepath.WalkDir(filepath.Join(root, dir), func(path string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return err
+			}
+			rel, _ := filepath.Rel(root, path)
+			rel = filepath.ToSlash(rel)
+			if rel == mechanism {
+				return nil
+			}
+			f, err := parser.ParseFile(fset, path, nil, 0)
+			if err != nil {
+				return err
+			}
+			for _, imp := range f.Imports {
+				if strings.Trim(imp.Path.Value, `"`) == lockLibrary {
+					t.Errorf("%s imports %s: only %s may lock htt's files", rel, lockLibrary, mechanism)
+				}
+			}
+			if !strings.HasPrefix(rel, "internal/storage/") {
+				return nil
+			}
+			ast.Inspect(f, func(n ast.Node) bool {
+				sel, ok := n.(*ast.SelectorExpr)
+				if !ok {
+					return true
+				}
+				if pkg, ok := sel.X.(*ast.Ident); ok && pkg.Name == "os" && writes[sel.Sel.Name] {
+					t.Errorf("%s: os.%s: only %s writes htt's files", fset.Position(sel.Pos()), sel.Sel.Name, mechanism)
+				}
+				return true
+			})
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// TestArchitecture_StorageReadsThroughOneRead pins how storage reads
+// htt's files: through transaction.go's readFile, which on Windows
+// tries again while another htt renames a new file over the one read
+// (opening a file at that moment fails there with a sharing
+// violation). No other file in storage opens or reads a file itself.
+func TestArchitecture_StorageReadsThroughOneRead(t *testing.T) {
+	const mechanism = "internal/storage/transaction.go"
+	reads := map[string]bool{"ReadFile": true, "Open": true, "OpenFile": true, "OpenInRoot": true}
+	root := findRepoRoot(t)
+	fset := token.NewFileSet()
+	err := filepath.WalkDir(filepath.Join(root, "internal", "storage"), func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			return err
+		}
+		rel, _ := filepath.Rel(root, path)
+		if rel = filepath.ToSlash(rel); rel == mechanism {
+			return nil
+		}
+		f, err := parser.ParseFile(fset, path, nil, 0)
+		if err != nil {
+			return err
+		}
+		ast.Inspect(f, func(n ast.Node) bool {
+			if sel, ok := n.(*ast.SelectorExpr); ok {
+				if pkg, ok := sel.X.(*ast.Ident); ok && pkg.Name == "os" && reads[sel.Sel.Name] {
+					t.Errorf("%s: os.%s: storage reads htt's files through %s's readFile", fset.Position(sel.Pos()), sel.Sel.Name, mechanism)
+				}
+			}
+			return true
+		})
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 

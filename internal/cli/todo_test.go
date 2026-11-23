@@ -1,10 +1,13 @@
 package cli
 
 import (
+	"io"
+	"os"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/bricef/htt/internal/domain"
 	"github.com/bricef/htt/internal/storage"
 	"github.com/bricef/htt/internal/vars"
 	"github.com/spf13/viper"
@@ -336,6 +339,79 @@ func TestMinusAsDown(t *testing.T) {
 		if !slices.Equal(c.args, in) {
 			t.Errorf("minusAsDown(%q) changed its argument to %q", in, c.args)
 		}
+	}
+}
+
+// captureStdout runs f with os.Stdout going to a pipe, and returns what
+// f wrote there.
+func captureStdout(t *testing.T, f func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	prev := os.Stdout
+	os.Stdout = w
+	read := make(chan string)
+	go func() {
+		b, _ := io.ReadAll(r)
+		read <- string(b)
+	}()
+	func() {
+		defer func() {
+			os.Stdout = prev
+			_ = w.Close()
+		}()
+		f()
+	}()
+	return <-read
+}
+
+// `todo add --under N` says which task the subtask went under as it was
+// written: the task N named when the subtask was added, with the id it
+// got. It used to print task N as the command loaded it, before the
+// transaction: another htt putting a task above it meanwhile (here,
+// while the add runs, so the add runs again) made it name another task.
+func TestCobra_AddUnder_SaysTheParentAsWritten(t *testing.T) {
+	repo := withMemoryRepo(t)
+	t.Cleanup(func() { addUnder = "" })
+	seedTodo := func(lines ...string) {
+		ctx := domain.NewContext(repo, "todo")
+		for _, l := range lines {
+			task, err := domain.NewTask(l)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx.Tasks = append(ctx.Tasks, task)
+		}
+		if err := repo.Save(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	seedTodo("Plan id:1", "Write p:1", "Book p:1", "Other")
+	repo.Underneath = func(run int) {
+		if run == 1 { // another htt puts a task above them all
+			seedTodo("(A) Zed", "Plan id:1", "Write p:1", "Book p:1", "Other")
+		}
+	}
+	out := captureStdout(t, func() {
+		if err := runCobra(t, "todo", "add", "--under", "2", "2026-01-01", "child"); err != nil {
+			t.Errorf("add --under: %v", err)
+		}
+	})
+	ctx, err := repo.Context("todo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, task := range ctx.Tasks {
+		got = append(got, task.Raw)
+	}
+	if want := []string{"(A) Zed", "Plan id:1", "Write p:1 id:2", "2026-01-01 child p:2", "Book p:1", "Other"}; !slices.Equal(got, want) {
+		t.Fatalf("todo: %q, want %q", got, want)
+	}
+	if !strings.Contains(out, "Under: Write p:1 id:2\n") {
+		t.Errorf("stdout %q, want the parent as written, Write p:1 id:2", out)
 	}
 }
 

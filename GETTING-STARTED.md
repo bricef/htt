@@ -1107,9 +1107,11 @@ Current Context: work
   done.txt                         ← completed tasks
   archive.txt                      ← deleted tasks
   *.txt.bak                        ← the previous version of each file
+  .htt.lock                        ← htt's lock (see below)
   timelogs/                        ← daily activity logs
     2026-05-15.log
     2026-05-14.log
+    .htt.lock
     …
 ~/.cache/htt/update-check.json     ← when htt last checked for a new release
 ```
@@ -1119,6 +1121,34 @@ header. You can edit them by hand; `htt` rewrites a file only when a
 command changes it, keeping the previous version as `.bak`. Anything
 else in the data directory, such as a `.git/` if you keep it under
 version control, htt leaves alone.
+
+### Using htt from several places at once
+
+You can run htt in several places at once: the TUI in one terminal,
+commands in another, a script adding tasks, the REPL. Nothing one of
+them saves is lost to another. Each change takes htt's lock (the
+`.htt.lock` files; the operating system lets go of it if htt stops),
+reads the files afresh, and writes them whole: a new file is written
+beside the old and put in its place in one step, so anything reading a
+file sees all of it, never half. If another htt is busy with your
+files for more than a few seconds, the command says `another htt is
+busy with your files; try again` and changes nothing.
+
+Your editor, topydo or a sync tool doesn't take htt's lock, but htt
+checks just before writing that nothing changed a file since it read
+it, and if something did, makes its change again on the new version,
+so both are kept. A file that keeps changing under it is left alone:
+`<file> keeps changing; nothing was saved`. Two things stay as they
+are with plain files: a task number is read when the command starts,
+so if another htt or your editor added or removed a task above it
+since you last looked, `htt todo do 3` acts on whatever is task 3
+then; and an editor saving at the very instant htt does can still
+overwrite htt's change, or htt the editor's. A command that waits for
+you, `htt todo edit` while your editor is open or the question `htt
+todo do` asks about open subtasks, follows its task by its text from
+then on: if the task changed or went meanwhile, nothing is saved, and
+`todo edit` says where your edit is kept. The TUI acts on the task it
+shows, by its text, and shows changes made elsewhere within a second.
 
 On Windows, `~` is your user folder, such as `C:\Users\you`: the config
 is `C:\Users\you\.config\htt\config.yaml`, and the task files are in
@@ -1258,6 +1288,16 @@ line is mentioned once a session.
 
 The TUI works on the same data files as the CLI — you can switch
 between them in the same session without anything getting out of sync.
+While it's open, a change made elsewhere (a command in another
+terminal, your editor) shows within a second, the cursor staying on
+the task it was on; and every key acts on the file as it is then, on
+the task you see, found by its text. If that task was changed or
+removed elsewhere, nothing happens, and the line above the keymap says
+so (see [Using htt from several places at
+once](#using-htt-from-several-places-at-once)). So does a change that
+can't be saved, because another htt is busy with your files or the
+disk refuses (full, read-only): nothing changes, and the TUI stays
+open for you to try again.
 
 ### Colours and themes
 

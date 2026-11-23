@@ -80,15 +80,22 @@ func addTask(ctx *domain.Context, args []string, due, under, to string) error {
 		warnTypedTask(ctx, task)
 		return nil
 	}
-	parent, err := ctx.GetTaskByStrId(under)
-	if err != nil {
+	if _, err := ctx.GetTaskByStrId(under); err != nil {
 		return fmt.Errorf("--under: %w", err)
 	}
 	if err := ctx.AddSubtask(under, task); err != nil {
 		return fmt.Errorf("add subtask of task %s%s: %w", under, to, err)
 	}
 	fmt.Printf("Added: %v%s\n", task.ConsoleString(), to)
-	fmt.Printf("Under: %v\n", parent.ConsoleString())
+	// The parent as written: the task the subtask's p: names in ctx, as
+	// the add saved it. Task N when the command loaded the list may be
+	// another: the number is read when the add runs, on the file as it
+	// is then.
+	if i := slices.Index(ctx.Tasks, task); i >= 0 {
+		if parent := domain.NewTree(ctx.Tasks, nil).Nodes[i].Parent; parent != nil {
+			fmt.Printf("Under: %v\n", parent.Task.ConsoleString())
+		}
+	}
 	warnTypedTask(ctx, task)
 	return nil
 }
@@ -152,8 +159,15 @@ func applyDueFlag(task *domain.Task, value string) error {
 }
 
 var edit = &cobra.Command{
-	Use:     "edit <item index>",
-	Short:   "Edit the item specified in your editor ($VISUAL or $EDITOR)",
+	Use:   "edit <item index>",
+	Short: "Edit the item specified in your editor ($VISUAL or $EDITOR)",
+	Long: `Edit the item specified in your editor ($VISUAL or $EDITOR).
+
+The task is the one numbered N when the command starts. While the
+editor is open, another htt (or your own editor on the file) can add
+or remove tasks above it, so on saving htt finds the task by its text:
+where it was, or wherever it has moved. If it changed or went
+meanwhile, nothing is saved, and htt says where your edit is kept.`,
 	Args:    cobra.ExactArgs(1),
 	Aliases: []string{"e"},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -165,15 +179,24 @@ var edit = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("get task: %w", err)
 		}
+		// Waiting for the editor, the command follows the task by its
+		// line (domain.FindTask), not by its number, which another htt
+		// can shift meanwhile.
+		index, raw := oldTask.Line, oldTask.Raw
 
 		f, err := os.CreateTemp("", "hypothetical-tracker-todo")
 		if err != nil {
 			return fmt.Errorf("open temp file: %w", err)
 		}
 		name := f.Name()
-		defer func() { _ = os.Remove(name) }()
+		keep := false // the edit, when it couldn't be saved
+		defer func() {
+			if !keep {
+				_ = os.Remove(name)
+			}
+		}()
 
-		if _, err := f.WriteString(oldTask.Raw + "\n"); err != nil {
+		if _, err := f.WriteString(raw + "\n"); err != nil {
 			return fmt.Errorf("write temp file: %w", err)
 		}
 		if err := f.Close(); err != nil {
@@ -188,20 +211,25 @@ var edit = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("read temp file: %w", err)
 		}
-		raw := strings.TrimSpace(string(content))
-		if raw == oldTask.Raw || raw == "" {
+		edited := strings.TrimSpace(string(content))
+		if edited == raw || edited == "" {
 			utils.Info("New entry was identical or empty. No actions taken.")
 			return nil
 		}
 
-		newTask, err := domain.NewTask(raw)
+		newTask, err := domain.NewTask(edited)
 		if err != nil {
 			return fmt.Errorf("parse replacement: %w", err)
 		}
-		if _, err := ctx.Replace(args[0], newTask); err != nil {
+		before, err := ctx.ReplaceFound(index, raw, newTask)
+		if errors.Is(err, domain.ErrTaskChanged) {
+			keep = true
+			return fmt.Errorf("task %d changed or went while you were editing it, so nothing was saved; your edit is kept in %s", index, name)
+		}
+		if err != nil {
 			return fmt.Errorf("replace: %w", err)
 		}
-		fmt.Printf("Before: %s\n", oldTask.ConsoleString())
+		fmt.Printf("Before: %s\n", before.ConsoleString())
 		fmt.Printf("After:  %s\n", newTask.ConsoleString())
 		warnTypedTask(ctx, newTask)
 		return nil

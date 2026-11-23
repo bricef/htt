@@ -404,22 +404,81 @@ func (r unsaveable) Context(name string) (*domain.Context, error) {
 	return ctx, nil
 }
 
-func TestAct_FailedActionLogsErrorAndQuits(t *testing.T) {
-	// Completing task 1 can't be saved.
-	m, repo := seedModel(t, "todo", "first", "second")
-	m.repo = unsaveable{repo}
-	var err error
-	if m.context, err = m.repo.Context("todo"); err != nil { // the list shown saves through it
-		t.Fatal(err)
-	}
-	m.list.Select(1)
-	m, buf := withLogBuffer(m)
+// An action whose save fails (a full disk here) says so on the status
+// line, logs it, and leaves the TUI open, nothing changed: every action
+// works on the file as it is, so staying can't save over anything. It
+// used to quit, saying nothing on the screen.
+func TestAct_AFailedSaveSaysSoAndStaysOpen(t *testing.T) {
+	for _, key := range []string{"x", "d", "+", "-", "tab"} {
+		t.Run(key, func(t *testing.T) {
+			m, repo := seedModel(t, "todo", "first", "second")
+			m.repo = unsaveable{repo}
+			var err error
+			if m.context, err = m.repo.Context("todo"); err != nil { // the list shown saves through it
+				t.Fatal(err)
+			}
+			m.list.Select(1)
+			m, buf := withLogBuffer(m)
 
-	_, cmd := Do.Act(m)
-	if !isQuit(cmd) {
-		t.Errorf("a failed do should still quit the TUI")
+			next, cmd := m.Update(keyPress(key))
+			if isQuit(cmd) {
+				t.Errorf("the TUI quit")
+			}
+			got := asModel(t, next)
+			if !strings.Contains(strings.ToLower(got.status), "no space left on device") || !strings.Contains(got.status, "Nothing was saved") {
+				t.Errorf("status %q, want it to say what failed", got.status)
+			}
+			assertLogged(t, buf.String(), "level=ERROR", `msg="action failed"`, "no space left on device")
+			if got := stored(t, repo, "todo"); !slices.Equal(got, []string{"first", "second"}) {
+				t.Errorf("todo = %q", got)
+			}
+		})
 	}
-	assertLogged(t, buf.String(), "level=ERROR", `msg="action failed"`, "action=do", "complete task 1")
+}
+
+// The same with real files, in a data directory htt can't write: the
+// lock or the temporary file can't be made.
+func TestAct_AReadOnlyDataDirectorySaysSoAndStaysOpen(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root writes whatever the mode")
+	}
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no read-only directories")
+	}
+	for _, key := range []string{"x", "+", "l"} {
+		t.Run(key, func(t *testing.T) {
+			m := fileTreeModel(t, "first", "second")
+			if err := m.repo.Save(&domain.Context{Name: "work", Tasks: []*domain.Task{mustTask(t, "in work")}}); err != nil {
+				t.Fatal(err)
+			}
+			m.contexts = append([]*domain.Context{{Name: "todo"}, {Name: "work"}}, m.contexts[len(m.contexts)-1])
+			m.contextCursor = 0
+			dir := filepath.Dir(m.repo.ContextPath("todo"))
+			if err := os.Remove(filepath.Join(dir, ".htt.lock")); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Chmod(dir, 0o555); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+			m = selectRow(t, m, 1)
+
+			next, cmd := m.Update(keyPress(key))
+			if isQuit(cmd) {
+				t.Errorf("the TUI quit")
+			}
+			got := asModel(t, next)
+			if !strings.Contains(got.status, "permission denied") {
+				t.Errorf("status %q, want it to say what failed", got.status)
+			}
+			if got.context.Name != "todo" {
+				t.Errorf("the TUI shows %s", got.context.Name)
+			}
+			if got := lines(t, got, "todo"); !slices.Equal(got, []string{"first", "second"}) {
+				t.Errorf("todo = %q", got)
+			}
+		})
+	}
 }
 
 func TestAct_NothingSelectedIsUnavailable(t *testing.T) {

@@ -1294,7 +1294,10 @@ the task it was on; and every key acts on the file as it is then, on
 the task you see, found by its text. If that task was changed or
 removed elsewhere, nothing happens, and the line above the keymap says
 so (see [Using htt from several places at
-once](#using-htt-from-several-places-at-once)).
+once](#using-htt-from-several-places-at-once)). So does a change that
+can't be saved, because another htt is busy with your files or the
+disk refuses (full, read-only): nothing changes, and the TUI stays
+open for you to try again.
 
 ### Colours and themes
 

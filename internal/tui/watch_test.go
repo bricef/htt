@@ -171,6 +171,9 @@ type busy struct{ *storage.MemoryRepository }
 
 func (busy) Transact(func(domain.Repository) error) error { return domain.ErrBusy }
 
+// SetCurrent is a change too.
+func (busy) SetCurrent(string) error { return domain.ErrBusy }
+
 // Context loads the named context wired to change through r.
 func (r busy) Context(name string) (*domain.Context, error) {
 	loaded, err := r.MemoryRepository.Context(name)
@@ -183,26 +186,37 @@ func (r busy) Context(name string) (*domain.Context, error) {
 }
 
 // Another htt busy with the files: the status line says so, the TUI
-// stays open, and nothing changes.
+// stays open, and nothing changes; a tab switch stays on its tab. A tab
+// switch used to quit the TUI, saying nothing.
 func TestOnShown_AnotherHttBusySaysSoAndStaysOpen(t *testing.T) {
 	m, repo := seedModel(t, "todo", "one", "two")
-	m.repo = busy{repo}
-	var err error
-	if m.context, err = m.repo.Context("todo"); err != nil {
+	if err := repo.Save(&domain.Context{Name: "work", Tasks: []*domain.Task{mustTask(t, "in work")}}); err != nil {
 		t.Fatal(err)
 	}
+	ctx, err := busy{repo}.Context("todo") // the list shown changes through busy
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = Model(busy{repo}, ctx, Options{})
 	m.list.Select(1)
-	for _, key := range []string{"+", "x", "d"} {
+	for _, key := range []string{"+", "x", "d", "l", "h", "tab"} {
 		next, cmd := m.Update(keyPress(key))
 		if isQuit(cmd) {
 			t.Errorf("%s: the TUI quit", key)
 		}
-		if got := asModel(t, next).status; got != "Another htt is busy with your files; try again." {
-			t.Errorf("%s: status %q", key, got)
+		got := asModel(t, next)
+		if got.status != "Another htt is busy with your files; try again." {
+			t.Errorf("%s: status %q", key, got.status)
+		}
+		if got.context.Name != "todo" || got.contexts[got.contextCursor].Name != "todo" {
+			t.Errorf("%s: the TUI shows %s, its tab %s", key, got.context.Name, got.contexts[got.contextCursor].Name)
 		}
 	}
 	if got := stored(t, repo, "todo"); !slices.Equal(got, []string{"one", "two"}) {
 		t.Errorf("todo = %q", got)
+	}
+	if name, _ := repo.CurrentContextName(); name != "todo" {
+		t.Errorf("current = %s", name)
 	}
 }
 

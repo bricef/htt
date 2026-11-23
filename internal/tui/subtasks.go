@@ -85,12 +85,12 @@ var NestTask = mkAction("nest under the task above", func(m model) (tea.Model, t
 	}
 	if err != nil {
 		if errors.Is(err, errGone) {
-			return m, quitUnless(err), err
+			return m, nil, err
 		}
 		if unavailable := m.treeChange(at, err); unavailable != nil {
 			return m, nil, unavailable
 		}
-		return m, quitUnless(err), fmt.Errorf("nest task %d: %w", at, err)
+		return m, nil, fmt.Errorf("nest task %d: %w", at, err)
 	}
 	if err := m.arranged(moved); err != nil {
 		return m, tea.Quit, err
@@ -115,12 +115,12 @@ var UnnestTask = mkAction("unnest a level", func(m model) (tea.Model, tea.Cmd, e
 	})
 	if err != nil {
 		if errors.Is(err, errGone) {
-			return m, quitUnless(err), err
+			return m, nil, err
 		}
 		if unavailable := m.treeChange(at, err); unavailable != nil {
 			return m, nil, unavailable
 		}
-		return m, quitUnless(err), fmt.Errorf("unnest task %d: %w", at, err)
+		return m, nil, fmt.Errorf("unnest task %d: %w", at, err)
 	}
 	if err := m.arranged(moved); err != nil {
 		return m, tea.Quit, err
@@ -238,7 +238,7 @@ func completeAnswered(q question, choice domain.Subtasks) *Action {
 			m.status = fmt.Sprintf("Task %d's open subtasks changed elsewhere; nothing was completed.", q.index)
 		}
 		if err != nil {
-			return m, quitUnless(err), err
+			return m, nil, err
 		}
 		if err := refresh(&m); err != nil {
 			return m, tea.Quit, err

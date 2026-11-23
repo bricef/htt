@@ -74,10 +74,13 @@ var errGone = fmt.Errorf("%w: the task shown changed elsewhere", errUnavailable)
 // runs again on the new file, finding the task again. When the task
 // isn't there any more, changed or removed elsewhere (the CLI, say),
 // nothing changes: the status line says so (changed), and the error is
-// errGone. Another htt holding the files too long, or a file that keeps
-// changing, is said on the status line too, and the TUI stays open
-// (quitUnless) to try again. Either way the list shows the file as the
-// transaction left it, on the task found.
+// errGone. A save that fails (another htt holding the files too long, a
+// file that keeps changing, a full disk or a read-only directory) is
+// said on the status line too (failed), and the TUI stays open, as it
+// does after any action that fails: nothing was saved, and every action
+// works on the file as it is, so trying again can't save over anything.
+// Either way the list shows the file as the transaction left it, on the
+// task found.
 func (m *model) onShown(index int, raw, changed string, act func(c *domain.Context, at int) error) error {
 	found := -1
 	err := m.context.Transact(func(c *domain.Context) error {
@@ -88,12 +91,26 @@ func (m *model) onShown(index int, raw, changed string, act func(c *domain.Conte
 	})
 	m.showTasks(found)
 	switch {
+	case err == nil:
 	case errors.Is(err, errGone):
 		m.status = changed
-	case errors.Is(err, domain.ErrBusy), errors.Is(err, domain.ErrKeepsChanging):
-		m.status = sentence(err)
+	case !errors.Is(err, errUnavailable): // an action that can't run says why itself
+		m.status = failed(err)
 	}
 	return err
+}
+
+// failed is what the status line says of an action that failed with
+// err, having saved nothing: another htt busy with the files, as the
+// domain says it, or the error, and that nothing was saved.
+func failed(err error) string {
+	switch {
+	case errors.Is(err, domain.ErrBusy):
+		return sentence(domain.ErrBusy)
+	case errors.Is(err, domain.ErrKeepsChanging):
+		return sentence(err) // "<file> keeps changing; nothing was saved."
+	}
+	return sentence(err) + " Nothing was saved."
 }
 
 // sentence is err's message as a sentence, for the status line.
@@ -118,18 +135,6 @@ func shownAt(tasks []*domain.Task, index int, raw string) int {
 // elsewhere, and what didn't happen because of it.
 func changedElsewhere(index int, nothing string) string {
 	return fmt.Sprintf("Task %d was changed or removed elsewhere; %s.", index, nothing)
-}
-
-// quitUnless is what an action that failed with err does next: quit,
-// unless err is errUnavailable's, or another htt was busy with the
-// files or a file kept changing (domain.ErrBusy, ErrKeepsChanging),
-// when the TUI stays open: nothing was saved, and the action can be
-// tried again.
-func quitUnless(err error) tea.Cmd {
-	if errors.Is(err, errUnavailable) || errors.Is(err, domain.ErrBusy) || errors.Is(err, domain.ErrKeepsChanging) {
-		return nil
-	}
-	return tea.Quit
 }
 
 // refresh reloads the context the TUI shows from the repo, by its name,
@@ -169,16 +174,21 @@ func switchTo(m *model, index int) error {
 
 var Noop = mkAction("noop", func(m model) (tea.Model, tea.Cmd, error) { return m, nil, nil })
 
+// NextContext and PreviousContext switch tabs. A switch that fails
+// (another htt busy with the files, the pointer's directory read-only)
+// says so on the status line and stays on the tab shown.
 var NextContext = mkAction("move right", func(m model) (tea.Model, tea.Cmd, error) {
 	if err := switchTo(&m, min(m.contextCursor+1, len(m.contexts)-1)); err != nil {
-		return m, tea.Quit, err
+		m.status = failed(err)
+		return m, nil, err
 	}
 	return m, nil, nil
 })
 
 var PreviousContext = mkAction("move left", func(m model) (tea.Model, tea.Cmd, error) {
 	if err := switchTo(&m, max(m.contextCursor-1, 0)); err != nil {
-		return m, tea.Quit, err
+		m.status = failed(err)
+		return m, nil, err
 	}
 	return m, nil, nil
 })
@@ -209,7 +219,7 @@ var Do = mkAction("do", func(m model) (tea.Model, tea.Cmd, error) {
 		return nil
 	})
 	if err != nil {
-		return m, quitUnless(err), err
+		return m, nil, err
 	}
 	if len(open) > 0 {
 		m.ask(at, open) // the next key answers (see answer)
@@ -463,7 +473,7 @@ var Delete = mkAction("delete", func(m model) (tea.Model, tea.Cmd, error) {
 		return nil
 	})
 	if err != nil {
-		return m, quitUnless(err), err
+		return m, nil, err
 	}
 	if err := refresh(&m); err != nil {
 		return m, tea.Quit, err
@@ -489,7 +499,7 @@ var IncreasePriority = mkAction("increase priority", func(m model) (tea.Model, t
 		return nil
 	})
 	if err != nil {
-		return m, quitUnless(err), err
+		return m, nil, err
 	}
 	if err := refresh(&m); err != nil {
 		return m, tea.Quit, err
@@ -529,7 +539,7 @@ var DecreasePriority = mkAction("decrease priority", func(m model) (tea.Model, t
 		return nil
 	})
 	if err != nil {
-		return m, quitUnless(err), err
+		return m, nil, err
 	}
 	if err := refresh(&m); err != nil {
 		return m, tea.Quit, err

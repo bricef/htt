@@ -616,9 +616,11 @@ a line runs).
   program's write finds the task again. A task changed or removed
   elsewhere is left alone (`errGone`), and the status line says so
   (Tab also checks, inside the transaction, the task above it, and the
-  answer to `x`'s question the subtasks it counted). Another htt busy
-  with the files, or a file that keeps changing, goes on the status
-  line and the TUI stays open (`quitUnless`). Then `refresh`, which
+  answer to `x`'s question the subtasks it counted). A save that fails
+  (another htt busy with the files, a file that keeps changing, a full
+  disk, a read-only directory) goes on the status line (`failed`) and
+  the TUI stays open, as for a tab switch that fails: nothing was
+  saved, and the next key works on the file as it is. Then `refresh`, which
   reloads the list shown by its name, as the watch does (another htt
   switching the current context doesn't switch the TUI's), and
   `showTasks`. Context-switching actions (`switchTo`) load the tab's

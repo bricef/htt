@@ -618,8 +618,11 @@ a line runs).
   (Tab also checks, inside the transaction, the task above it, and the
   answer to `x`'s question the subtasks it counted). Another htt busy
   with the files, or a file that keeps changing, goes on the status
-  line and the TUI stays open (`quitUnless`). Then `refresh` and
-  `showTasks`; context-switching actions call `m.repo.SetCurrent`.
+  line and the TUI stays open (`quitUnless`). Then `refresh`, which
+  reloads the list shown by its name, as the watch does (another htt
+  switching the current context doesn't switch the TUI's), and
+  `showTasks`. Context-switching actions (`switchTo`) load the tab's
+  context by its name, then call `m.repo.SetCurrent`.
 - **Watching** (`watch.go`). `Init` starts a tick (`watchMsg`) each
   second for a list with a file (`ContextPath`); each tick stats it
   (`look`) and, when it's another file (an atomic replacement), or

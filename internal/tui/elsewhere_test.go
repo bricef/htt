@@ -151,6 +151,46 @@ func TestElsewhere_ActionsFollowTheTaskShown(t *testing.T) {
 	}
 }
 
+// Another htt switching the current context (`htt todo context other`
+// in another terminal) doesn't switch the TUI's: its actions act on the
+// list it shows, and it goes on showing it. It used to reload through
+// the pointer after an action, and show the other list, which the next
+// action then changed.
+func TestElsewhere_AnotherHttSwitchingContextLeavesTheTUIsList(t *testing.T) {
+	m := fileTreeModel(t, "one", "two", "three")
+	elsewhere := m.repo
+	other, err := elsewhere.Context("other")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range []string{"o-one", "o-two", "o-three"} {
+		if err := other.AddTask(mustTask(t, "2026-01-01 "+s)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := elsewhere.SetCurrent("other"); err != nil {
+		t.Fatal(err)
+	}
+	m = selectRow(t, m, 1) // two
+	m = keys(t, m, runes("++")...)
+	if m.context.Name != "todo" {
+		t.Errorf("the TUI shows %s", m.context.Name)
+	}
+	if got := shownLines(m); !slices.Equal(got, []string{"(B) two", "one", "three"}) {
+		t.Errorf("the list shows %q", got)
+	}
+	if got := lines(t, m, "todo"); !slices.Equal(got, []string{"(B) two", "one", "three"}) {
+		t.Errorf("todo: %q", got)
+	}
+	if got := lines(t, m, "other"); !slices.Equal(got, []string{"2026-01-01 o-one", "2026-01-01 o-two", "2026-01-01 o-three"}) {
+		t.Errorf("other: %q", got)
+	}
+	m = look(t, m)
+	if m.context.Name != "todo" {
+		t.Errorf("after a look, the TUI shows %s", m.context.Name)
+	}
+}
+
 // A task changed or removed elsewhere is left alone: nothing changes,
 // the list shows the file as it is, and the status line says why.
 func TestElsewhere_ATaskChangedElsewhereIsLeftAlone(t *testing.T) {

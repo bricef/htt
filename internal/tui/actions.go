@@ -132,56 +132,54 @@ func quitUnless(err error) tea.Cmd {
 	return tea.Quit
 }
 
-// refresh reloads the current context from the repo and assigns it to m.
-// Used after every mutating action so the rendered view reflects what's
-// on disk. The file is looked at first (watch.go), so the next tick
-// doesn't take the action's own write for a change to reload, and a
-// write landing between the look and the read is seen at the next one.
+// refresh reloads the context the TUI shows from the repo, by its name,
+// as the watch does: another htt switching the current context (the
+// pointer) doesn't switch the TUI's. Used after every mutating action
+// so the rendered view reflects what's on disk. The file is looked at
+// first (watch.go), so the next tick doesn't take the action's own
+// write for a change to reload, and a write landing between the look
+// and the read is seen at the next one.
 func refresh(m *model) error {
-	name, err := m.repo.CurrentContextName()
+	seen := m.look()
+	ctx, err := m.repo.Context(m.context.Name)
 	if err != nil {
-		return fmt.Errorf("reload current context: %w", err)
+		return fmt.Errorf("reload %s: %w", m.context.Name, err)
 	}
+	m.context, m.seen = ctx, seen
+	return nil
+}
+
+// switchTo shows the context of the tab at index: loaded by its name,
+// and made the current context (the pointer, which the CLI follows).
+func switchTo(m *model, index int) error {
+	name := m.contexts[index].Name
 	seen := m.lookAt(name)
 	ctx, err := m.repo.Context(name)
 	if err != nil {
-		return fmt.Errorf("reload current context: %w", err)
+		return fmt.Errorf("load %s: %w", name, err)
 	}
-	m.context, m.seen = ctx, seen
+	if err := m.repo.SetCurrent(name); err != nil {
+		return fmt.Errorf("switch to %s: %w", name, err)
+	}
+	m.contextCursor, m.context, m.seen = index, ctx, seen
+	m.showTasks(-1)
+	m.list.Select(0)
 	return nil
 }
 
 var Noop = mkAction("noop", func(m model) (tea.Model, tea.Cmd, error) { return m, nil, nil })
 
 var NextContext = mkAction("move right", func(m model) (tea.Model, tea.Cmd, error) {
-	if m.contextCursor < len(m.contexts)-1 {
-		m.contextCursor++
-	}
-	newName := m.contexts[m.contextCursor].Name
-	if err := m.repo.SetCurrent(newName); err != nil {
-		return m, tea.Quit, fmt.Errorf("switch to %s: %w", newName, err)
-	}
-	if err := refresh(&m); err != nil {
+	if err := switchTo(&m, min(m.contextCursor+1, len(m.contexts)-1)); err != nil {
 		return m, tea.Quit, err
 	}
-	m.showTasks(-1)
-	m.list.Select(0)
 	return m, nil, nil
 })
 
 var PreviousContext = mkAction("move left", func(m model) (tea.Model, tea.Cmd, error) {
-	if m.contextCursor > 0 {
-		m.contextCursor--
-	}
-	newName := m.contexts[m.contextCursor].Name
-	if err := m.repo.SetCurrent(newName); err != nil {
-		return m, tea.Quit, fmt.Errorf("switch to %s: %w", newName, err)
-	}
-	if err := refresh(&m); err != nil {
+	if err := switchTo(&m, max(m.contextCursor-1, 0)); err != nil {
 		return m, tea.Quit, err
 	}
-	m.showTasks(-1)
-	m.list.Select(0)
 	return m, nil, nil
 })
 

@@ -14,9 +14,17 @@ GitHub Actions workflow that builds the binaries (see
 
 ## Steps
 
-1. **Pick the version.** Semver. While htt is `v0.x`, a release that
-   adds features or removes one bumps the minor version, and a
-   fixes-only release bumps the patch.
+1. **Pick the version.** Semver:
+
+   - **major** for a change that breaks something users rely on: a
+     command or flag removed or renamed, or the todo.txt or time-log
+     file formats or the config's keys changed so that existing files
+     or configs no longer work as before;
+   - **minor** for a feature;
+   - **patch** for fixes only.
+
+   Changing `htt gui`'s JSON API isn't a break: the page embedded in
+   the same binary is its only client, and changes with it.
 
 2. **Check `main`:**
 

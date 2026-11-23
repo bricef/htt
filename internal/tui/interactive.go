@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/bricef/htt/internal/domain"
@@ -57,6 +58,7 @@ type model struct {
 	datesWarned   map[string]bool  // the date warnings shown so far; see noteDateWarnings
 	folded        map[string]bool  // folded tasks, by foldKey, for the session
 	asking        *question        // the question x asked about open subtasks, until the next key
+	notice        string           // an update notice that came while asking, for after the answer
 }
 
 var controller = NewKeyBindingController().
@@ -289,15 +291,27 @@ func (m model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return editorFinished(m, msg)
 
 	case updateNoticeMsg:
-		m.status = string(msg)
 		m.logger.Info("update available", "notice", string(msg))
+		if m.asking != nil {
+			// The question stays on screen while the next key answers
+			// it; the notice waits for the answer.
+			m.notice = string(msg)
+			return m, nil
+		}
+		m.status = string(msg)
 		return m, nil
 
 	case tea.KeyMsg:
 		// A status message lasts until the user does something else.
 		m.status = ""
 		if m.asking != nil {
-			return answer(m, msg)
+			next, cmd := answer(m, msg)
+			if nm, ok := next.(model); ok && nm.notice != "" {
+				nm.status = strings.TrimSpace(nm.status + " " + nm.notice)
+				nm.notice = ""
+				return nm, cmd
+			}
+			return next, cmd
 		}
 		switch {
 		case m.textInput.Focused():

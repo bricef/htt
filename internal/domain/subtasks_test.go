@@ -4,6 +4,7 @@ package domain_test
 // repository (docs/design/subtasks.md).
 
 import (
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -117,4 +118,31 @@ func TestContext_NumbersFollowTheTree(t *testing.T) {
 		t.Errorf("completed %q, want call", done[0].Raw)
 	}
 	wantLines(t, "left", rawsOf(t, repo, "todo"), "plan id:1", "book p:1 id:2", "other")
+}
+
+// A copy for a record outside the context, a time-log entry: the links
+// go, every other word stays, and the task itself is left as it was.
+func TestTask_WithoutLinks(t *testing.T) {
+	for raw, want := range map[string]string{
+		"Write p:1 +work id:2 due:2026-01-01": "Write +work due:2026-01-01",
+		"(A) 2026-01-01 Plan id:1 p:3 p:4":    "(A) 2026-01-01 Plan",
+		"Read p:12 of the book":               "Read of the book",
+		"plain +work":                         "plain +work",
+	} {
+		task := mustTask(t, raw)
+		got, err := task.WithoutLinks()
+		if err != nil {
+			t.Errorf("%q without its links: %v", raw, err)
+		} else if got.Raw != want {
+			t.Errorf("%q without its links: %q, want %q", raw, got.Raw, want)
+		}
+		if task.Raw != raw {
+			t.Errorf("the task changed: %q", task.Raw)
+		}
+	}
+	for _, raw := range []string{"p:1", "id:1 p:2", "2026-01-01 id:3"} {
+		if _, err := mustTask(t, raw).WithoutLinks(); !errors.Is(err, domain.ErrOnlyLink) {
+			t.Errorf("%q: %v, want ErrOnlyLink", raw, err)
+		}
+	}
 }

@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -92,6 +93,28 @@ func addTask(ctx *domain.Context, args []string, due, under, to string) error {
 }
 
 var addToDue, addToUnder string
+
+// taskNumber is a string flag that takes a task number, a whole number,
+// and refuses anything else: an empty --under would otherwise read as
+// no --under at all, and add a top-level task.
+type taskNumber struct{ value *string }
+
+func (f taskNumber) String() string {
+	if f.value == nil { // pflag's zero value, for its help
+		return ""
+	}
+	return *f.value
+}
+
+func (f taskNumber) Set(s string) error {
+	if n, err := strconv.Atoi(s); err != nil || n < 0 {
+		return errors.New("not a task number")
+	}
+	*f.value = s
+	return nil
+}
+
+func (f taskNumber) Type() string { return "string" }
 
 var addTo = &cobra.Command{
 	Use:   "add-to <context> <entry...>",
@@ -507,8 +530,8 @@ func init() {
 		"Due date: absolute (YYYY-MM-DD) or phrase (Friday, tomorrow, in two weeks)")
 	addTo.Flags().StringVar(&addToDue, "due", "",
 		"Due date: absolute (YYYY-MM-DD) or phrase (Friday, tomorrow, in two weeks)")
-	add.Flags().StringVar(&addUnder, "under", "", "Add it as a subtask of task `N`")
-	addTo.Flags().StringVar(&addToUnder, "under", "", "Add it as a subtask of task `N` of that context")
+	add.Flags().Var(taskNumber{&addUnder}, "under", "Add it as a subtask of task `N`")
+	addTo.Flags().Var(taskNumber{&addToUnder}, "under", "Add it as a subtask of task `N` of that context")
 
 	TodoCommand.AddCommand(add)
 	TodoCommand.AddCommand(addTo)

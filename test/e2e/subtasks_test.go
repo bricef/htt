@@ -118,6 +118,52 @@ func TestSubtasks_MoveToTheCurrentContextUnderAnotherSpelling(t *testing.T) {
 	assertEqual(t, "my_list.txt", e.readData("my_list.txt"), "Parent id:1\nChild p:1\nOther\n")
 }
 
+// --under takes a task number: given empty, or not a number, it's an
+// error, and nothing is added (an empty one used to add a top-level
+// task).
+func TestSubtasks_UnderNeedsATaskNumber(t *testing.T) {
+	e := newEnv(t)
+	e.writeData("todo.txt", "Plan id:1\n")
+	e.writeData("work.txt", "Review\n")
+	for _, args := range [][]string{
+		{"todo", "add", "--under", "", "meant as a subtask"},
+		{"todo", "add", "--under=", "meant as a subtask"},
+		{"todo", "add", "--under", "abc", "meant as a subtask"},
+		{"todo", "add", "--under", "-1", "meant as a subtask"},
+		{"todo", "add-to", "work", "--under", "", "meant as a subtask"},
+	} {
+		r := e.run(args...)
+		if r.exitCode == 0 || !strings.Contains(r.stderr, "--under") || !strings.Contains(r.stderr, "task number") {
+			t.Errorf("htt %s: exit %d, stderr %q", strings.Join(args, " "), r.exitCode, r.stderr)
+		}
+	}
+	assertEqual(t, "todo.txt", e.readData("todo.txt"), "Plan id:1\n")
+	assertEqual(t, "work.txt", e.readData("work.txt"), "Review\n")
+
+	// In the REPL too, and the next add isn't under anything.
+	e.mustRunWithInput("add --under \"\" meant as a subtask\nadd Other\nq\n", "repl")
+	assertEqual(t, "todo.txt after the REPL", e.readData("todo.txt"), "Plan id:1\n"+today()+" Other\n")
+}
+
+// workon logs the task's text, tags included, but not its id: and p:,
+// which link to nothing in the time log. A task with no other text has
+// nothing to log.
+func TestSubtasks_WorkonLeavesTheLinksOut(t *testing.T) {
+	e := newEnv(t)
+	e.writeData("todo.txt", "Plan id:1\nWrite p:1 +work\np:1\n")
+	assertEqual(t, "workon 1", e.mustRun("workon", "1").stdout, "Logging entry: Write +work\n")
+	assertEqual(t, "workon 0", e.mustRun("workon", "0").stdout, "Logging entry: Plan\n")
+	r := e.run("workon", "2")
+	if r.exitCode == 0 || !strings.Contains(r.stderr, "no text besides its link") {
+		t.Errorf("workon on a task with only its link: exit %d, stderr %q", r.exitCode, r.stderr)
+	}
+	log := e.readData(filepath.Join("timelogs", today()+".log"))
+	if strings.Count(log, "\n") != 2 || strings.Contains(log, "id:") || strings.Contains(log, "p:") ||
+		!strings.HasPrefix(log, "Write +work ts:") || !strings.Contains(log, "\nPlan ts:") {
+		t.Errorf("time log:\n%s", log)
+	}
+}
+
 // A done task moved back to the context it was completed in links up
 // again: a parent keeps its id, its subtasks under it; a subtask keeps
 // its p: when its parent is there.

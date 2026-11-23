@@ -559,6 +559,23 @@ func (t *Task) setParent(id string) {
 	t.rebuild()
 }
 
+// WithoutLinks returns a copy of the task without its id: and p: tags,
+// for a record outside the context, such as a time-log entry, where they
+// would link to nothing. A task with no text besides them is refused
+// (ErrOnlyLink): the copy would be empty.
+func (t *Task) WithoutLinks() (*Task, error) {
+	if !slices.ContainsFunc(t.body, func(w bodyWord) bool { return w.key != idKey && w.key != parentKey }) {
+		return nil, fmt.Errorf("%w: %s", ErrOnlyLink, t.Raw)
+	}
+	out, err := NewTask(t.Raw)
+	if err != nil {
+		return nil, err
+	}
+	delete(out.Annotations, idKey)
+	delete(out.Annotations, parentKey)
+	return out.rebuild(), nil
+}
+
 // takeParent removes every p: from the task, or, when they're all the
 // text it has, refuses (ErrOnlyLink), changing nothing: without them,
 // it would be an empty line, or only a preamble.

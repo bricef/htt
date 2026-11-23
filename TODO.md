@@ -35,12 +35,6 @@ Since safe writes (`feat/safe-writes`, 2026-11-23):
   Finding the task by its text, as the TUI does, would close it; a
   decision for the design. (Before safe writes, `edit` saved the list
   as it was loaded, losing the other change instead.)
-- **A completion holds htt's lock while it parses the whole done
-  file**, as it parsed it before: about 0.7 s at 3,000 done tasks,
-  2.4 s at 10,000. Another htt waits up to 5 s for the lock, so a few
-  completions queued on a very large done file could make it give up
-  ("another htt is busy"). Adding to the done file and the archive
-  without parsing them would make it milliseconds.
 
 ## Wishlist
 

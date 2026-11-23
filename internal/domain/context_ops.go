@@ -39,11 +39,11 @@ func (c *Context) Transact(body func(c *Context) error) error {
 
 // transact runs body as one transaction of c's repository, on c as the
 // store holds it then. c's tasks become those the transaction reads:
-// c's own task objects when they're the same lines, so a task the
-// caller holds sees the change, as before transactions; the store's
-// otherwise, or when body runs again (the run before may have changed
-// c's). While body runs, c's repository is the transaction's, so what
-// body loads and saves is part of it.
+// c's own task objects for the lines it holds, so a task the caller
+// holds sees the change, as before transactions (reread); the store's
+// when body runs again (the run before may have changed c's). While
+// body runs, c's repository is the transaction's, so what body loads
+// and saves is part of it.
 func (c *Context) transact(body func() error) error {
 	if c.changing {
 		return body()
@@ -51,11 +51,15 @@ func (c *Context) transact(body func() error) error {
 	outer, held := c.repo, rawLines(c.Tasks)
 	first := true
 	return outer.Transact(func(tx Repository) error {
-		now, err := tx.Context(c.Name)
-		if err != nil {
-			return err
-		}
-		if !first || !slices.Equal(rawLines(now.Tasks), held) {
+		if first {
+			if err := c.reread(tx, held); err != nil {
+				return err
+			}
+		} else {
+			now, err := tx.Context(c.Name)
+			if err != nil {
+				return err
+			}
 			c.Tasks = now.Tasks
 		}
 		first = false
@@ -64,6 +68,81 @@ func (c *Context) transact(body func() error) error {
 		defer func() { c.repo, c.changing = outer, false }()
 		return body()
 	})
+}
+
+// reread makes c's tasks the store's, as tx reads them, on a
+// transaction's first run, parsing only the lines it must. c was
+// loaded, and its tasks parsed, before the transaction (held are their
+// lines); parsing the whole context again while the transaction holds
+// the store would keep every other htt waiting. From a LineSource, the
+// lines come unparsed: when they're held's, in the same order, c stays
+// as it is; otherwise c keeps its task for each line it still holds,
+// only the other lines are parsed, and the tasks are arranged. A line
+// that doesn't parse, or a repository that isn't a LineSource, loads
+// the context (Context), and c keeps its tasks if the lines are held's.
+//
+// A task's FileLine counts the file's lines without the blank ones,
+// until the context is saved: htt writes none.
+func (c *Context) reread(tx Repository, held []string) error {
+	source, ok := tx.(LineSource)
+	if !ok {
+		return c.reload(tx, held)
+	}
+	lines, err := source.ContextLines(c.Name)
+	if err != nil {
+		return err
+	}
+	if slices.Equal(lines, held) {
+		return nil
+	}
+	have := map[string][]*Task{}
+	for _, t := range c.Tasks {
+		have[t.Raw] = append(have[t.Raw], t)
+	}
+	tasks := make([]*Task, len(lines))
+	for i, l := range lines {
+		if ts := have[l]; len(ts) > 0 {
+			tasks[i], have[l] = ts[0], ts[1:]
+		} else if tasks[i], err = NewTask(l); err != nil {
+			return c.reload(tx, held) // the repository says which line of which file
+		}
+		tasks[i].FileLine = i + 1
+	}
+	c.Tasks = tasks
+	c.Arrange()
+	return nil
+}
+
+// reload loads c's context from tx, keeping c's tasks when their lines
+// are the store's (held).
+func (c *Context) reload(tx Repository, held []string) error {
+	now, err := tx.Context(c.Name)
+	if err != nil {
+		return err
+	}
+	if !slices.Equal(rawLines(now.Tasks), held) {
+		c.Tasks = now.Tasks
+	}
+	return nil
+}
+
+// addTo adds tasks to the end of the named context, the done file or
+// the archive, which keep their tasks flat, in the order they came, and
+// grow with every task completed or deleted: through a repository that
+// can append to a context unread (Appender), without loading it;
+// otherwise by loading it, adding them and saving it.
+func (c *Context) addTo(name string, tasks []*Task) error {
+	if a, ok := c.repo.(Appender); ok {
+		return a.Append(name, tasks)
+	}
+	to, err := c.repo.Context(name)
+	if err != nil {
+		return err
+	}
+	for _, t := range tasks {
+		to.add(t)
+	}
+	return to.save()
 }
 
 // rawLines returns the tasks' lines.
@@ -121,10 +200,6 @@ func (c *Context) Delete(strID string) ([]*Task, error) {
 			}
 			return c.save()
 		}
-		archive, err := c.repo.Context(ArchiveContextName)
-		if err != nil {
-			return err
-		}
 		now := time.Now()
 		for _, t := range tasks {
 			if _, err := t.markDeleted(c, now); err != nil {
@@ -133,9 +208,8 @@ func (c *Context) Delete(strID string) ([]*Task, error) {
 			if err := c.remove(t); err != nil {
 				return err
 			}
-			archive.add(t)
 		}
-		if err := archive.save(); err != nil {
+		if err := c.addTo(ArchiveContextName, tasks); err != nil {
 			return err
 		}
 		return c.save()
@@ -207,14 +281,25 @@ func (c *Context) Move(strID, toName string) ([]*Task, error) {
 		if same, ok := c.repo.(SameFiler); ok && same.SameFile(c.Name, toName) {
 			return fmt.Errorf("cannot move task to its current context %q: %q is kept in the same file", c.Name, toName)
 		}
+		if !(&Context{Name: toName}).IsTree() {
+			// Into the done file or the archive: the lines go as they
+			// are, at the end.
+			for _, t := range tasks {
+				if err := c.remove(t); err != nil {
+					return err
+				}
+			}
+			if err := c.addTo(toName, tasks); err != nil {
+				return err
+			}
+			return c.save()
+		}
 		to, err := c.repo.Context(toName)
 		if err != nil {
 			return err
 		}
-		if to.IsTree() {
-			if err := c.fitInto(tasks, to); err != nil {
-				return err
-			}
+		if err := c.fitInto(tasks, to); err != nil {
+			return err
 		}
 		for _, t := range tasks {
 			if err := c.remove(t); err != nil {
@@ -268,10 +353,6 @@ func (c *Context) Complete(strID string, subtasks Subtasks) ([]*Task, error) {
 		default:
 			return fmt.Errorf("task %s: %w (%d)", strID, ErrOpenSubtasks, len(open))
 		}
-		done, err := c.repo.Context(DoneContextName)
-		if err != nil {
-			return err
-		}
 		now := time.Now()
 		for _, t := range tasks {
 			if _, err := t.markCompleted(c, now); err != nil {
@@ -280,9 +361,8 @@ func (c *Context) Complete(strID string, subtasks Subtasks) ([]*Task, error) {
 			if err := c.remove(t); err != nil {
 				return err
 			}
-			done.add(t)
 		}
-		if err := done.save(); err != nil {
+		if err := c.addTo(DoneContextName, tasks); err != nil {
 			return err
 		}
 		return c.save()

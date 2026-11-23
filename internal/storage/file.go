@@ -241,6 +241,7 @@ var (
 	_ domain.Repository = (*fileTx)(nil)
 	_ domain.LineSource = (*fileTx)(nil)
 	_ domain.SameFiler  = (*fileTx)(nil)
+	_ domain.Appender   = (*fileTx)(nil)
 )
 
 // errOver is a save to a transaction's repository once its change has
@@ -342,6 +343,37 @@ func (tx *fileTx) Save(ctx *domain.Context) error {
 		return errOver
 	}
 	tx.t.Write(tx.r.ContextPath(ctx.Name), contextFile(ctx), true)
+	return nil
+}
+
+// Append adds tasks to the end of the named context's file
+// (domain.Appender) without parsing it: their lines go after the bytes
+// the transaction reads there, which the check covers as for any read,
+// and the file is replaced as for any save, its previous version kept
+// as .bak. The done file and the archive grow with every task completed
+// or deleted; parsing them whole for each would hold the lock for
+// seconds.
+func (tx *fileTx) Append(name string, tasks []*domain.Task) error {
+	if name == "" {
+		return domain.ErrInvalidContextName
+	}
+	if tx.over {
+		return errOver
+	}
+	path := tx.r.ContextPath(name)
+	data, _, err := tx.t.Read(path)
+	if err != nil {
+		return err
+	}
+	out := slices.Clone(data)
+	if len(out) > 0 && out[len(out)-1] != '\n' {
+		out = append(out, '\n')
+	}
+	for _, task := range tasks {
+		out = append(out, task.Raw...)
+		out = append(out, '\n')
+	}
+	tx.t.Write(path, out, true)
 	return nil
 }
 

@@ -40,7 +40,12 @@ type fileLook struct {
 // repository without files (the memory repository), which isn't
 // watched.
 func (m *model) look() fileLook {
-	path := m.repo.ContextPath(m.context.Name)
+	return m.lookAt(m.context.Name)
+}
+
+// lookAt looks at the named context's file.
+func (m *model) lookAt(name string) fileLook {
+	path := m.repo.ContextPath(name)
 	if path == "" {
 		return fileLook{}
 	}

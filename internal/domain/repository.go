@@ -100,6 +100,18 @@ type LineSource interface {
 	ContextLines(name string) ([]string, error)
 }
 
+// Appender is a Repository that can add tasks to the end of a context
+// without loading it: the done file and the archive, which keep their
+// tasks flat and grow with every task completed or deleted, so that
+// completing a task doesn't parse the whole done file while a
+// transaction holds the store. Append adds a line per task, each task's
+// Raw, after the context's lines as the store holds them. The file
+// repository's transactions are one; Complete, Delete and Move load,
+// add to and save the context through any other.
+type Appender interface {
+	Append(name string, tasks []*Task) error
+}
+
 // SameFiler is a Repository that can tell whether two contexts are kept
 // in one file, which comparing their names (ContextFileName) can't: on a
 // case-insensitive file system, macOS's and Windows' default, todo.txt

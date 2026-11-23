@@ -463,11 +463,17 @@ storage's own tests: `writing` before each temporary file is written
 its one save point runs through it: every persistent `Context` method
 calls `transact`, which runs the method's body as a transaction of the
 context's repository on the context as the store holds it then. The
-context's tasks become the file's (its own task objects when they're
-the same lines, so a task the caller holds sees the change, as the
-CLI's `Under:` line needs); its repository is the transaction's while
-the body runs, so the done file, the archive or a move's target the
-body loads and saves are part of it. The body saves the file gaining
+context's tasks become the file's, its own task objects for the lines
+it still holds, so a task the caller holds sees the change; its
+repository is the transaction's while the body runs, so the done file,
+the archive or a move's target the body loads and saves are part of
+it. The lock is held while the body runs, so it parses no more than it
+must: the context's lines come unparsed (`LineSource`) and are compared
+with those it holds, and only the lines it doesn't hold are parsed
+(`reread`), so a command's context isn't parsed a second time; and the
+done file and the archive are appended to (`domain.Appender`, which a
+`fileTx` is: the lines go after the bytes read), never parsed, however
+many tasks they hold. The body saves the file gaining
 tasks before the one losing them, and the storage writes the gaining
 file first whatever the order of the saves, so a failure part-way
 leaves a task in both, never in neither.
@@ -613,7 +619,9 @@ a line runs).
   its size or modification time changed, since the last look
   (`model.seen`), reloads the list (`reloadShown`) and shows it, the
   selection on the same task by its text. A reload that finds the
-  same lines changes nothing.
+  same lines changes nothing. After an action, `refresh` looks at the
+  file before reading it, so the TUI's own write isn't taken for a
+  change on the next tick.
 - **The task list** is a `bubbles/list` model (`tasklist.go`). Each
   item is a `taskItem`: a task and its index in the context. Actions
   take that index from `selectedTask()`, never the row on screen,

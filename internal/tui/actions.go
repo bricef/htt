@@ -145,13 +145,20 @@ func quitUnless(err error) tea.Cmd {
 
 // refresh reloads the current context from the repo and assigns it to m.
 // Used after every mutating action so the rendered view reflects what's
-// on disk.
+// on disk. The file is looked at first (watch.go), so the next tick
+// doesn't take the action's own write for a change to reload, and a
+// write landing between the look and the read is seen at the next one.
 func refresh(m *model) error {
-	ctx, err := m.repo.CurrentContext()
+	name, err := m.repo.CurrentContextName()
 	if err != nil {
 		return fmt.Errorf("reload current context: %w", err)
 	}
-	m.context = ctx
+	seen := m.lookAt(name)
+	ctx, err := m.repo.Context(name)
+	if err != nil {
+		return fmt.Errorf("reload current context: %w", err)
+	}
+	m.context, m.seen = ctx, seen
 	return nil
 }
 

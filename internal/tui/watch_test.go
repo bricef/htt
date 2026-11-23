@@ -129,6 +129,43 @@ func TestWatch_LooksEachSecond(t *testing.T) {
 	}
 }
 
+// loadCounting counts the contexts loaded through it.
+type loadCounting struct {
+	domain.Repository
+	loads int
+}
+
+func (r *loadCounting) Context(name string) (*domain.Context, error) {
+	r.loads++
+	return r.Repository.Context(name)
+}
+
+func (r *loadCounting) CurrentContext() (*domain.Context, error) {
+	r.loads++
+	return r.Repository.CurrentContext()
+}
+
+// The TUI's own write isn't a change to reload for: after an action,
+// the next look finds the file as the action left it, and reads nothing.
+// It used to read and parse the file again on the next tick, after
+// every action.
+func TestWatch_TheTUIsOwnWriteIsntReloaded(t *testing.T) {
+	for _, key := range []string{"+", "x", "d"} {
+		t.Run(key, func(t *testing.T) {
+			m := fileTreeModel(t, "one", "two", "three")
+			counting := &loadCounting{Repository: m.repo}
+			m.repo = counting
+			m = selectRow(t, m, 1)
+			m = keys(t, m, runes(key)...)
+			counting.loads = 0
+			m = look(t, m)
+			if counting.loads > 0 {
+				t.Errorf("the look after %s loaded the list %d times, want none", key, counting.loads)
+			}
+		})
+	}
+}
+
 // busy is a repository another htt holds: every change gives ErrBusy.
 type busy struct{ *storage.MemoryRepository }
 

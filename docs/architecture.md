@@ -87,17 +87,22 @@ construct `Context`s via struct literals.
 Persistent methods that go through the repo:
 
 - `AddTask(*Task) error`
-- `Delete(strID string) (*Task, error)`
+- `Delete(strID string) ([]*Task, error)` (the task and its subtree)
 - `Replace(strID string, replacement *Task) (snapshot *Task, error)`
-- `Move(strID, toName string) (*Task, error)`
-- `Complete(strID string) (*Task, error)`
+- `Move(strID, toName string) ([]*Task, error)` (the task and its subtree)
+- `Complete(strID string, subtasks Subtasks) ([]*Task, error)`
 - `SetPriority(strID, priority string) (snapshot, mutated *Task, error)`
 - `IncreasePriority(strID string) (snapshot, mutated *Task, error)`
 - `DecreasePriority(strID string) (snapshot, mutated *Task, error)`
+- `AddSubtask(parentID string, task *Task) error`
+- `Nest(strID, parentID string) (task, parent *Task, error)`
+- `Unnest(strID string) (*Task, error)`
+- `NestUnderPrevious(strID string) (*Task, error)`, `UnnestOneLevel(strID string) (*Task, error)` (the TUI's Tab and Shift-Tab)
 
 `Move` and `Complete` save destination-first so a partial-save failure
 leaves the task in both places (recoverable) rather than neither
-(silent data loss).
+(silent data loss). Every one of them saves through `Context.save`,
+which arranges the tasks first (see [Subtasks](#subtasks)).
 
 ### `Task`
 
@@ -169,6 +174,77 @@ as messages naming the word: a date-shaped word that is impossible
 by `FileRepository` and `FileTimelogRepository` as they read or save a
 task or entry, is its line in the file (they differ once the file has
 a blank line), for messages that point into the file.
+
+### Subtasks
+
+`docs/design/subtasks.md` is what subtasks are; this is how they're
+built. A task with subtasks carries `id:N`, each subtask `p:N`, as
+topydo writes them. `Task.ID` is a task's first `id:` and
+`Task.ParentIDs` its `p:` values; ids are text, matched exactly, as
+topydo matches them.
+
+`NewTree(tasks, doneIDs)` (`tree.go`) reads a context's tasks as a
+tree of `Node`s: a task's parent is the one task holding the id its
+first `p:` names. A parent's subtasks are in priority order (`(A)` to
+`(Z)`, then none; stable), top-level tasks in the order they came.
+The broken links the design lists are `LinkProblem`s (a task index and
+a message), each affected task at the top level: a `p:` naming no task
+(nor a done id), every task of a loop, an id on several tasks (the
+problem is on each holder; the tasks naming it go to the top level),
+and several `p:` (the task stays under its first). A `p:` naming one of
+`doneIDs` is a done parent: the task is at the top level, marked
+(`Node.DoneParent`), with no problem. `Context.Tree` supplies the ids
+of the context's tasks in the done file (those whose `context:` names
+it, as `Complete` writes them), reading `done.txt` only when a link
+doesn't resolve in the file (`Tree.Unresolved`), once until the
+context is next saved, and, from a repository that is a `LineSource`
+(both of storage's: `ContextLines` hands over a context's lines
+unparsed), parsing only the lines with an `id:` and the context's
+`context:` in them: parsing a large done file whole took seconds. `NextID` is
+topydo's `find_next_id`: the smallest whole number no `id:` or `p:` in
+the file uses.
+
+The done file and the archive collect tasks from every context, so
+their ids aren't one file's: `Context.IsTree` is false for them, and
+they stay flat, in the order written.
+
+**Order.** `Context.Arrange` puts the tasks in tree order (a
+depth-first walk, `Tree.Order`) and numbers them in it (`Task.Line`);
+it only moves pointers, never rewrites a line. It runs on every write
+(`Context.save`, which every persistent method saves through) and on
+every load (`FileRepository.Context` and `MemoryRepository.Context`
+call it), so a task's number is its place in the tree even in a file
+another tool left out of order, and the tree reads top to bottom in
+number order. `FileLine` stays the line in the file, for warnings. A
+priority change still sorts the context by priority (`Sort`, now
+stable) before the write, as in 1.0, so top-level tasks sort as they
+did; arranging then puts each subtask among its siblings.
+
+**Operations** (`subtasks.go`) each refuse, changing nothing, with an
+error the CLI and TUI word: `ErrNotATree` (done file, archive),
+`ErrLoop` (checked by following the tags, so two tasks already in a
+loop can't close it again), `ErrSharedID` (a parent whose id another
+task holds: a `p:` naming it couldn't resolve), `ErrTopLevel`,
+`ErrNothingAbove`, `ErrOpenSubtasks`. A parent gets its id on its
+first subtask (`idFor`). Where a task lands is the list's order, then
+arranging: `AddSubtask` appends (so the new task lands after its
+parent's last descendant, or at its priority's place); `Nest` moves the
+subtree to just after the new parent's subtree (last among its
+priority). The others needn't move anything, the list being in tree
+order: under `NestUnderPrevious` the task already follows the subtree
+of the task above it, and a task that `Unnest` or `UnnestOneLevel`
+takes out of a subtree already sits right after it, where arranging,
+which keeps the order of the top level and of siblings of a priority,
+leaves it.
+`Move` takes the subtree, and into a context file `fitInto` removes
+the moved task's `p:` and renumbers the subtree's ids the target
+already uses (as an `id:` or a `p:`), with their `p:` links. `Delete`
+archives the subtree. `Complete` takes a `Subtasks` choice:
+`SubtasksAsk` (the zero value) refuses a task with open tasks below it,
+`SubtasksLeave` completes it alone, `SubtasksComplete` with every open
+task below it (`OpenSubtasks`). `SubtasksQuestion` is the question the
+CLI and the TUI ask, and `SubtaskLine` the line `AddSubtask` would
+save, for the TUI's preview.
 
 ### `Timelog`
 
@@ -291,7 +367,9 @@ Two implementations of each in `storage`:
   returned pointer can't leak back into stored state. This matches the
   file impl's serialize-then-reparse semantics.
 - `FileRepository` / `FileTimelogRepository` — todo.txt-format files
-  on disk. The on-disk layout is byte-for-byte compatible with the
+  on disk. Both task repositories arrange a context as they load it
+  (`Context.Arrange`), so its tasks come in tree order, and both are
+  `domain.LineSource`s (`ContextLines`: a context's lines, unparsed). The on-disk layout is byte-for-byte compatible with the
   pre-refactor format. Context names are sanitized
   (`utils.StringToFilename`) at the path boundary so a name like
   `../escape` can't write outside `dataDir`. Save rotates the existing
@@ -357,6 +435,22 @@ was given is read from the flags' own values (`--since`'s through
 `givenString`), never pflag's `Changed`, which stays set between the
 REPL's commands; `resetReplFlags` resets them.
 
+The same wrapper warns about subtasks' broken links
+(`domain.LinkProblem`, from `Context.Tree`), in the same form and with
+the same record, each task's after its dates. `printContext`
+(`show.go`) prints a context for `htt todo`, `todo show`, `todo
+status`, `htt status` and the REPL: the tree, two spaces a level after
+the number, `(parent done)` after a done parent; `--flat`, sorted and
+filtered views and `search` print the plain list.
+
+`todo do` (`complete.go`) asks before completing a task with open
+subtasks: `onTerminal` (stdin and stdout both terminals, the REPL's
+check too) or it fails naming `--leave-subtasks` and
+`--with-subtasks`. The question runs through `runOnTerminal`, so in
+the REPL it takes the terminal from readline as the TUI does, and
+`readAnswer` reads one line a byte at a time, taking nothing after
+it; only `x` and `A`, exactly, answer.
+
 Commands that write a task the user typed (`todo add`, `add-to`,
 `replace`, `edit`, and `log add` for a time-log entry) warn about it
 once it's saved, through `warnTypedTask` / `warnTypedEntry`, rather
@@ -411,10 +505,29 @@ a line runs).
   results. Search is `searchFilter`: words that `domain.ParseFilter`
   accepts are filters, the rest fuzzy text, all ANDed, file order
   kept.
+- **The tree.** `showTasks` loads the items from the context's tree
+  (`Context.Tree`), in its order, leaving out the subtrees of folded
+  tasks (`model.folded`, by context and id, for the session); each
+  `taskItem` carries its depth, how many tasks its fold hides and
+  whether its parent is done. While a search is typed or applied every
+  task is an item, folded or not, and rows are drawn flat;
+  `updateList` reloads the items when a search starts or ends (only
+  when something is folded). Space folds (`ToggleFold`), `s` opens
+  the input for a subtask (`inputSubtask`, previewed with
+  `SubtaskLine`), Tab and Shift-Tab call `NestUnderPrevious` and
+  `UnnestOneLevel`, and the cursor follows the task moved
+  (`arranged`, unfolding what's above it). `x` on a task with open
+  subtasks sets `model.asking` and puts `SubtasksQuestion` on the
+  status line; `update` hands the next key to `answer` before
+  anything else. Link problems join date warnings on the status line
+  (`noteDateWarnings`).
 - **Task rows.** `taskDelegate` draws each row through `styles.line`,
   which colours the line word by word from `domain.Tokens`: the same
   parse `NewTask` makes, walked for each word's kind and byte offsets,
-  so a colour always matches what htt understood. The search's match
+  so a colour always matches what htt understood. `id:` and `p:` are
+  drawn muted (`styles.muted`), as are a row's notes, `(N folded)` and
+  `(parent done)`, after the line; a subtask is indented two spaces a
+  level after the number. The search's match
   positions (`list.MatchesForItem`) are byte offsets too, from
   `sahilm/fuzzy`, and are underlined. The selected row keeps one
   style, and rows are cut to the list's width with `ansi.Truncate`.
@@ -653,5 +766,8 @@ Worth reading if you're touching the relevant area:
   and why the GUI and the report take their figures from one place.
 - `2026-11-02-tui-log-file.md` — why the TUI has its own logger and
   how actions report errors.
+- `2026-11-23-subtasks.md` — how subtasks were built on
+  `docs/design/subtasks.md`: where the tree lives, how the file order
+  hooks into reads and writes, the prompt, the TUI's keys.
 - `2026-11-02-tui-editor-exec.md` — how the editor gets the terminal,
   and why editor failures never close the TUI.

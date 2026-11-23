@@ -1,6 +1,6 @@
 # Subtasks
 
-**Status:** Agreed design, 2026-11-23 (Brice), with the TUI's one-level nest and unnest and priority order among subtasks added the same day. Not yet built.
+**Status:** Agreed design, 2026-11-23 (Brice), with the TUI's one-level nest and unnest and priority order among subtasks added the same day. Built 2026-11-23, on the `feat/subtasks` branch.
 
 A task can hold other tasks: its subtasks, which can hold their own.
 This document says how htt records them in todo.txt files and how they

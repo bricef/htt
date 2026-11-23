@@ -362,15 +362,20 @@ const replHelpText = `htt REPL — todo-mode shell
 
 Common commands (run implicitly as todo <command>):
   add <entry...>            add a task to the current context
-  delete <index>            archive the task at <index>
-  do <index>                complete the task
+  add --under <index> ...   add a subtask of the task at <index>
+  delete <index>            archive the task at <index>, with its subtasks
+  do <index>                complete the task (asks first if it has open
+                            subtasks; --leave-subtasks / --with-subtasks)
+  nest <index> <parent>     put the task, with its subtasks, under <parent>
+  unnest <index>            make the task a top-level task
   + <index>                 raise priority
   - <index>                 lower priority
   priority <index> <A|B|C>  set priority explicitly
-  move <index> <context>    move task to another context
+  move <index> <context>    move task, with its subtasks, to another context
   replace <index> <entry>   replace the task
   context [name]            show or switch context
-  show                      re-render the view (or hit Enter on empty line)
+  show                      re-render the view (or hit Enter on empty line);
+                            --flat lists it without indenting subtasks
   search <regex>            filter the current view
   random                    pick a task at random
   edit <index>              open the task in your editor

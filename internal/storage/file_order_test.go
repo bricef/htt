@@ -183,7 +183,7 @@ func TestFileRepository_AFileInOrderIsWrittenBackUnchanged(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Completing the last task: everything else stays as it was.
-	if _, err := ctx.Complete(strconv.Itoa(len(lines) - 1)); err != nil {
+	if _, err := ctx.Complete(strconv.Itoa(len(lines)-1), domain.SubtasksAsk); err != nil {
 		t.Fatal(err)
 	}
 	after, _ := os.ReadFile(repo.ContextPath("work"))

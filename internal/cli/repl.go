@@ -314,8 +314,8 @@ func (r replReader) Close() error {
 //
 // New stateful flags added elsewhere need to be added here.
 func resetReplFlags() {
-	addDue = ""
-	addToDue = ""
+	addDue, addUnder = "", ""
+	addToDue, addToUnder = "", ""
 	logAt = atFlag{}
 	reportSince, reportSinceGiven = "7d", false
 	reportWeek, reportMonth = false, false

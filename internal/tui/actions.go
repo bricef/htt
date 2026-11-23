@@ -116,7 +116,11 @@ var Do = mkAction("do", func(m model) (tea.Model, tea.Cmd, error) {
 	if !ok {
 		return m, nil, errNoTaskSelected
 	}
-	if _, err := m.context.Complete(strID(it.index)); err != nil {
+	if _, err := m.context.Complete(strID(it.index), domain.SubtasksAsk); err != nil {
+		if errors.Is(err, domain.ErrOpenSubtasks) {
+			m.status = fmt.Sprintf("Task %d has open subtasks.", it.index)
+			return m, nil, fmt.Errorf("%w: %w", errUnavailable, err)
+		}
 		return m, tea.Quit, fmt.Errorf("complete task %d: %w", it.index, err)
 	}
 	if err := refresh(&m); err != nil {

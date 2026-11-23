@@ -151,10 +151,11 @@ func TestContext_Delete_RemovesFromSourceAndArchives(t *testing.T) {
 	_ = ctx.AddTask(mustTask(t, "keep"))
 	_ = ctx.AddTask(mustTask(t, "delete me"))
 
-	task, err := ctx.Delete("1")
+	tasks, err := ctx.Delete("1")
 	if err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
+	task := tasks[0]
 	if task.Entry() != "delete me" {
 		t.Errorf("deleted task = %q, want 'delete me'", task.Entry())
 	}
@@ -192,7 +193,7 @@ func TestContext_Delete_PreservesCompletionContextAnnotation(t *testing.T) {
 	repo := newRepo(t)
 	work := loadCtx(t, repo, "work")
 	_ = work.AddTask(mustTask(t, "the thing"))
-	if _, err := work.Complete("0"); err != nil {
+	if _, err := work.Complete("0", domain.SubtasksAsk); err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
 
@@ -302,10 +303,11 @@ func TestContext_Move_TransfersBetweenContexts(t *testing.T) {
 	ctx := currentCtx(t, repo)
 	_ = ctx.AddTask(mustTask(t, "moveme"))
 
-	task, err := ctx.Move("0", "work")
+	tasks, err := ctx.Move("0", "work")
 	if err != nil {
 		t.Fatalf("Move: %v", err)
 	}
+	task := tasks[0]
 	if task.Entry() != "moveme" {
 		t.Errorf("moved task = %q, want 'moveme'", task.Entry())
 	}
@@ -327,10 +329,11 @@ func TestContext_Complete_MovesToDoneAndAnnotates(t *testing.T) {
 	ctx := currentCtx(t, repo)
 	_ = ctx.AddTask(mustTask(t, "make tea"))
 
-	task, err := ctx.Complete("0")
+	tasks, err := ctx.Complete("0", domain.SubtasksAsk)
 	if err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
+	task := tasks[0]
 	if !task.Completed {
 		t.Errorf("task should be marked Completed")
 	}
@@ -354,7 +357,7 @@ func TestContext_Complete_MovesToDoneAndAnnotates(t *testing.T) {
 func TestContext_Complete_OutOfRangeErrors(t *testing.T) {
 	repo := newRepo(t)
 	ctx := currentCtx(t, repo)
-	if _, err := ctx.Complete("99"); err == nil {
+	if _, err := ctx.Complete("99", domain.SubtasksAsk); err == nil {
 		t.Errorf("expected out-of-range error")
 	}
 }
@@ -476,7 +479,7 @@ func TestContext_Complete_FromDoneContextRejected(t *testing.T) {
 	done := loadCtx(t, repo, domain.DoneContextName)
 	_ = done.AddTask(mustTask(t, "already done"))
 
-	if _, err := done.Complete("0"); err == nil {
+	if _, err := done.Complete("0", domain.SubtasksAsk); err == nil {
 		t.Errorf("Complete from done context should error")
 	}
 
@@ -579,7 +582,7 @@ func TestContext_Complete_SavesDoneFirst(t *testing.T) {
 	repo.seed("todo", mustTask(t, "finishme"))
 
 	ctx, _ := repo.Context("todo")
-	if _, err := ctx.Complete("0"); err != nil {
+	if _, err := ctx.Complete("0", domain.SubtasksAsk); err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
 

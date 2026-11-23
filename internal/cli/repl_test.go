@@ -289,6 +289,7 @@ func TestResetReplFlags_ClearsBleedingState(t *testing.T) {
 	// poisoning the next dispatch.
 	addDue = "Friday"
 	addToDue = "tomorrow"
+	addUnder, addToUnder = "3", "4"
 	logAt = atFlag{value: "9:30", given: true}
 	reportSince = "yesterday"
 	showSortKey = "-due"
@@ -305,6 +306,9 @@ func TestResetReplFlags_ClearsBleedingState(t *testing.T) {
 	}
 	if addToDue != "" {
 		t.Errorf("addToDue = %q, want empty", addToDue)
+	}
+	if addUnder != "" || addToUnder != "" {
+		t.Errorf("addUnder = %q, addToUnder = %q, want empty", addUnder, addToUnder)
 	}
 	if logAt != (atFlag{}) {
 		t.Errorf("logAt = %+v, want it not given", logAt)

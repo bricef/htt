@@ -109,12 +109,12 @@ func TestContext_NumbersFollowTheTree(t *testing.T) {
 	}(), "plan id:1", "book p:1 id:2", "call p:2", "other")
 
 	// 2 is the task shown as 2: call.
-	done, err := ctx.Complete("2")
+	done, err := ctx.Complete("2", domain.SubtasksAsk)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(done.Raw, "call p:2") {
-		t.Errorf("completed %q, want call", done.Raw)
+	if !strings.Contains(done[0].Raw, "call p:2") {
+		t.Errorf("completed %q, want call", done[0].Raw)
 	}
 	wantLines(t, "left", rawsOf(t, repo, "todo"), "plan id:1", "book p:1 id:2", "other")
 }

@@ -27,9 +27,11 @@ func (c *Context) AddTask(task *Task) error {
 	return c.save()
 }
 
-// Delete moves the indexed task to the archive context (annotating
-// it with archived-from:<source> and deleted-on:<date>) and persists
-// both. Returns the moved task so callers can confirm what went.
+// Delete moves the indexed task, with every task below it, to the
+// archive context (annotating each with archived-from:<source> and
+// deleted-on:<date>) and persists both. Returns the tasks moved, the
+// indexed one first, then its subtree in tree order, so callers can
+// confirm what went.
 //
 // Deleting from the archive itself is true removal — the task is
 // dropped from the in-memory slice and the archive is re-saved.
@@ -42,38 +44,41 @@ func (c *Context) AddTask(task *Task) error {
 // first so a partial failure (ENOSPC, EROFS, quota) errs toward
 // duplication over loss — the user can rerun the delete or remove
 // the duplicate, but a lost task is gone.
-func (c *Context) Delete(strID string) (*Task, error) {
-	target, err := c.GetTaskByStrId(strID)
+func (c *Context) Delete(strID string) ([]*Task, error) {
+	tasks, err := c.below(strID)
 	if err != nil {
 		return nil, err
 	}
 	if c.Name == ArchiveContextName {
-		if err := c.remove(target); err != nil {
+		if err := c.remove(tasks[0]); err != nil {
 			return nil, err
 		}
 		if err := c.save(); err != nil {
 			return nil, err
 		}
-		return target, nil
+		return tasks, nil
 	}
 	archive, err := c.repo.Context(ArchiveContextName)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := target.markDeleted(c, time.Now()); err != nil {
-		return nil, fmt.Errorf("mark task deleted: %w", err)
+	now := time.Now()
+	for _, t := range tasks {
+		if _, err := t.markDeleted(c, now); err != nil {
+			return nil, fmt.Errorf("mark task deleted: %w", err)
+		}
+		if err := c.remove(t); err != nil {
+			return nil, err
+		}
+		archive.add(t)
 	}
-	if err := c.remove(target); err != nil {
-		return nil, err
-	}
-	archive.add(target)
 	if err := archive.save(); err != nil {
 		return nil, err
 	}
 	if err := c.save(); err != nil {
 		return nil, err
 	}
-	return target, nil
+	return tasks, nil
 }
 
 // Replace swaps the indexed task for replacement, persists, and returns
@@ -97,8 +102,14 @@ func (c *Context) Replace(strID string, replacement *Task) (*Task, error) {
 	return snapshot, nil
 }
 
-// Move transfers the indexed task to another context (loaded via the
-// shared repo) and persists both. Returns the moved task.
+// Move transfers the indexed task, with every task below it, to
+// another context (loaded via the shared repo) and persists both.
+// Returns the tasks moved, the indexed one first, then its subtree in
+// tree order. Into a context file, the subtree fits in (fitInto): the
+// indexed task loses its p:, since a parent is always in its subtasks'
+// file, and ids the target already uses are renumbered, keeping the
+// subtree's links. Into the done file or the archive, the lines go as
+// they are.
 //
 // Save order is destination-first: a partial-save failure (ENOSPC,
 // EROFS, EACCES, quota) on the source then leaves the task in *both*
@@ -107,8 +118,8 @@ func (c *Context) Replace(strID string, replacement *Task) (*Task, error) {
 //
 // Same-context moves are rejected up front so the load-twice path
 // can't duplicate the task into itself.
-func (c *Context) Move(strID, toName string) (*Task, error) {
-	target, err := c.GetTaskByStrId(strID)
+func (c *Context) Move(strID, toName string) ([]*Task, error) {
+	tasks, err := c.below(strID)
 	if err != nil {
 		return nil, err
 	}
@@ -119,28 +130,38 @@ func (c *Context) Move(strID, toName string) (*Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := c.remove(target); err != nil {
-		return nil, err
+	if to.IsTree() {
+		fitInto(tasks, to.Tasks)
 	}
-	to.add(target)
+	for _, t := range tasks {
+		if err := c.remove(t); err != nil {
+			return nil, err
+		}
+		to.add(t)
+	}
 	if err := to.save(); err != nil {
 		return nil, err
 	}
 	if err := c.save(); err != nil {
 		return nil, err
 	}
-	return target, nil
+	return tasks, nil
 }
 
 // Complete marks the indexed task complete (annotating it with the
 // originating context name), moves it into the "done" context, and
-// persists both.
+// persists both. A task with open tasks below it, at any depth, takes
+// a choice (Subtasks): SubtasksAsk refuses with ErrOpenSubtasks,
+// changing nothing; SubtasksLeave completes the task alone, its
+// subtasks staying open and naming it; SubtasksComplete completes
+// every open task below it too. Returns the tasks completed, the
+// indexed one first, then the rest in tree order.
 //
 // Same save-order reasoning as Move: done is saved first so a partial
 // failure errs toward duplication over loss. Completing a task that is
 // already in the done context is rejected since the task is already
 // there and the "originating context" annotation would be misleading.
-func (c *Context) Complete(strID string) (*Task, error) {
+func (c *Context) Complete(strID string, subtasks Subtasks) ([]*Task, error) {
 	target, err := c.GetTaskByStrId(strID)
 	if err != nil {
 		return nil, err
@@ -148,24 +169,39 @@ func (c *Context) Complete(strID string) (*Task, error) {
 	if c.Name == DoneContextName {
 		return nil, fmt.Errorf("cannot complete a task already in %q", DoneContextName)
 	}
+	open, err := c.OpenSubtasks(strID)
+	if err != nil {
+		return nil, err
+	}
+	tasks := []*Task{target}
+	switch {
+	case len(open) == 0 || subtasks == SubtasksLeave:
+	case subtasks == SubtasksComplete:
+		tasks = append(tasks, open...)
+	default:
+		return nil, fmt.Errorf("task %s: %w (%d)", strID, ErrOpenSubtasks, len(open))
+	}
 	done, err := c.repo.Context(DoneContextName)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := target.markCompleted(c, time.Now()); err != nil {
-		return nil, fmt.Errorf("mark task complete: %w", err)
+	now := time.Now()
+	for _, t := range tasks {
+		if _, err := t.markCompleted(c, now); err != nil {
+			return nil, fmt.Errorf("mark task complete: %w", err)
+		}
+		if err := c.remove(t); err != nil {
+			return nil, err
+		}
+		done.add(t)
 	}
-	if err := c.remove(target); err != nil {
-		return nil, err
-	}
-	done.add(target)
 	if err := done.save(); err != nil {
 		return nil, err
 	}
 	if err := c.save(); err != nil {
 		return nil, err
 	}
-	return target, nil
+	return tasks, nil
 }
 
 // SetPriority assigns priority to the indexed task and persists. Returns

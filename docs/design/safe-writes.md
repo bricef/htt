@@ -1,6 +1,7 @@
 # Safe writes
 
-**Status:** Proposed, 2026-11-23. Not yet agreed or built.
+**Status:** Agreed, 2026-11-23 (Brice), with gofrs/flock for the lock.
+Not yet built.
 
 htt's files are plain text, and more than one thing writes them: two htt
 commands at once (a script, or the CLI beside the TUI), the TUI over
@@ -106,9 +107,9 @@ check is for.
 
 - **The mechanism** (transaction, lock, check, atomic replacement) is
   one file in the storage layer. Go's standard library has no portable
-  file lock: the lock calls themselves are either a small, maintained
-  library (gofrs/flock, which keeps the mechanism to that one file) or
-  two tiny per-system files beside it.
+  file lock, so the lock itself comes from gofrs/flock, a small,
+  maintained library over `flock` on Unix and `LockFileEx` on Windows,
+  which keeps the mechanism to that one file.
 - **The domain** already sends every persistent change through one
   point (a context's save, a time log's save). That point becomes "run
   this operation as a transaction", so the domain's operations (add,

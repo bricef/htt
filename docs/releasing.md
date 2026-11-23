@@ -108,10 +108,23 @@ Windows on amd64 and arm64:
   `README.md` and `LICENSE`, a zip as Go's own Windows downloads are.
   Releases up to v0.4.0 have none: they don't build for Windows
   (goterm v1.0.3 used `unix.EOPNOTSUPP` on every platform);
-- in every archive from v0.6.0, `third-party/`: the licences, notices
-  and sources README of the code and fonts `htt gui` embeds (ECharts
-  with ZRender and d3, IBM Plex), copied from
-  `internal/gui/web/vendor` with their paths, as their licences ask;
+- in every archive, `third-party/`: the licences of the third-party
+  code in `htt`, as those licences ask:
+  - in `third-party/go/`, whatever the version, those of Go and of the
+    Go modules linked into that archive's binary, the ones `go version
+    -m` lists for it (the list differs by platform): Go's `LICENSE`,
+    from the Go that built it, as `std/LICENSE`, and every `LICENSE*`,
+    `LICENCE*`, `COPYING*` and `NOTICE*` file at the root of each
+    module, from the module cache, under the module's path; with an
+    index, `third-party/go/README.md`, of module, version and files. A
+    module with none fails the build, unless dist.sh names the file
+    that states its licence instead: go-localereader v0.0.1, linked on
+    Windows, says MIT in its README. dist.sh checks each archive's
+    `third-party/go/` against its binary, and `just release` checks
+    this machine's archive the same way;
+  - from v0.6.0, the licences, notices and sources README of the code
+    and fonts `htt gui` embeds (ECharts with ZRender and d3, IBM
+    Plex), copied from `internal/gui/web/vendor` with their paths;
 - `htt_vX.Y.Z_SHA256SUMS`, the SHA-256 of each archive;
 
 then makes a signed build-provenance attestation for the archives and

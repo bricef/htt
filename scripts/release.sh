@@ -124,6 +124,8 @@ check_binaries() { # VERSION: every expected asset is attached, and this machine
 	got=$(version_of "$tmp/htt")
 	[[ $got == "htt version $version" ]] || fail "the downloaded htt says '$got'"
 	echo "the downloaded htt says: $got"
+	# Go's licence and those of every module that htt links (go version -m).
+	"$here/dist.sh" --check-go-licences "$tmp/$archive"
 	rm -rf "$tmp"
 }
 

@@ -630,7 +630,13 @@ a line runs).
   (`look`) and, when it's another file (an atomic replacement), or
   its size or modification time changed, since the last look
   (`model.seen`), reloads the list (`reloadShown`) and shows it, the
-  selection on the same task by its text. A reload that finds the
+  selection on the same task by its text. What holds a task by its
+  number across the reload follows it by its text too: the task input
+  open for an edit or a subtask (`followInput`: its prompt, preview and
+  check name the task's number now; a task gone leaves the input open
+  with what was typed, saying it can't be saved, and Enter closes it)
+  and the question about open subtasks (`followQuestion`). A search
+  is applied again to the list reloaded. A reload that finds the
   same lines changes nothing. After an action, `refresh` looks at the
   file before reading it, so the TUI's own write isn't taken for a
   change on the next tick.

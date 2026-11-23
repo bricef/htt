@@ -221,25 +221,59 @@ func (k inputKeys) FullHelp() [][]key.Binding { return [][]key.Binding{k.ShortHe
 // task being edited.
 func (m *model) openInput(mode inputMode, value string, editIndex int) {
 	m.input = mode
-	m.editIndex = editIndex
+	m.editIndex, m.editGone = editIndex, false
 	m.editRaw = ""
 	if editIndex >= 0 {
 		m.editRaw = m.context.Tasks[editIndex].Raw
 	}
-	m.textInput.Prompt = "New task > "
+	m.setPrompt()
 	m.textInput.Placeholder = "(A) do a thing for +project @place due:friday"
-	switch mode {
-	case inputEdit:
-		m.textInput.Prompt = fmt.Sprintf("Edit task %d > ", editIndex)
+	if mode == inputEdit {
 		m.textInput.Placeholder = ""
-	case inputSubtask:
-		m.textInput.Prompt = fmt.Sprintf("New subtask of %d > ", editIndex)
 	}
 	m.tags = knownTags(m.repo)
 	m.textInput.SetValue(value)
 	m.textInput.CursorEnd()
 	m.textInput.Focus()
 	m.refreshSuggestions()
+}
+
+// setPrompt gives the task input its prompt, naming the task it's for
+// by its number now.
+func (m *model) setPrompt() {
+	m.textInput.Prompt = "New task > "
+	switch m.input {
+	case inputEdit:
+		m.textInput.Prompt = fmt.Sprintf("Edit task %d > ", m.editIndex)
+	case inputSubtask:
+		m.textInput.Prompt = fmt.Sprintf("New subtask of %d > ", m.editIndex)
+	}
+}
+
+// followInput keeps the task input, open for a task (an edit, a new
+// subtask), on that task when the list is reloaded (reloadShown): it
+// finds it by its text among tasks, the list as reloaded (shownAt), so
+// the prompt, the preview and the check before saving are about it,
+// under its number now. When it isn't there, changed or removed
+// elsewhere, the status line says so, and the input stays open with
+// what was typed (the next keys still go to it), its preview saying it
+// can't be saved; Enter then saves nothing and closes it, as for the
+// other actions (onShown). A later reload that finds it again lets it
+// be saved.
+func (m *model) followInput(tasks []*domain.Task) {
+	if m.input != inputEdit && m.input != inputSubtask {
+		return
+	}
+	at := shownAt(tasks, m.editIndex, m.editRaw)
+	if at < 0 {
+		if !m.editGone {
+			m.status = changedElsewhere(m.editIndex, "what you type can't be saved (esc cancels)")
+		}
+		m.editGone = true
+		return
+	}
+	m.editIndex, m.editGone = at, false
+	m.setPrompt()
 }
 
 // closeInput closes the task input and forgets what was in it.
@@ -275,7 +309,10 @@ func (m model) inputView() string {
 		lines[0] = ansi.Truncate(lines[0], m.width, "")
 	}
 	d := readDraft(m.textInput.Value(), m.now(), m.input != inputEdit)
-	if m.input == inputSubtask && d.raw != "" && len(d.problems) == 0 {
+	switch {
+	case m.editGone:
+		d.problems = append(d.problems, fmt.Sprintf("task %d was changed or removed elsewhere", m.editIndex))
+	case m.input == inputSubtask && d.raw != "" && len(d.problems) == 0:
 		d.raw, d.problems = m.subtaskDraft(d.raw)
 	}
 	switch {

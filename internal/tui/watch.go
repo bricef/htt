@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/bricef/htt/internal/domain"
@@ -88,7 +89,11 @@ func (m model) watched() (tea.Model, tea.Cmd) {
 
 // reloadShown loads the list shown from its file and, if its lines have
 // changed, shows it, the selection on the task it was on, found by its
-// text (shownAt), or where it was when that task is gone.
+// text (shownAt), or where it was when that task is gone. What holds a
+// task by its number across the reload follows it too: the task input
+// open for a task (followInput) and the question about a task's open
+// subtasks (followQuestion). A search is applied again to the list
+// reloaded (showTasks), its rows numbered afresh.
 func (m *model) reloadShown() error {
 	ctx, err := m.repo.Context(m.context.Name)
 	if errors.Is(err, os.ErrNotExist) {
@@ -104,7 +109,25 @@ func (m *model) reloadShown() error {
 	if it, ok := m.selectedTask(); ok {
 		at = shownAt(ctx.Tasks, it.index, it.task.Raw)
 	}
+	m.followInput(ctx.Tasks)
+	m.followQuestion(ctx.Tasks)
 	m.context = ctx
 	m.showTasks(at)
 	return nil
+}
+
+// followQuestion keeps the question about a task's open subtasks, while
+// it waits for its answer, on that task when the list is reloaded: the
+// question names the task by its number now. The answer finds the task
+// by its text in any case (completeAnswered), and says so when it's
+// gone.
+func (m *model) followQuestion(tasks []*domain.Task) {
+	q := m.asking
+	if q == nil {
+		return
+	}
+	if at := shownAt(tasks, q.index, q.raw); at >= 0 && at != q.index {
+		q.index = at
+		m.status = strings.Join(domain.SubtasksQuestion(strID(at), len(q.open)), "\n")
+	}
 }

@@ -47,6 +47,7 @@ type model struct {
 	input         inputMode           // what the task input is open for
 	editIndex     int                 // inputEdit, inputSubtask: the index of the task being edited, or the parent
 	editRaw       string              // inputEdit, inputSubtask: its line when the input opened
+	editGone      bool                // inputEdit, inputSubtask: a reload found the task changed or removed (followInput)
 	tags          map[string][]string // tags to complete, by sigil; gathered when the input opens
 	textInput     textinput.Model
 	logger        *slog.Logger // diagnostics; never the terminal

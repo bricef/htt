@@ -403,7 +403,9 @@ var AddTask = mkAction("add task", func(m model) (tea.Model, tea.Cmd, error) {
 		m.closeInput()
 		return m, tea.ClearScreen, nil
 	}
-	if m.input == inputSubtask && len(d.problems) == 0 {
+	if m.input == inputSubtask && !m.editGone && len(d.problems) == 0 {
+		// The check the preview makes. A task a reload found gone is
+		// looked for again below, in the file as it is now.
 		_, d.problems = m.subtaskDraft(d.raw)
 	}
 	if len(d.problems) > 0 {

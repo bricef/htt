@@ -120,7 +120,9 @@ func (c *Context) Replace(strID string, replacement *Task) (*Task, error) {
 // Same-context moves are rejected up front so the load-twice path
 // can't duplicate the task into itself, or save the context without
 // the subtree over the file it was just written to. Names are compared
-// as files are named (ContextFileName): "my list" is my_list.
+// as files are named (ContextFileName): "my list" is my_list. Where the
+// repository can tell (SameFiler), two names kept in one file, such as
+// TODO and todo on a case-insensitive file system, are refused too.
 func (c *Context) Move(strID, toName string) ([]*Task, error) {
 	tasks, err := c.below(strID)
 	if err != nil {
@@ -131,6 +133,9 @@ func (c *Context) Move(strID, toName string) ([]*Task, error) {
 			return nil, fmt.Errorf("cannot move task to its current context %q: %q names its file", c.Name, toName)
 		}
 		return nil, fmt.Errorf("cannot move task to its current context %q", c.Name)
+	}
+	if same, ok := c.repo.(SameFiler); ok && same.SameFile(c.Name, toName) {
+		return nil, fmt.Errorf("cannot move task to its current context %q: %q is kept in the same file", c.Name, toName)
 	}
 	to, err := c.repo.Context(toName)
 	if err != nil {

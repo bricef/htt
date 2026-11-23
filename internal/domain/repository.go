@@ -76,6 +76,16 @@ type LineSource interface {
 	ContextLines(name string) ([]string, error)
 }
 
+// SameFiler is a Repository that can tell whether two contexts are kept
+// in one file, which comparing their names (ContextFileName) can't: on a
+// case-insensitive file system, macOS's and Windows' default, todo.txt
+// and TODO.txt are one file, and a symlink makes any two names one.
+// Context.Move refuses to move a task between them, which would write
+// it into the file and then save that file without it.
+type SameFiler interface {
+	SameFile(a, b string) bool
+}
+
 // ErrInvalidContextName is returned when a name fails validation (empty,
 // or sanitizes to empty).
 var ErrInvalidContextName = errors.New("invalid context name")

@@ -6,6 +6,8 @@ package domain_test
 // context_test.go (white-box, package domain).
 
 import (
+	"os"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -504,6 +506,46 @@ func TestContext_Move_SameContextUnderAnotherSpellingRejected(t *testing.T) {
 		}
 		wantLines(t, "my_list after moving to "+name, got, "Parent id:1", "Child p:1", "Other")
 	}
+}
+
+// Two context names can name one file: on a case-insensitive file
+// system (macOS's and Windows' defaults) todo.txt and TODO.txt are the
+// same file, and a symlink does the same anywhere. Moving between them
+// would write the subtree into the file and then save that file without
+// it. A symlink stands in for the case-insensitive file system here.
+func TestContext_Move_ToAnotherNameForTheSameFileRejected(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("making a symlink on Windows needs a privilege CI doesn't have")
+	}
+	dir := t.TempDir()
+	repo := storage.NewFileRepository(dir, dir)
+	ctx, err := repo.Context("todo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx.Tasks = []*domain.Task{mustTask(t, "Parent id:1"), mustTask(t, "Child p:1"), mustTask(t, "Other")}
+	if err := repo.Save(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(repo.ContextPath("todo"), repo.ContextPath("work")); err != nil {
+		t.Fatal(err)
+	}
+	ctx, err = repo.Context("todo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ctx.Move("0", "work"); err == nil {
+		t.Error("moving to work, the same file as todo: no error")
+	}
+	stored, err := repo.Context("todo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, task := range stored.Tasks {
+		got = append(got, task.Raw)
+	}
+	wantLines(t, "todo after moving to work", got, "Parent id:1", "Child p:1", "Other")
 }
 
 func TestContextFileName(t *testing.T) {

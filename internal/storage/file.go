@@ -61,6 +61,22 @@ func (r *FileRepository) ContextPath(name string) string {
 	return filepath.Join(r.dataDir, domain.ContextFileName(name)+fileExtension)
 }
 
+// SameFile reports whether contexts a and b are kept in one file
+// (domain.SameFiler): both files exist and the file system says they're
+// the same, as for TODO.txt and todo.txt on a case-insensitive one, or
+// a symlink. A context with no file yet can't be the same as another.
+func (r *FileRepository) SameFile(a, b string) bool {
+	fa, err := os.Stat(r.ContextPath(a))
+	if err != nil {
+		return false
+	}
+	fb, err := os.Stat(r.ContextPath(b))
+	if err != nil {
+		return false
+	}
+	return os.SameFile(fa, fb)
+}
+
 func (r *FileRepository) currentPointerPath() string {
 	return filepath.Join(r.pointerDir, currentContextFile)
 }

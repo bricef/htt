@@ -106,23 +106,12 @@ func sentence(err error) string {
 }
 
 // shownAt finds the task the TUI showed at index as raw among tasks,
-// the file as it is now: still at index, or, if the file moved it, the
-// one task with that line. -1 when it isn't there, or several tasks
-// have its line and none is at index.
+// the file as it is now, as the CLI's commands that wait for the user
+// find theirs (domain.FindTask): still at index, or, if the file moved
+// it, the one task with that line. -1 when it isn't there, or several
+// tasks have its line and none is at index.
 func shownAt(tasks []*domain.Task, index int, raw string) int {
-	if index >= 0 && index < len(tasks) && tasks[index].Raw == raw {
-		return index
-	}
-	at := -1
-	for i, t := range tasks {
-		if t.Raw == raw {
-			if at >= 0 {
-				return -1
-			}
-			at = i
-		}
-	}
-	return at
+	return domain.FindTask(tasks, index, raw)
 }
 
 // changedElsewhere says on the status line that task index changed

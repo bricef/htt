@@ -3,7 +3,6 @@ package tui
 import (
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/bricef/htt/internal/domain"
@@ -223,22 +222,19 @@ var cancelCompleting = mkAction("cancel completing", func(m model) (tea.Model, t
 // the ones asked about.
 func completeAnswered(q question, choice domain.Subtasks) *Action {
 	return mkAction("complete, subtasks answered", func(m model) (tea.Model, tea.Cmd, error) {
-		errOpen := fmt.Errorf("%w: task %d's open subtasks changed elsewhere", errUnavailable, q.index)
 		var done []*domain.Task
 		err := m.onShown(q.index, q.raw, changedElsewhere(q.index, "nothing was completed"), func(c *domain.Context, at int) error {
-			open, err := c.OpenSubtasks(strID(at))
+			var err error
+			done, err = c.CompleteFound(at, q.raw, q.open, choice)
+			if errors.Is(err, domain.ErrSubtasksChanged) {
+				return fmt.Errorf("%w: task %d: %w", errUnavailable, q.index, err)
+			}
 			if err != nil {
-				return fmt.Errorf("complete task %d: %w", at, err)
-			}
-			if !slices.Equal(lineOf(open), q.open) {
-				return errOpen
-			}
-			if done, err = c.Complete(strID(at), choice); err != nil {
 				return fmt.Errorf("complete task %d: %w", at, err)
 			}
 			return nil
 		})
-		if errors.Is(err, errOpen) {
+		if errors.Is(err, domain.ErrSubtasksChanged) {
 			m.status = fmt.Sprintf("Task %d's open subtasks changed elsewhere; nothing was completed.", q.index)
 		}
 		if err != nil {

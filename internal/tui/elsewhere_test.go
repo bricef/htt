@@ -151,27 +151,6 @@ func TestElsewhere_ActionsFollowTheTaskShown(t *testing.T) {
 	}
 }
 
-func TestShownAt(t *testing.T) {
-	tasks := []*domain.Task{mustTask(t, "a"), mustTask(t, "b"), mustTask(t, "b"), mustTask(t, "c")}
-	for _, tc := range []struct {
-		index int
-		raw   string
-		want  int
-	}{
-		{0, "a", 0},  // where it was
-		{2, "a", 0},  // moved: the one task with its line
-		{9, "c", 3},  // past the end of the list now
-		{1, "b", 1},  // two tasks with its line, one where it was
-		{2, "b", 2},  //
-		{0, "b", -1}, // two, neither where it was: can't say which
-		{0, "gone", -1},
-	} {
-		if got := shownAt(tasks, tc.index, tc.raw); got != tc.want {
-			t.Errorf("shownAt(%d, %q) = %d, want %d", tc.index, tc.raw, got, tc.want)
-		}
-	}
-}
-
 // A task changed or removed elsewhere is left alone: nothing changes,
 // the list shows the file as it is, and the status line says why.
 func TestElsewhere_ATaskChangedElsewhereIsLeftAlone(t *testing.T) {

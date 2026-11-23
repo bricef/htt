@@ -480,7 +480,13 @@ leaves a task in both, never in neither.
 A body may run again, so it decides from the context alone; a task
 number is read then (the design's Limits), and `AddSubtask` puts its
 task back as it was given before running again. `Context.Transact`
-runs several steps as one transaction, for the TUI. `Timelog.Append`
+runs several steps as one transaction, for the TUI. A command that
+waits for the user follows its task by the line it read
+(`follow.go`): `FindTask` finds it where it was or, moved, as the one
+task with that line; `ReplaceFound` (the CLI's `todo edit`) and
+`CompleteFound` (the answer to `todo do`'s question, in the CLI and the
+TUI, which also checks the open subtasks are the ones asked about)
+refuse with `ErrTaskChanged` or `ErrSubtasksChanged` otherwise. `Timelog.Append`
 and `AppendAt` run the same way. The CLI, the REPL and the GUI call
 the operations as before and see only `ErrBusy`, `ErrKeepsChanging`,
 or the disk's own errors.
@@ -604,7 +610,8 @@ a line runs).
   right now) at warn, any other error at error. Mutating actions run
   through `onShown`: one transaction (`domain.Context.Transact`) that
   finds the selected task in the list's file as it is, by the line the
-  TUI showed (`shownAt`), and acts on it (`c.X(...)`), so nothing older
+  TUI showed (`shownAt`, the domain's `FindTask`), and acts on it
+  (`c.X(...)`), so nothing older
   than what another htt wrote is saved, and a run again after another
   program's write finds the task again. A task changed or removed
   elsewhere is left alone (`errGone`), and the status line says so

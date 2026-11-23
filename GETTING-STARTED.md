@@ -1139,12 +1139,16 @@ checks just before writing that nothing changed a file since it read
 it, and if something did, makes its change again on the new version,
 so both are kept. A file that keeps changing under it is left alone:
 `<file> keeps changing; nothing was saved`. Two things stay as they
-are with plain files: a task number is read when the command runs, so
-if another htt or your editor added or removed a task above it since
-you last looked, `htt todo do 3` acts on whatever is task 3 then; and
-an editor saving at the very instant htt does can still overwrite
-htt's change, or htt the editor's. The TUI acts on the task it shows,
-by its text, and shows changes made elsewhere within a second.
+are with plain files: a task number is read when the command starts,
+so if another htt or your editor added or removed a task above it
+since you last looked, `htt todo do 3` acts on whatever is task 3
+then; and an editor saving at the very instant htt does can still
+overwrite htt's change, or htt the editor's. A command that waits for
+you, `htt todo edit` while your editor is open or the question `htt
+todo do` asks about open subtasks, follows its task by its text from
+then on: if the task changed or went meanwhile, nothing is saved, and
+`todo edit` says where your edit is kept. The TUI acts on the task it
+shows, by its text, and shows changes made elsewhere within a second.
 
 On Windows, `~` is your user folder, such as `C:\Users\you`: the config
 is `C:\Users\you\.config\htt\config.yaml`, and the task files are in

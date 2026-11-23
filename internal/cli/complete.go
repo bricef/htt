@@ -32,6 +32,11 @@ x completes the task alone: its subtasks stay open, still naming it
 with p:. A completes it and every open task below it, at any depth.
 Anything else, or the end of the input, changes nothing.
 
+The answer is about the task and the subtasks the question counted.
+If, while it waited, another htt moved the task (adding or removing a
+task above it), the answer finds it by its text; if the task changed
+or went, or its open subtasks changed, nothing is completed.
+
 Without a terminal to ask on (a script, piped input), give the answer
 as a flag: --leave-subtasks (as x) or --with-subtasks (as A). Without
 one, the task isn't completed, and htt says why.`,
@@ -56,26 +61,58 @@ one, the task isn't completed, and htt says why.`,
 				return fmt.Errorf("complete task: %w", err)
 			}
 			if len(open) > 0 {
-				answer, err := askAboutSubtasks(args[0], len(open))
-				if err != nil {
-					return err
-				}
-				if answer == domain.SubtasksAsk {
-					fmt.Println("Cancelled: nothing changed.")
-					return nil
-				}
-				choice = answer
+				return completeAsked(ctx, args[0], open)
 			}
 		}
 		done, err := ctx.Complete(args[0], choice)
 		if err != nil {
 			return fmt.Errorf("complete task: %w", err)
 		}
-		for _, t := range done {
-			fmt.Printf("Completed: %s\n", t.ConsoleString())
-		}
+		printCompleted(done)
 		return nil
 	},
+}
+
+// completeAsked asks what to do with the open subtasks of task n of
+// ctx, and completes it as answered. While the question waits, another
+// htt can add or remove tasks above it, or change its subtasks, so the
+// answer follows the task by its line, as the command read it, and is
+// about the subtasks it counted (domain.Context.CompleteFound): when
+// either changed meanwhile, nothing is completed.
+func completeAsked(ctx *domain.Context, n string, open []*domain.Task) error {
+	task, err := ctx.GetTaskByStrId(n)
+	if err != nil {
+		return fmt.Errorf("complete task: %w", err)
+	}
+	index, raw, asked := task.Line, task.Raw, make([]string, len(open))
+	for i, t := range open {
+		asked[i] = t.Raw
+	}
+	answer, err := askAboutSubtasks(n, len(open))
+	if err != nil {
+		return err
+	}
+	if answer == domain.SubtasksAsk {
+		fmt.Println("Cancelled: nothing changed.")
+		return nil
+	}
+	done, err := ctx.CompleteFound(index, raw, asked, answer)
+	switch {
+	case errors.Is(err, domain.ErrTaskChanged):
+		return fmt.Errorf("task %d changed or went while you were answering, so nothing was completed", index)
+	case errors.Is(err, domain.ErrSubtasksChanged):
+		return fmt.Errorf("task %d's open subtasks changed while you were answering, so nothing was completed", index)
+	case err != nil:
+		return fmt.Errorf("complete task: %w", err)
+	}
+	printCompleted(done)
+	return nil
+}
+
+func printCompleted(done []*domain.Task) {
+	for _, t := range done {
+		fmt.Printf("Completed: %s\n", t.ConsoleString())
+	}
 }
 
 func init() {

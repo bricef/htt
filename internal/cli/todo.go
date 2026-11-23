@@ -80,15 +80,22 @@ func addTask(ctx *domain.Context, args []string, due, under, to string) error {
 		warnTypedTask(ctx, task)
 		return nil
 	}
-	parent, err := ctx.GetTaskByStrId(under)
-	if err != nil {
+	if _, err := ctx.GetTaskByStrId(under); err != nil {
 		return fmt.Errorf("--under: %w", err)
 	}
 	if err := ctx.AddSubtask(under, task); err != nil {
 		return fmt.Errorf("add subtask of task %s%s: %w", under, to, err)
 	}
 	fmt.Printf("Added: %v%s\n", task.ConsoleString(), to)
-	fmt.Printf("Under: %v\n", parent.ConsoleString())
+	// The parent as written: the task the subtask's p: names in ctx, as
+	// the add saved it. Task N when the command loaded the list may be
+	// another: the number is read when the add runs, on the file as it
+	// is then.
+	if i := slices.Index(ctx.Tasks, task); i >= 0 {
+		if parent := domain.NewTree(ctx.Tasks, nil).Nodes[i].Parent; parent != nil {
+			fmt.Printf("Under: %v\n", parent.Task.ConsoleString())
+		}
+	}
 	warnTypedTask(ctx, task)
 	return nil
 }

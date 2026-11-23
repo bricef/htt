@@ -15,10 +15,12 @@ package storage
 //  5. Check that no file it read has changed on disk since (another
 //     program wrote it). If one has, remove the temporary files and go
 //     back to 2; after a few runs, give up, writing nothing.
-//  6. Replace: rename each temporary file over its file, in the order
-//     the change wrote them, so a reader sees the old file or the new
-//     one. Only renames follow the check, so the moment in which
-//     another program's write can go unseen is as short as it can be.
+//  6. Replace: rename each temporary file over its file, the files
+//     gaining tasks before those losing them, so a reader sees the old
+//     file or the new one, and a failure part-way leaves a task in
+//     both, never in neither. Only renames follow the check, so the
+//     moment in which another program's write can go unseen is as
+//     short as it can be.
 //  7. Unlock.
 //
 // The repositories (file.go, timelog_file.go) only parse what a
@@ -127,7 +129,8 @@ func (t *transaction) Read(path string) (data []byte, exists bool, err error) {
 // returns, the file's previous version kept as <path>.bak when bak is
 // true (task files and logs; the current-context pointer has none).
 // Writing a path again replaces the content and keeps the path's place
-// in the order.
+// in the order the change wrote them, which the replacing follows among
+// files alike (gainingFirst).
 func (t *transaction) Write(path string, data []byte, bak bool) {
 	if i := t.written(path); i >= 0 {
 		t.writes[i].data = data

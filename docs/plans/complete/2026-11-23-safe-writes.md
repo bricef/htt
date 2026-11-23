@@ -98,6 +98,63 @@ waiting. Nothing is skipped there; CI is the first run on Windows.
   tasks and 2.4 s at 10,000, against a 5 s wait (in TODO.md).
 - The lock wait is 5 s, "a few seconds"; the design doesn't fix it.
 
+**After review** (2026-11-23). An independent review of the branch
+found seven problems and four nits; each was fixed on the branch in a
+commit of its own, its test seen failing on the reviewed tree
+(c187a3a) first, and each fix undone once to see its test fail:
+
+1. `htt todo edit N`, and the answer to `htt todo do N`'s question,
+   read N again when you answered, so a task added or removed above
+   meanwhile moved the change to another task (the first open item
+   above). Decided for Brice: a command that waits for you remembers
+   the task's line (and the open subtasks it asked about) and, when
+   you answer, finds the task by it (`domain.FindTask`, the TUI's rule
+   moved to the domain; `ReplaceFound`, `CompleteFound`); a task that
+   changed or went is left alone, and `edit` says where your edit is
+   kept. The design's Limits say so, with a dated note.
+2. The check came before the temporary files were written and synced,
+   so the window in which another program's write goes unseen held
+   every write and fsync. Now everything is written and synced, then
+   checked, then only renamed. An in-place appender racing htt (the
+   reviewer's probe, 120 appends against `todo up`, `add` and `do`,
+   three rounds each, the two builds taking turns): 104 of 1,080 lines
+   lost before, 1 after (and 1 of 720 on the branch's last build); the
+   window from the check's last read to the last rename, under strace,
+   went from 4.5 ms to 0.6–1.5 ms for a completion, 2.7 ms to 0.5 ms
+   for a priority change.
+3. The TUI quit, saying nothing, on a tab switch while another htt
+   held the lock, and on any save failure but "busy": now the status
+   line says what failed and the TUI stays open.
+4. The watch's reload left an open subtask or edit input on the
+   task's old index: the input, and the question about open subtasks,
+   now follow their task by its text, and say so when it's gone.
+5. The busy bound was reached under modest load (30 concurrent adds
+   on 1,000 tasks: 8 of 30 busy). The domain now rereads a context
+   without parsing the lines it holds (`reread`; per line, since under
+   concurrent adds the file has always changed since the command
+   loaded it), the done file and the archive are appended to unparsed
+   (`domain.Appender`), and the TUI doesn't reload after its own
+   write. Now none of 30 are busy (three runs of each, 6.8 s to about
+   2 s); 10 concurrent completions with 3,000 done tasks went from 2
+   busy in 5.9 s to none in 0.1–0.2 s; one `todo add` from
+   44/120/476 ms to 24–35/65–89/251–264 ms at 50/200/1,000 tasks (two
+   runs), one `todo do` at 1,000 tasks and 3,000 done from 1,197 ms to
+   280–297 ms (the second open item above is closed).
+6. The pointer's read skipped the retry the other reads have on
+   Windows; it now goes through `readFile`, pinned by an architecture
+   test.
+7. The TUI reloaded through the pointer after an action (already on
+   main), so another htt switching contexts switched the TUI's next
+   action's list; it reloads by its own name.
+
+The nits: a symlinked context file stays a link (its target is
+replaced, the temporary file beside it); the renames go gaining file
+first whatever order a composed body saved them in; temporary files a
+crashed htt left, an hour old, are swept; `todo add --under` prints
+the parent as written. The reviewer's differential test (19
+operations by 6 changes underneath) is in the suite. The lock wait
+stays 5 s.
+
 ## Stages
 
 Each stage is a commit that builds and passes `just test`, `just vet`

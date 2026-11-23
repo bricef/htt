@@ -238,3 +238,60 @@ func TestNextID_Properties(t *testing.T) {
 		}
 	}
 }
+
+func TestArrange_Properties(t *testing.T) {
+	r := rand.New(rand.NewPCG(41, 3))
+	for range 600 {
+		tasks := randomTreeTasks(t, r, 30)
+		raws := make(map[*Task]string, len(tasks))
+		for _, task := range tasks {
+			raws[task] = task.Raw
+		}
+		c := &Context{Name: "work", Tasks: slices.Clone(tasks)}
+		c.Arrange()
+
+		// A permutation: every task once, its line untouched.
+		if len(c.Tasks) != len(tasks) {
+			t.Fatalf("%d tasks became %d", len(tasks), len(c.Tasks))
+		}
+		seen := map[*Task]bool{}
+		for i, task := range c.Tasks {
+			if _, ok := raws[task]; !ok || seen[task] {
+				t.Fatalf("task %d of the arranged list is new or repeated: %q", i, task.Raw)
+			}
+			seen[task] = true
+			if task.Raw != raws[task] {
+				t.Fatalf("arranging changed %q to %q", raws[task], task.Raw)
+			}
+			if task.Line != i {
+				t.Fatalf("task %d numbered %d", i, task.Line)
+			}
+		}
+
+		// The tree's order, and already in it: arranging again changes
+		// nothing, and the arranged list reads as the same tree.
+		want := NewTree(tasks, nil).Order()
+		for i, n := range want {
+			if c.Tasks[i] != n.Task {
+				t.Fatalf("task %d is %q, the tree has %q there", i, c.Tasks[i].Raw, n.Task.Raw)
+			}
+		}
+		again := &Context{Name: "work", Tasks: slices.Clone(c.Tasks)}
+		again.Arrange()
+		if !slices.Equal(again.Tasks, c.Tasks) {
+			t.Fatal("arranging an arranged list moved a task")
+		}
+		if got, want := outline(NewTree(c.Tasks, nil)), outline(NewTree(tasks, nil)); got != want {
+			t.Fatalf("the arranged list reads as another tree:\n%s\nwant:\n%s", got, want)
+		}
+
+		// The done file and the archive aren't trees: as they were.
+		for _, name := range []string{DoneContextName, ArchiveContextName} {
+			flat := &Context{Name: name, Tasks: slices.Clone(tasks)}
+			flat.Arrange()
+			if !slices.Equal(flat.Tasks, tasks) {
+				t.Fatalf("%s was reordered", name)
+			}
+		}
+	}
+}

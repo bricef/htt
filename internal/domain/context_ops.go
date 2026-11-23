@@ -24,7 +24,7 @@ import (
 func (c *Context) AddTask(task *Task) error {
 	task.StampCreated(time.Now())
 	c.add(task)
-	return c.repo.Save(c)
+	return c.save()
 }
 
 // Delete moves the indexed task to the archive context (annotating
@@ -51,7 +51,7 @@ func (c *Context) Delete(strID string) (*Task, error) {
 		if err := c.remove(target); err != nil {
 			return nil, err
 		}
-		if err := c.repo.Save(c); err != nil {
+		if err := c.save(); err != nil {
 			return nil, err
 		}
 		return target, nil
@@ -67,10 +67,10 @@ func (c *Context) Delete(strID string) (*Task, error) {
 		return nil, err
 	}
 	archive.add(target)
-	if err := c.repo.Save(archive); err != nil {
+	if err := archive.save(); err != nil {
 		return nil, err
 	}
-	if err := c.repo.Save(c); err != nil {
+	if err := c.save(); err != nil {
 		return nil, err
 	}
 	return target, nil
@@ -91,7 +91,7 @@ func (c *Context) Replace(strID string, replacement *Task) (*Task, error) {
 	if err := c.replaceInPlace(target, replacement); err != nil {
 		return nil, err
 	}
-	if err := c.repo.Save(c); err != nil {
+	if err := c.save(); err != nil {
 		return nil, err
 	}
 	return snapshot, nil
@@ -123,10 +123,10 @@ func (c *Context) Move(strID, toName string) (*Task, error) {
 		return nil, err
 	}
 	to.add(target)
-	if err := c.repo.Save(to); err != nil {
+	if err := to.save(); err != nil {
 		return nil, err
 	}
-	if err := c.repo.Save(c); err != nil {
+	if err := c.save(); err != nil {
 		return nil, err
 	}
 	return target, nil
@@ -159,10 +159,10 @@ func (c *Context) Complete(strID string) (*Task, error) {
 		return nil, err
 	}
 	done.add(target)
-	if err := c.repo.Save(done); err != nil {
+	if err := done.save(); err != nil {
 		return nil, err
 	}
-	if err := c.repo.Save(c); err != nil {
+	if err := c.save(); err != nil {
 		return nil, err
 	}
 	return target, nil
@@ -217,10 +217,18 @@ func (c *Context) priorityTransform(strID string, transform func(*Task) *Task) (
 	}
 	mutated := transform(target)
 	c.Sort()
-	if err := c.repo.Save(c); err != nil {
+	if err := c.save(); err != nil {
 		return nil, nil, err
 	}
 	return snapshot, mutated, nil
+}
+
+// save writes the context through its repository, arranged first
+// (Arrange): when htt writes a context file, every subtree is directly
+// below its parent. Every persistent method saves through it.
+func (c *Context) save() error {
+	c.Arrange()
+	return c.repo.Save(c)
 }
 
 // add appends a task to the in-memory slice. Internal helper used by the

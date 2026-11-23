@@ -11,9 +11,10 @@ import "errors"
 // and CurrentContext return Contexts wired with this repo so their
 // persistent methods (AddTask, Complete, etc.) can save through it.
 type Repository interface {
-	// Context returns the named context, loaded with its tasks. A name
-	// that has never been persisted returns an empty Context (Tasks
-	// empty), not an error.
+	// Context returns the named context, loaded with its tasks,
+	// arranged (Context.Arrange): in tree order, numbered in it,
+	// whatever order the file holds them in. A name that has never been
+	// persisted returns an empty Context (Tasks empty), not an error.
 	Context(name string) (*Context, error)
 
 	// Contexts returns every persisted context with tasks loaded. Heavier

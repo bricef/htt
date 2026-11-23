@@ -37,6 +37,7 @@ func (r *MemoryRepository) Context(name string) (*domain.Context, error) {
 	ctx := domain.NewContext(r, name)
 	ctx.Tasks = make([]*domain.Task, len(stored))
 	copy(ctx.Tasks, stored)
+	ctx.Arrange() // as FileRepository loads a context
 	return ctx, nil
 }
 

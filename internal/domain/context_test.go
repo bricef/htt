@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -148,6 +149,26 @@ func TestContext_Sort_ByPriority(t *testing.T) {
 	for i, want := range wantOrder {
 		if ctx.Tasks[i].Raw != want {
 			t.Errorf("Tasks[%d] = %q, want %q", i, ctx.Tasks[i].Raw, want)
+		}
+	}
+}
+
+// Sorting by priority keeps tasks of the same priority in their order,
+// so a priority change doesn't shuffle the rest of the file: the design
+// asks it of subtasks (docs/design/subtasks.md). No priority sorts
+// after every letter, (Z) included.
+func TestContext_Sort_KeepsTheOrderOfEqualPriorities(t *testing.T) {
+	var raws []string
+	for i := range 60 {
+		raws = append(raws, fmt.Sprintf("(%c) task %02d", "ABZ"[i%3], i))
+		raws = append(raws, fmt.Sprintf("plain %02d", i))
+	}
+	ctx := newCtxWithTasks(t, "todo", raws...)
+	ctx.Sort()
+	for i := 1; i < len(ctx.Tasks); i++ {
+		a, b := ctx.Tasks[i-1], ctx.Tasks[i]
+		if comparePriority(a.Priority, b.Priority) > 0 || a.Priority == b.Priority && a.Entry() > b.Entry() {
+			t.Fatalf("%q sorted after %q", b.Raw, a.Raw)
 		}
 	}
 }

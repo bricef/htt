@@ -118,12 +118,10 @@ func (r *FileRepository) Context(name string) (*domain.Context, error) {
 		if err != nil {
 			return nil, fmt.Errorf("parse %s:%d: %w", r.ContextPath(name), lineNo, err)
 		}
-		// Line is the task's index in ctx.Tasks, the number commands
-		// like delete take. It is not the file line: blank lines are
-		// skipped, so the two differ once a file has one. FileLine is
-		// the file line, for messages about the file (see
-		// Task.DateWarnings).
-		task.Line = len(ctx.Tasks)
+		// FileLine is the file line, for messages about the file (see
+		// Task.DateWarnings). Line, the number commands like delete
+		// take, is the task's index once arranged, below: blank lines
+		// are skipped, and subtasks go under their parents.
 		task.FileLine = lineNo + 1
 		ctx.Tasks = append(ctx.Tasks, task)
 		lineNo++
@@ -131,6 +129,7 @@ func (r *FileRepository) Context(name string) (*domain.Context, error) {
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("scan %s: %w", r.ContextPath(name), err)
 	}
+	ctx.Arrange()
 	return ctx, nil
 }
 

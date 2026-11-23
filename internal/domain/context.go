@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
-	"strings"
 
 	"github.com/bricef/htt/internal/vars"
 	"github.com/fatih/color"
@@ -38,17 +37,11 @@ func (c *Context) Equals(other *Context) bool {
 	return c.Name == other.Name
 }
 
+// Sort orders the tasks by priority, (A) first, then (B) and on, then
+// no priority, keeping tasks of the same priority in their order.
 func (c *Context) Sort() *Context {
-	slices.SortFunc(c.Tasks, func(i, j *Task) int {
-		var a = i.Priority
-		var b = j.Priority
-		if a == "" {
-			a = "Z"
-		}
-		if b == "" {
-			b = "Z"
-		}
-		return strings.Compare(a, b)
+	slices.SortStableFunc(c.Tasks, func(a, b *Task) int {
+		return comparePriority(a.Priority, b.Priority)
 	})
 	return c
 }

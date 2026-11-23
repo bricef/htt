@@ -282,6 +282,40 @@ func runRepositoryContract(t *testing.T, newRepo func(t *testing.T) domain.Repos
 			t.Errorf("post-save mutation leaked into stored state; len = %d, want 1", len(loaded.Tasks))
 		}
 	})
+
+	// Subtasks: a context loads in tree order (domain.Context.Arrange),
+	// whatever order it was saved in, numbered in that order, so a
+	// task's number is its place in the tree. The done file and the
+	// archive aren't trees and load as they are.
+	t.Run("Context loads subtasks under their parents, numbered in that order", func(t *testing.T) {
+		r := newRepo(t)
+		raws := []string{"Call three venues p:2", "other", "Book the venue p:1 id:2", "(B) Write p:1", "Plan id:1"}
+		for _, name := range []string{"work", domain.DoneContextName, domain.ArchiveContextName} {
+			tasks := make([]*domain.Task, len(raws))
+			for i, raw := range raws {
+				tasks[i] = mustTask(t, raw)
+			}
+			if err := r.Save(&domain.Context{Name: name, Tasks: tasks}); err != nil {
+				t.Fatalf("save %s: %v", name, err)
+			}
+		}
+		want := map[string][]string{
+			"work":                    {"other", "Plan id:1", "(B) Write p:1", "Book the venue p:1 id:2", "Call three venues p:2"},
+			domain.DoneContextName:    raws,
+			domain.ArchiveContextName: raws,
+		}
+		for name, lines := range want {
+			loaded, err := r.Context(name)
+			if err != nil {
+				t.Fatalf("load %s: %v", name, err)
+			}
+			for i, task := range loaded.Tasks {
+				if task.Raw != lines[i] || task.Line != i {
+					t.Errorf("%s: Tasks[%d] = %q (Line %d), want %q (Line %d)", name, i, task.Raw, task.Line, lines[i], i)
+				}
+			}
+		}
+	})
 }
 
 func TestMemoryRepository_Contract(t *testing.T) {

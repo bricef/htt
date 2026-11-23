@@ -253,3 +253,30 @@ func NextID(tasks []*Task) string {
 	}
 	return strconv.Itoa(n)
 }
+
+// IsTree reports whether the context's file holds a tree: every context
+// but the done file and the archive. Those collect tasks from every
+// context, so their ids aren't one file's: they stay flat, in the order
+// they were written.
+func (c *Context) IsTree() bool {
+	return c.Name != DoneContextName && c.Name != ArchiveContextName
+}
+
+// Arrange puts the context's tasks in tree order (NewTree's Order) and
+// numbers them in it (Task.Line), so the tree reads top to bottom in
+// number order. It only moves tasks: no line is read back, rebuilt or
+// dropped, and a list already in order stays as it is. Repositories
+// arrange a context as they load it; Context.save arranges it before
+// every write. The done file and the archive are only numbered.
+func (c *Context) Arrange() {
+	if c.IsTree() {
+		order := NewTree(c.Tasks, nil).Order()
+		c.Tasks = make([]*Task, len(order))
+		for i, n := range order {
+			c.Tasks[i] = n.Task
+		}
+	}
+	for i, t := range c.Tasks {
+		t.Line = i
+	}
+}

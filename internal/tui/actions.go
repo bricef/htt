@@ -347,7 +347,6 @@ var IncreasePriority = mkAction("increase priority", func(m model) (tea.Model, t
 	if err := refresh(&m); err != nil {
 		return m, tea.Quit, err
 	}
-	m.context.Sort()
 	m.showTasks(indexOf(m.context, changed))
 	m.status = datedNote(before, changed)
 	return m, tea.ClearScreen, nil
@@ -381,7 +380,6 @@ var DecreasePriority = mkAction("decrease priority", func(m model) (tea.Model, t
 	if err := refresh(&m); err != nil {
 		return m, tea.Quit, err
 	}
-	m.context.Sort()
 	m.showTasks(indexOf(m.context, changed))
 	m.status = datedNote(before, changed)
 	return m, tea.ClearScreen, nil

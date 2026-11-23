@@ -284,7 +284,8 @@ Clarified by Brice during the build (2026-11-18):
 - An `--at HH:MM` option on `log start`, `log add` and `log end`, to
   record an entry after the fact (the wishlist's `log@`): with the
   24:00 rule, a forgotten `@end` is otherwise fixed only by editing the
-  file.
+  file. Built the same day, on `workon` too (merge b198406; see
+  `2026-11-18-timelog-at.md`).
 - Should `log status` name the category, or only the report?
   Decided: it does (see Amendments in Outcome).
 - Should the report list time in the default category separately as

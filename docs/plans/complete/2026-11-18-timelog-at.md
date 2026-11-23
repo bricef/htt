@@ -115,7 +115,10 @@ Found while building, not fixed (it predates `--at`, and is in
 TODO.md's known issues): where the clocks go forward at midnight, as
 in Santiago, the report gets that night wrong. `time.Date` puts the
 missing midnight an hour early, so `Timesheet` ends the day before at
-23:00 and the report's day walk lists that day twice.
+23:00 and the report's day walk lists that day twice. The day walk
+was fixed on 2026-11-20 (merge 2f14c28): the report reads days by
+date, as `htt gui` does, and lists that day once. The timesheet still
+ends an hour early: issue #15.
 
 ## Motivation
 

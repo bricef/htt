@@ -35,8 +35,14 @@ func (r *fakeRepo) CurrentContextName() (string, error) { return "work", nil }
 func (r *fakeRepo) SetCurrent(string) error             { return nil }
 func (r *fakeRepo) ContextPath(string) string           { return "" }
 
+// Transact runs change with r itself: a fake without transactions,
+// every save made as it is called.
+func (r *fakeRepo) Transact(change func(Repository) error) error { return change(r) }
+
 // lineRepo is fakeRepo as a LineSource, as storage's repositories are.
 type lineRepo struct{ *fakeRepo }
+
+func (r lineRepo) Transact(change func(Repository) error) error { return change(r) }
 
 func (r lineRepo) ContextLines(name string) ([]string, error) {
 	var out []string

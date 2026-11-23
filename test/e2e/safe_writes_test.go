@@ -1,9 +1,12 @@
 package e2e
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -26,6 +29,133 @@ func safeEnv(t *testing.T) *env {
 	return e
 }
 
+// started is an htt process started by start, with its output.
+type started struct {
+	args           []string
+	cmd            *exec.Cmd
+	stdout, stderr bytes.Buffer
+}
+
+// start starts htt with args, as run does, killed at ctx's deadline.
+func (e *env) start(ctx context.Context, args ...string) *started {
+	e.t.Helper()
+	p := &started{args: args}
+	p.cmd = exec.CommandContext(ctx, binaryPath, append([]string{"--no-color"}, args...)...)
+	p.cmd.Env = append(append(e.homeEnv(), "PATH="+os.Getenv("PATH")), e.extraEnv...)
+	p.cmd.Stdout, p.cmd.Stderr = &p.stdout, &p.stderr
+	if err := p.cmd.Start(); err != nil {
+		e.t.Fatalf("could not start htt: %v", err)
+	}
+	return p
+}
+
+// wait waits for p and fails the test if it didn't exit 0.
+func (p *started) wait(t *testing.T) {
+	t.Helper()
+	if err := p.cmd.Wait(); err != nil {
+		t.Errorf("htt %s: %v\nstdout:\n%s\nstderr:\n%s", strings.Join(p.args, " "), err, p.stdout.String(), p.stderr.String())
+	}
+}
+
+// concurrently is how many htt processes the tests run at once.
+const concurrently = 20
+
+// Twenty htt processes adding a task each to one context at once: all
+// twenty tasks land. Before safe writes, each read the file, added its
+// task and wrote the file back, so a process that read before another
+// wrote discarded that one's task (and a reader could catch the file
+// renamed away or half-written, and write that back).
+func TestSafeWrites_ConcurrentAddsAllLand(t *testing.T) {
+	e := safeEnv(t)
+	e.mustRun("todo", "add", "already there")
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	var procs []*started
+	for i := range concurrently {
+		procs = append(procs, e.start(ctx, "todo", "add", fmt.Sprintf("added by process %02d", i)))
+	}
+	for _, p := range procs {
+		p.wait(t)
+	}
+
+	lines := strings.Split(strings.TrimSuffix(e.readData("todo.txt"), "\n"), "\n")
+	var lost []string
+	for i := range concurrently {
+		want := fmt.Sprintf("added by process %02d", i)
+		if n := countSuffix(lines, " "+want); n != 1 {
+			lost = append(lost, fmt.Sprintf("%q %d times", want, n))
+		}
+	}
+	if countSuffix(lines, " already there") != 1 {
+		lost = append(lost, `"already there" gone`)
+	}
+	if len(lost) > 0 {
+		t.Errorf("%d of %d tasks lost or doubled: %s\ntodo.txt:\n%s", len(lost), concurrently+1, strings.Join(lost, "; "), strings.Join(lines, "\n"))
+	}
+	if len(lines) != concurrently+1 {
+		t.Errorf("todo.txt has %d lines, want %d", len(lines), concurrently+1)
+	}
+}
+
+// Processes completing, adding and raising priorities in one context at
+// once: every task lands where its command put it. A completion moves a
+// task to done.txt, so two files change in one go.
+func TestSafeWrites_ConcurrentChangesAcrossFilesAllLand(t *testing.T) {
+	e := safeEnv(t)
+	var seed strings.Builder
+	for i := range concurrently {
+		fmt.Fprintf(&seed, "finish %02d\n", i)
+	}
+	e.writeData("todo.txt", seed.String())
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	var procs []*started
+	for i := range concurrently {
+		// todo do takes a number, read when the command runs; the
+		// first task is always one of the "finish" tasks still open.
+		procs = append(procs,
+			e.start(ctx, "todo", "do", "0"),
+			e.start(ctx, "todo", "add", fmt.Sprintf("new %02d", i)))
+	}
+	for _, p := range procs {
+		p.wait(t)
+	}
+
+	todo := strings.Split(strings.TrimSuffix(e.readData("todo.txt"), "\n"), "\n")
+	done := strings.Split(strings.TrimSuffix(e.readData("done.txt"), "\n"), "\n")
+	for i := range concurrently {
+		if n := countSuffix(todo, fmt.Sprintf(" new %02d", i)); n != 1 {
+			t.Errorf("new %02d is in todo.txt %d times, want once", i, n)
+		}
+		finish := fmt.Sprintf("finish %02d", i)
+		inTodo := slices.Contains(todo, finish)
+		inDone := slices.ContainsFunc(done, func(l string) bool { return strings.Contains(l, " "+finish+" ") })
+		if inTodo || !inDone {
+			t.Errorf("%q: in todo.txt %v, in done.txt %v; want it done, once", finish, inTodo, inDone)
+		}
+	}
+	if len(todo) != concurrently || len(done) != concurrently {
+		t.Errorf("todo.txt has %d lines and done.txt %d, want %d each\ntodo.txt:\n%s\ndone.txt:\n%s",
+			len(todo), len(done), concurrently, strings.Join(todo, "\n"), strings.Join(done, "\n"))
+	}
+}
+
+func countSuffix(lines []string, suffix string) int {
+	n := 0
+	for _, l := range lines {
+		if strings.HasSuffix(l, suffix) {
+			n++
+		}
+	}
+	return n
+}
+
+// While htt rewrites a file again and again, a reader of it sees each
+// time a whole version, the one before or the one after: never no file,
+// never part of one. Before safe writes, htt renamed the file to .bak
+// and wrote it again, a line at a time.
 func TestSafeWrites_AReaderNeverSeesAPartFile(t *testing.T) {
 	e := safeEnv(t)
 	const tasks = 400

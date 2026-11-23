@@ -21,14 +21,15 @@ func newCtxWithTasks(t *testing.T, name string, raws ...string) *Context {
 // identity, not behavior.
 type stubRepository struct{}
 
-func (*stubRepository) Context(string) (*Context, error)    { panic("stub") }
-func (*stubRepository) Contexts() ([]*Context, error)       { panic("stub") }
-func (*stubRepository) ContextNames() ([]string, error)     { panic("stub") }
-func (*stubRepository) CurrentContext() (*Context, error)   { panic("stub") }
-func (*stubRepository) CurrentContextName() (string, error) { panic("stub") }
-func (*stubRepository) SetCurrent(string) error             { panic("stub") }
-func (*stubRepository) Save(*Context) error                 { panic("stub") }
-func (*stubRepository) ContextPath(string) string           { panic("stub") }
+func (*stubRepository) Context(string) (*Context, error)      { panic("stub") }
+func (*stubRepository) Contexts() ([]*Context, error)         { panic("stub") }
+func (*stubRepository) ContextNames() ([]string, error)       { panic("stub") }
+func (*stubRepository) CurrentContext() (*Context, error)     { panic("stub") }
+func (*stubRepository) CurrentContextName() (string, error)   { panic("stub") }
+func (*stubRepository) SetCurrent(string) error               { panic("stub") }
+func (*stubRepository) Save(*Context) error                   { panic("stub") }
+func (*stubRepository) ContextPath(string) string             { panic("stub") }
+func (*stubRepository) Transact(func(Repository) error) error { panic("stub") }
 
 func TestNewContext_InjectsRepo(t *testing.T) {
 	// Step 2 invariant: NewContext stores the supplied Repository on the

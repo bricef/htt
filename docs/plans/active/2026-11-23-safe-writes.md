@@ -49,10 +49,9 @@ and `just check`.
   rather than guessing which file gains.
 - **Errors the caller can see**, declared by the domain (the contract)
   and returned by storage: `domain.ErrBusy` ("another htt is busy with
-  your files; try again"), `domain.ErrKeepsChanging` (wrapped as
-  "<file> keeps changing; nothing was saved"), and
-  `domain.ErrTaskChanged` for an operation that can't find its task
-  in the content as it is now.
+  your files; try again") and `domain.ErrKeepsChanging` (wrapped as
+  "<file> keeps changing; nothing was saved"). "The task is gone or
+  changed" is the TUI's, as now (see below).
 - **One file.** `internal/storage/transaction.go` holds the
   transaction (read once, recorded; writes held, in order; the check;
   the retries), the lock (gofrs/flock v0.13.2, the newest release at
@@ -75,14 +74,15 @@ and `just check`.
   result. A body may run more than once; each run starts from the
   store, and a task the caller passed in is put back as it was given
   first (a subtask's `p:` is chosen afresh).
-- **Task numbers** name the task the caller's context had at that
-  number when the operation was called; run on the content as it is
-  now, the operation finds that task by its line (the design's
-  "complete the task whose line is …"): where it was, or the one task
-  with that line, or it refuses with `ErrTaskChanged`. For a CLI
-  command that's line N as the command read it, milliseconds before,
-  as now; for `todo edit` and `todo do`'s question, which wait for the
-  user, it's the task the user saw, not whatever is at N by then.
+- **Task numbers** are read against the content the transaction reads,
+  when the operation runs (the design's Limits: `htt todo do 3` acts on
+  whatever task is line 3 at that moment). Twenty `htt todo do 0` at
+  once complete the first twenty tasks. (Tried first and dropped: a
+  number naming the task the caller had loaded at it, found again by
+  its line; the design keeps finding by text for the TUI.) Open for
+  Brice: `todo edit` and `todo do`'s question wait for the user between
+  loading the list and the operation, so a task added or removed above
+  meanwhile shifts the number (see the outcome).
 - **Composing.** `Context.Transact(body func(c *Context) error)` runs
   several steps as one transaction on the context as it is now, with
   no renumbering: the body finds what it acts on in `c`. Persistent

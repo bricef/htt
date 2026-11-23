@@ -390,6 +390,9 @@ type unsaveable struct{ *storage.MemoryRepository }
 
 func (unsaveable) Save(*domain.Context) error { return errors.New("no space left on device") }
 
+// Transact runs change with r itself, so its saves fail.
+func (r unsaveable) Transact(change func(domain.Repository) error) error { return change(r) }
+
 // Context loads the named context wired to save through r.
 func (r unsaveable) Context(name string) (*domain.Context, error) {
 	loaded, err := r.MemoryRepository.Context(name)

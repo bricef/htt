@@ -3,9 +3,11 @@ package storage
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -206,16 +208,154 @@ func (r *FileRepository) Contexts() ([]*domain.Context, error) {
 	return out, nil
 }
 
-// Save writes ctx's file as a transaction of its own (transaction.go):
-// locked, atomically, the previous version kept as .bak.
+// Save writes ctx's file as a transaction of its own: locked,
+// atomically, the previous version kept as .bak. The domain's
+// operations save within their own transactions (Transact).
 func (r *FileRepository) Save(ctx *domain.Context) error {
+	return r.Transact(func(tx domain.Repository) error { return tx.Save(ctx) })
+}
+
+// Transact runs change as one transaction (domain.Repository.Transact)
+// over the context files and the current-context pointer, through
+// transaction.go. change gets a fileTx.
+func (r *FileRepository) Transact(change func(tx domain.Repository) error) error {
+	return transact(r.dirs(), r.hooks, func(t *transaction) error {
+		tx := &fileTx{r: r, t: t}
+		defer func() { tx.over = true }()
+		return change(tx)
+	})
+}
+
+// fileTx is a FileRepository within one run of a transaction's change:
+// it reads files through the transaction, which keeps what it read for
+// the check, and saves into it, held until the change returns. Once the
+// change has returned it saves nothing, and Transact on it starts a
+// transaction of its own.
+type fileTx struct {
+	r    *FileRepository
+	t    *transaction
+	over bool
+}
+
+var (
+	_ domain.Repository = (*fileTx)(nil)
+	_ domain.LineSource = (*fileTx)(nil)
+	_ domain.SameFiler  = (*fileTx)(nil)
+)
+
+// errOver is a save to a transaction's repository once its change has
+// returned: a context it loaded, kept and changed afterwards.
+var errOver = errors.New("save outside the transaction that loaded the context")
+
+func (tx *fileTx) Context(name string) (*domain.Context, error) {
+	if name == "" {
+		return nil, domain.ErrInvalidContextName
+	}
+	data, _, err := tx.t.Read(tx.r.ContextPath(name))
+	if err != nil {
+		return nil, err
+	}
+	return tx.r.parseContext(tx, name, data)
+}
+
+func (tx *fileTx) ContextLines(name string) ([]string, error) {
+	if name == "" {
+		return nil, domain.ErrInvalidContextName
+	}
+	data, _, err := tx.t.Read(tx.r.ContextPath(name))
+	if err != nil {
+		return nil, err
+	}
+	return tx.r.lines(name, data)
+}
+
+// ContextNames lists the contexts on disk and those the change has
+// saved, which aren't on disk yet.
+func (tx *fileTx) ContextNames() ([]string, error) {
+	names, err := tx.r.ContextNames()
+	if err != nil {
+		return nil, err
+	}
+	for _, path := range tx.t.Paths() {
+		if filepath.Dir(path) == filepath.Clean(tx.r.dataDir) && strings.HasSuffix(path, fileExtension) {
+			if name := strings.TrimSuffix(filepath.Base(path), fileExtension); !slices.Contains(names, name) {
+				names = append(names, name)
+			}
+		}
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
+func (tx *fileTx) Contexts() ([]*domain.Context, error) {
+	names, err := tx.ContextNames()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*domain.Context, 0, len(names))
+	for _, name := range names {
+		ctx, err := tx.Context(name)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, ctx)
+	}
+	return out, nil
+}
+
+func (tx *fileTx) CurrentContextName() (string, error) {
+	data, exists, err := tx.t.Read(tx.r.currentPointerPath())
+	if err != nil {
+		return "", err
+	}
+	if !exists {
+		return domain.DefaultContextName, nil
+	}
+	return pointerName(data), nil
+}
+
+func (tx *fileTx) CurrentContext() (*domain.Context, error) {
+	name, err := tx.CurrentContextName()
+	if err != nil {
+		return nil, err
+	}
+	return tx.Context(name)
+}
+
+func (tx *fileTx) SetCurrent(name string) error {
+	sanitized := domain.ContextFileName(name)
+	if sanitized == "" {
+		return domain.ErrInvalidContextName
+	}
+	if tx.over {
+		return errOver
+	}
+	tx.t.Write(tx.r.currentPointerPath(), []byte(sanitized), false)
+	return nil
+}
+
+func (tx *fileTx) Save(ctx *domain.Context) error {
 	if ctx == nil || ctx.Name == "" {
 		return domain.ErrInvalidContextName
 	}
-	return transact(r.dirs(), r.hooks, func(t *transaction) error {
-		t.Write(r.ContextPath(ctx.Name), contextFile(ctx), true)
-		return nil
-	})
+	if tx.over {
+		return errOver
+	}
+	tx.t.Write(tx.r.ContextPath(ctx.Name), contextFile(ctx), true)
+	return nil
+}
+
+func (tx *fileTx) ContextPath(name string) string { return tx.r.ContextPath(name) }
+
+func (tx *fileTx) SameFile(a, b string) bool { return tx.r.SameFile(a, b) }
+
+// Transact runs change as part of this transaction, while its change
+// runs; afterwards, as a transaction of its own.
+func (tx *fileTx) Transact(change func(tx domain.Repository) error) error {
+	if tx.over {
+		return tx.r.Transact(change)
+	}
+	return change(tx)
 }
 
 // contextFile is ctx's file: a task a line, each task's Raw. Each
@@ -260,14 +400,10 @@ func (r *FileRepository) CurrentContext() (*domain.Context, error) {
 }
 
 // SetCurrent writes the current-context pointer as a transaction of its
-// own (transaction.go).
+// own.
 func (r *FileRepository) SetCurrent(name string) error {
-	sanitized := domain.ContextFileName(name)
-	if sanitized == "" {
+	if domain.ContextFileName(name) == "" {
 		return domain.ErrInvalidContextName
 	}
-	return transact(r.dirs(), r.hooks, func(t *transaction) error {
-		t.Write(r.currentPointerPath(), []byte(sanitized), false)
-		return nil
-	})
+	return r.Transact(func(tx domain.Repository) error { return tx.SetCurrent(name) })
 }

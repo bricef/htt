@@ -23,6 +23,11 @@ type Context struct {
 	// Tree read them, kept until the context is next saved: a command
 	// asks for the tree to warn and again to show it.
 	doneIDs map[string]bool
+
+	// changing is true while a transaction runs on the context
+	// (Transact): its repository is then the transaction's, and a
+	// persistent method called on it is part of that transaction.
+	changing bool
 }
 
 // NewContext returns a Context wired with the given Repository. Intended

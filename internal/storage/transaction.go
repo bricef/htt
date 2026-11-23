@@ -124,6 +124,15 @@ func (t *transaction) Write(path string, data []byte, bak bool) {
 	t.writes = append(t.writes, write{path: path, data: data, bak: bak})
 }
 
+// Paths returns the paths the change has written so far, in order.
+func (t *transaction) Paths() []string {
+	out := make([]string, len(t.writes))
+	for i, w := range t.writes {
+		out[i] = w.path
+	}
+	return out
+}
+
 func (t *transaction) written(path string) int {
 	return slices.IndexFunc(t.writes, func(w write) bool { return w.path == path })
 }

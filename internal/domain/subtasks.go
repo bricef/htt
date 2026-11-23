@@ -287,22 +287,37 @@ func tasksOfNodes(nodes []*Node) []*Task {
 // id: if it has none, and persists. The task is stamped with today's
 // date as AddTask stamps it, and lands after its parent's last
 // descendant, or at its priority's place among the parent's subtasks.
+//
+// task is changed as it's added. When the transaction runs again, task
+// is first put back as it was given, so the run starts as the first
+// did: its p:, and its parent's new id, come from the context as it is
+// then.
 func (c *Context) AddSubtask(parentID string, task *Task) error {
 	if !c.IsTree() {
 		return ErrNotATree
 	}
-	parent, err := c.GetTaskByStrId(parentID)
-	if err != nil {
-		return err
-	}
-	id, err := c.idFor(parent, task)
-	if err != nil {
-		return err
-	}
-	task.setParent(id)
-	task.StampCreated(time.Now())
-	c.add(task)
-	return c.save()
+	given, runs := task.Raw, 0
+	return c.transact(func() error {
+		if runs++; runs > 1 {
+			again, err := NewTask(given)
+			if err != nil {
+				return err
+			}
+			*task = *again
+		}
+		parent, err := c.GetTaskByStrId(parentID)
+		if err != nil {
+			return err
+		}
+		id, err := c.idFor(parent, task)
+		if err != nil {
+			return err
+		}
+		task.setParent(id)
+		task.StampCreated(time.Now())
+		c.add(task)
+		return c.save()
+	})
 }
 
 // Nest puts the task numbered strID, with its subtree, under the task
@@ -315,29 +330,37 @@ func (c *Context) Nest(strID, parentID string) (*Task, *Task, error) {
 	if !c.IsTree() {
 		return nil, nil, ErrNotATree
 	}
-	tree := NewTree(c.Tasks, nil)
-	n, err := c.node(tree, strID)
+	var task, parent *Task
+	err := c.transact(func() error {
+		tree := NewTree(c.Tasks, nil)
+		n, err := c.node(tree, strID)
+		if err != nil {
+			return err
+		}
+		m, err := c.node(tree, parentID)
+		if err != nil {
+			return err
+		}
+		if c.leadsTo(m.Task, n.Task) {
+			return ErrLoop
+		}
+		task, parent = n.Task, m.Task
+		if n.Parent == m {
+			return nil
+		}
+		id, err := c.idFor(m.Task)
+		if err != nil {
+			return err
+		}
+		block := tasksOfNodes(n.Subtree())
+		c.moveAfter(block, lastOutside(m, block))
+		n.Task.setParent(id)
+		return c.save()
+	})
 	if err != nil {
 		return nil, nil, err
 	}
-	m, err := c.node(tree, parentID)
-	if err != nil {
-		return nil, nil, err
-	}
-	if c.leadsTo(m.Task, n.Task) {
-		return nil, nil, ErrLoop
-	}
-	if n.Parent == m {
-		return n.Task, m.Task, nil
-	}
-	id, err := c.idFor(m.Task)
-	if err != nil {
-		return nil, nil, err
-	}
-	block := tasksOfNodes(n.Subtree())
-	c.moveAfter(block, lastOutside(m, block))
-	n.Task.setParent(id)
-	return n.Task, m.Task, c.save()
+	return task, parent, nil
 }
 
 // Unnest makes the task numbered strID a top-level task, with its
@@ -355,18 +378,26 @@ func (c *Context) Unnest(strID string) (*Task, error) {
 	if !c.IsTree() {
 		return nil, ErrNotATree
 	}
-	tree := NewTree(c.Tasks, nil)
-	n, err := c.node(tree, strID)
+	var task *Task
+	err := c.transact(func() error {
+		tree := NewTree(c.Tasks, nil)
+		n, err := c.node(tree, strID)
+		if err != nil {
+			return err
+		}
+		if len(n.Task.ParentIDs()) == 0 {
+			return ErrTopLevel
+		}
+		if err := n.Task.takeParent(); err != nil {
+			return err
+		}
+		task = n.Task
+		return c.save()
+	})
 	if err != nil {
 		return nil, err
 	}
-	if len(n.Task.ParentIDs()) == 0 {
-		return nil, ErrTopLevel
-	}
-	if err := n.Task.takeParent(); err != nil {
-		return nil, err
-	}
-	return n.Task, c.save()
+	return task, nil
 }
 
 // NestUnderPrevious puts the task numbered strID, with its subtree,
@@ -380,22 +411,30 @@ func (c *Context) NestUnderPrevious(strID string) (*Task, error) {
 	if !c.IsTree() {
 		return nil, ErrNotATree
 	}
-	n, above, err := c.above(strID)
+	var task *Task
+	err := c.transact(func() error {
+		n, above, err := c.above(strID)
+		if err != nil {
+			return err
+		}
+		if above == nil {
+			return ErrNothingAbove
+		}
+		if c.leadsTo(above.Task, n.Task) {
+			return ErrLoop
+		}
+		id, err := c.idFor(above.Task)
+		if err != nil {
+			return err
+		}
+		n.Task.setParent(id)
+		task = n.Task
+		return c.save()
+	})
 	if err != nil {
 		return nil, err
 	}
-	if above == nil {
-		return nil, ErrNothingAbove
-	}
-	if c.leadsTo(above.Task, n.Task) {
-		return nil, ErrLoop
-	}
-	id, err := c.idFor(above.Task)
-	if err != nil {
-		return nil, err
-	}
-	n.Task.setParent(id)
-	return n.Task, c.save()
+	return task, nil
 }
 
 // TaskAbove returns the task NestUnderPrevious would put the task
@@ -441,20 +480,28 @@ func (c *Context) UnnestOneLevel(strID string) (*Task, error) {
 	if !c.IsTree() {
 		return nil, ErrNotATree
 	}
-	tree := NewTree(c.Tasks, nil)
-	n, err := c.node(tree, strID)
+	var task *Task
+	err := c.transact(func() error {
+		tree := NewTree(c.Tasks, nil)
+		n, err := c.node(tree, strID)
+		if err != nil {
+			return err
+		}
+		if n.Parent == nil {
+			return ErrTopLevel
+		}
+		if g := n.Parent.Parent; g != nil {
+			n.Task.setParent(g.Task.ID())
+		} else if err := n.Task.takeParent(); err != nil {
+			return err
+		}
+		task = n.Task
+		return c.save()
+	})
 	if err != nil {
 		return nil, err
 	}
-	if n.Parent == nil {
-		return nil, ErrTopLevel
-	}
-	if g := n.Parent.Parent; g != nil {
-		n.Task.setParent(g.Task.ID())
-	} else if err := n.Task.takeParent(); err != nil {
-		return nil, err
-	}
-	return n.Task, c.save()
+	return task, nil
 }
 
 // fitInto readies tasks, a subtree in tree order moving from c, to join

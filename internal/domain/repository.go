@@ -64,6 +64,30 @@ type Repository interface {
 	// empty string; callers that depend on a usable path should
 	// check for it.
 	ContextPath(name string) string
+
+	// Transact runs change as one transaction
+	// (docs/design/safe-writes.md). change gets a Repository for the
+	// transaction: what it loads (Context, ContextLines, …) is read
+	// from the store as it is now, and what it saves (Save,
+	// SetCurrent) is held until change returns nil. Then, if nothing
+	// it read has changed in the store since, everything saved is
+	// written, in the order change saved it, so the context gaining
+	// tasks, saved first, is written first. If something has changed,
+	// change runs again on the store as it is then; a store that keeps
+	// changing gives ErrKeepsChanging. Since change may run more than
+	// once, it must decide from what it loads alone. An error from
+	// change saves nothing, and Transact returns it; ErrBusy says
+	// another htt held the store too long.
+	//
+	// The transaction's Repository is only for change while it runs.
+	// Transact on it runs a change as part of the same transaction.
+	//
+	// Context's persistent methods run through Transact (see
+	// Context.Transact), so callers never call it: every change they
+	// make is a transaction already. A repository without
+	// transactions, such as a test's fake, may run change with
+	// itself, every save made as it's called.
+	Transact(change func(tx Repository) error) error
 }
 
 // LineSource is a Repository that can also hand over a context's lines

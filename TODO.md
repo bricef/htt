@@ -24,6 +24,24 @@ Each confirmed against `main` on 2026-11-23.
   also listed 2026-09-05 twice; since 2026-11-20 it reads days by
   date, as `htt gui` does, and lists it once.)
 
+Since safe writes (`feat/safe-writes`, 2026-11-23):
+
+- **`htt todo edit N`, and `htt todo do N` when it asks about
+  subtasks, read task N again when they save**, after waiting for you
+  (the editor, the question). If another htt or your editor added or
+  removed a task above it meanwhile, the change lands on whatever is
+  task N then: the design's limit ("a task number is read when the
+  command runs"), but here the command runs for as long as you take.
+  Finding the task by its text, as the TUI does, would close it; a
+  decision for the design. (Before safe writes, `edit` saved the list
+  as it was loaded, losing the other change instead.)
+- **A completion holds htt's lock while it parses the whole done
+  file**, as it parsed it before: about 0.7 s at 3,000 done tasks,
+  2.4 s at 10,000. Another htt waits up to 5 s for the lock, so a few
+  completions queued on a very large done file could make it give up
+  ("another htt is busy"). Adding to the done file and the archive
+  without parsing them would make it milliseconds.
+
 ## Wishlist
 
 - Tasks

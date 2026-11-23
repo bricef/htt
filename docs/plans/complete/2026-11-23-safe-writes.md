@@ -1,12 +1,102 @@
 # Safe writes: building the agreed design
 
 **Date:** 2026-11-23
-**Status:** In progress
+**Status:** Complete (2026-11-23)
 
 The design is [docs/design/safe-writes.md](../../design/safe-writes.md)
 (agreed 2026-11-23, gofrs/flock for the lock). This plan doesn't restate
 it: it says how it's built, in which stages, how it's tested, and the
 choices the design leaves open.
+
+## Outcome
+
+Built on `feat/safe-writes` in the stages below, each a commit that
+passes the gates: the mechanism with atomic replacement; the domain's
+operations as transactions; time logs and the pointer; the TUI's
+actions in transactions and its watching; these docs. The design was
+followed as written, with the choices below. The CLI, the REPL and the
+GUI didn't change: they call the same operations and see only
+`ErrBusy`, `ErrKeepsChanging` or the disk's errors. The TUI changed
+where the brief asked (its reload folded into the transaction, and the
+watching); a failed save of another htt's making now leaves it open.
+Test fakes implementing the repository interfaces gained `Transact`
+(running the change with themselves), and three tests that set state
+only in memory now put it where the transaction reads it.
+
+**What main loses, and the branch doesn't** (the tests below, run on
+main's code and on the branch):
+
+| Test | main | branch |
+| --- | --- | --- |
+| 20 `htt todo add` at once (3 runs) | 13 of 20 lost, each run | none, 10 runs of 10 |
+| 20 `todo do 0` with 20 `todo add` | adds lost, completions doubled in done.txt | all land |
+| 20 `htt log add` at once | 13 of 20 lost, one failed | none |
+| a reader while htt rewrites a file 30 times | 3873 reads found no file and 839 part of one, of 106735 | none of about 290000 |
+| a reader while htt switches contexts 30 times | the pointer empty 76 times in 22324 reads | always a context |
+| the TUI's `+`/`-` racing 45 adds | the TUI read a torn file and lost its task within two presses | nothing lost (5 runs, race detector) |
+
+**Mutations**, each made by hand to `transaction.go` and caught:
+
+- *No lock* (the lock never taken): `TestTransact_AHeldLockGivesErrBusy`,
+  `TestTransact_LocksTheDirectoriesItWrites`, the e2e busy-lock test,
+  and the concurrency tests (e2e adds, changes across files and log
+  entries; goroutines; the TUI racing adds): the check alone lets
+  changes through between another htt's check and its rename.
+- *No check*: `TestTransact_AChangeUnderneathRunsTheChangeAgain`,
+  `AFileCreatedUnderneathIsAChange`, `AFileThatKeepsChangingGivesUp`,
+  and `TestFileTransact_AnEditorsSaveUnderneathIsKept`,
+  `AnEditorsSaveOfTheLogIsKept`, `AFileThatKeepsChangingSavesNothing`.
+- *No retry* (giving up at the first change): the same six.
+- *Writing in place* instead of a temporary file renamed over:
+  `TestTransact_AReaderNeverSeesAPartFile` and the e2e
+  `AReaderNeverSeesAPartFile` and `ThePointerIsAlwaysWhole`, three
+  runs of three.
+- *The losing file first*: `TestTransact_WritesInOrderAndStopsAtAFailure`
+  and `TestFileTransact_TheGainingFileIsWrittenFirst` (complete,
+  delete, move).
+- *No .bak*: `TestFileRepository_Save_CreatesBakBackup`,
+  `TestFileTimelogRepository_Save_CreatesBakBackup`,
+  `TestTransact_KeepsThePreviousVersionAsBak`,
+  `AChangeUnderneathRunsTheChangeAgain`, `AnEditorsSaveOfTheLogIsKept`.
+
+**Windows.** `os.Rename` there is `MoveFileEx` with
+`MOVEFILE_REPLACE_EXISTING`: it replaces an existing file, but fails
+while another process has the file open, and opening a file at the
+moment one is renamed over it fails too; both are tried again for up
+to two seconds (`rename`, `readFile`). `TestReplace_AFileHeldOpenIsReplacedOnceClosed`
+covers the first everywhere. The tests' readers pause a millisecond
+between reads on Windows, so a tight loop can't keep htt's rename
+waiting. Nothing is skipped there; CI is the first run on Windows.
+
+**Choices made while building**, besides those below:
+
+- Task numbers: first built as "the number names the task the caller
+  loaded at it, found again by its line", which made twenty concurrent
+  `todo do 0` complete one task and refuse nineteen. The design's
+  Limits and the brief say a number is read when the operation runs,
+  so that was dropped; the TUI keeps finding its task by text.
+- The memory repository now copies tasks on load and save, as the
+  memory time-log repository did, so a transaction's run can't change
+  the store before it commits.
+- `Context.Transact` is exported for the TUI, which must find its
+  task and check what it showed inside the transaction.
+- In the TUI, another htt busy or a file that keeps changing stays
+  open with the message on the status line (`quitUnless`), as "try
+  again" asks.
+
+**Open, for Brice:**
+
+- `htt todo edit N`, and `htt todo do N` when it asks about subtasks,
+  wait for the user between reading the list and saving, and read N
+  again when they save: a task added or removed above meanwhile moves
+  the change to another task. That is the design's limit taken
+  literally; finding the task by its text, as the TUI does, would
+  close it, but changes the CLI and the design's Limits, so it isn't
+  done (in TODO.md).
+- A completion parses the whole done file inside the transaction, as
+  it parsed it before: the lock is held about 0.7 s at 3,000 done
+  tasks and 2.4 s at 10,000, against a 5 s wait (in TODO.md).
+- The lock wait is 5 s, "a few seconds"; the design doesn't fix it.
 
 ## Stages
 

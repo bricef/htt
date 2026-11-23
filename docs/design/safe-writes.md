@@ -1,7 +1,7 @@
 # Safe writes
 
 **Status:** Agreed, 2026-11-23 (Brice), with gofrs/flock for the lock.
-Not yet built.
+Built 2026-11-23, on `feat/safe-writes`.
 
 htt's files are plain text, and more than one thing writes them: two htt
 commands at once (a script, or the CLI beside the TUI), the TUI over

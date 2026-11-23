@@ -222,7 +222,10 @@ func (k inputKeys) FullHelp() [][]key.Binding { return [][]key.Binding{k.ShortHe
 func (m *model) openInput(mode inputMode, value string, editIndex int) {
 	m.input = mode
 	m.editIndex = editIndex
-	m.editRaw = value
+	m.editRaw = ""
+	if editIndex >= 0 {
+		m.editRaw = m.context.Tasks[editIndex].Raw
+	}
 	m.textInput.Prompt = "New task > "
 	m.textInput.Placeholder = "(A) do a thing for +project @place due:friday"
 	switch mode {

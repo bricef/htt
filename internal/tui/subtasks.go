@@ -3,6 +3,7 @@ package tui
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/bricef/htt/internal/domain"
@@ -18,8 +19,9 @@ import (
 // question is the question x asks about a task's open subtasks, until
 // the next key answers it.
 type question struct {
-	index int    // the task's index
-	raw   string // its line when asked, to be sure it's the task answered about
+	index int      // the task's index
+	raw   string   // its line when asked, to be sure it's the task answered about
+	open  []string // the lines of its open subtasks when asked: the ones the answer is about
 }
 
 // treeChange reports why a subtask action left the tree as it was, on
@@ -65,12 +67,21 @@ var NestTask = mkAction("nest under the task above", func(m model) (tea.Model, t
 	if !ok {
 		return m, nil, errNoTaskSelected
 	}
-	moved, err := m.context.NestUnderPrevious(strID(it.index))
+	shownAbove := m.taskAbove(it.index)
+	at, err := m.reload(it.index, it.task.Raw, changedElsewhere(it.index, "nothing was moved"))
 	if err != nil {
-		if unavailable := m.treeChange(it.index, err); unavailable != nil {
+		return m, quitUnless(err), err
+	}
+	if m.taskAbove(at) != shownAbove {
+		m.status = fmt.Sprintf("The task above task %d was changed or moved elsewhere; nothing was moved.", it.index)
+		return m, nil, fmt.Errorf("%w: the task above task %d changed elsewhere", errUnavailable, it.index)
+	}
+	moved, err := m.context.NestUnderPrevious(strID(at))
+	if err != nil {
+		if unavailable := m.treeChange(at, err); unavailable != nil {
 			return m, nil, unavailable
 		}
-		return m, tea.Quit, fmt.Errorf("nest task %d: %w", it.index, err)
+		return m, tea.Quit, fmt.Errorf("nest task %d: %w", at, err)
 	}
 	if err := m.arranged(moved); err != nil {
 		return m, tea.Quit, err
@@ -85,18 +96,32 @@ var UnnestTask = mkAction("unnest a level", func(m model) (tea.Model, tea.Cmd, e
 	if !ok {
 		return m, nil, errNoTaskSelected
 	}
-	moved, err := m.context.UnnestOneLevel(strID(it.index))
+	at, err := m.reload(it.index, it.task.Raw, changedElsewhere(it.index, "nothing was moved"))
 	if err != nil {
-		if unavailable := m.treeChange(it.index, err); unavailable != nil {
+		return m, quitUnless(err), err
+	}
+	moved, err := m.context.UnnestOneLevel(strID(at))
+	if err != nil {
+		if unavailable := m.treeChange(at, err); unavailable != nil {
 			return m, nil, unavailable
 		}
-		return m, tea.Quit, fmt.Errorf("unnest task %d: %w", it.index, err)
+		return m, tea.Quit, fmt.Errorf("unnest task %d: %w", at, err)
 	}
 	if err := m.arranged(moved); err != nil {
 		return m, tea.Quit, err
 	}
 	return m, nil, nil
 })
+
+// taskAbove is the line of the task Tab would nest the task with the
+// given index under (domain.Context.TaskAbove); "" when there's none.
+func (m *model) taskAbove(index int) string {
+	above, err := m.context.TaskAbove(strID(index))
+	if err != nil || above == nil {
+		return ""
+	}
+	return above.Raw
+}
 
 // ToggleFold is Space: folds the selected task's subtree out of the
 // list, or unfolds it. Folds last the session.
@@ -134,11 +159,19 @@ var NewSubtask = mkAction("new subtask", func(m model) (tea.Model, tea.Cmd, erro
 	return m, tea.ClearScreen, nil
 })
 
-// ask puts the question about the selected task's open subtasks on the
-// status line, for the next key to answer (answer).
-func (m *model) ask(index, open int) {
-	m.asking = &question{index: index, raw: m.context.Tasks[index].Raw}
-	m.status = strings.Join(domain.SubtasksQuestion(strID(index), open), "\n")
+// ask puts the question about the open subtasks of the task with the
+// given index on the status line, for the next key to answer (answer).
+func (m *model) ask(index int, open []*domain.Task) {
+	m.asking = &question{index: index, raw: m.context.Tasks[index].Raw, open: lineOf(open)}
+	m.status = strings.Join(domain.SubtasksQuestion(strID(index), len(open)), "\n")
+}
+
+func lineOf(tasks []*domain.Task) []string {
+	out := make([]string, len(tasks))
+	for i, t := range tasks {
+		out[i] = t.Raw
+	}
+	return out
 }
 
 // answer takes the key pressed after the question: x completes the task
@@ -168,16 +201,26 @@ var cancelCompleting = mkAction("cancel completing", func(m model) (tea.Model, t
 	return m, nil, nil
 })
 
-// completeAnswered completes the task q was about, as answered.
+// completeAnswered completes the task q was about, as answered, in the
+// file as it is now, provided the task and its open subtasks are still
+// the ones asked about.
 func completeAnswered(q question, choice domain.Subtasks) *Action {
 	return mkAction("complete, subtasks answered", func(m model) (tea.Model, tea.Cmd, error) {
-		if q.index >= len(m.context.Tasks) || m.context.Tasks[q.index].Raw != q.raw {
-			m.status = "That task changed; nothing was completed."
-			return m, nil, fmt.Errorf("task %d changed before the answer", q.index)
-		}
-		done, err := m.context.Complete(strID(q.index), choice)
+		at, err := m.reload(q.index, q.raw, changedElsewhere(q.index, "nothing was completed"))
 		if err != nil {
-			return m, tea.Quit, fmt.Errorf("complete task %d: %w", q.index, err)
+			return m, quitUnless(err), err
+		}
+		open, err := m.context.OpenSubtasks(strID(at))
+		if err != nil {
+			return m, tea.Quit, fmt.Errorf("complete task %d: %w", at, err)
+		}
+		if !slices.Equal(lineOf(open), q.open) {
+			m.status = fmt.Sprintf("Task %d's open subtasks changed elsewhere; nothing was completed.", q.index)
+			return m, nil, fmt.Errorf("%w: task %d's open subtasks changed elsewhere", errUnavailable, q.index)
+		}
+		done, err := m.context.Complete(strID(at), choice)
+		if err != nil {
+			return m, tea.Quit, fmt.Errorf("complete task %d: %w", at, err)
 		}
 		if err := refresh(&m); err != nil {
 			return m, tea.Quit, err

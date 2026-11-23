@@ -44,8 +44,8 @@ type model struct {
 	keys          KeyBindingController
 	showHelp      bool
 	input         inputMode           // what the task input is open for
-	editIndex     int                 // inputEdit: the index of the task being edited
-	editRaw       string              // inputEdit: its line when editing began
+	editIndex     int                 // inputEdit, inputSubtask: the index of the task being edited, or the parent
+	editRaw       string              // inputEdit, inputSubtask: its line when the input opened
 	tags          map[string][]string // tags to complete, by sigil; gathered when the input opens
 	textInput     textinput.Model
 	logger        *slog.Logger // diagnostics; never the terminal

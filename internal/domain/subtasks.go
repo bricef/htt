@@ -380,20 +380,13 @@ func (c *Context) NestUnderPrevious(strID string) (*Task, error) {
 	if !c.IsTree() {
 		return nil, ErrNotATree
 	}
-	tree := NewTree(c.Tasks, nil)
-	n, err := c.node(tree, strID)
+	n, above, err := c.above(strID)
 	if err != nil {
 		return nil, err
 	}
-	siblings := tree.Roots
-	if n.Parent != nil {
-		siblings = n.Parent.Children
-	}
-	k := slices.Index(siblings, n)
-	if k == 0 {
+	if above == nil {
 		return nil, ErrNothingAbove
 	}
-	above := siblings[k-1]
 	if c.leadsTo(above.Task, n.Task) {
 		return nil, ErrLoop
 	}
@@ -403,6 +396,36 @@ func (c *Context) NestUnderPrevious(strID string) (*Task, error) {
 	}
 	n.Task.setParent(id)
 	return n.Task, c.save()
+}
+
+// TaskAbove returns the task NestUnderPrevious would put the task
+// numbered strID under: the task above it at its level, its previous
+// sibling (for a top-level task, the top-level task above it); nil for
+// the first task at its level.
+func (c *Context) TaskAbove(strID string) (*Task, error) {
+	_, above, err := c.above(strID)
+	if err != nil || above == nil {
+		return nil, err
+	}
+	return above.Task, nil
+}
+
+// above finds the task numbered strID in the context's tree, and the
+// task above it at its level (nil for the first).
+func (c *Context) above(strID string) (n, above *Node, err error) {
+	tree := NewTree(c.Tasks, nil)
+	n, err = c.node(tree, strID)
+	if err != nil {
+		return nil, nil, err
+	}
+	siblings := tree.Roots
+	if n.Parent != nil {
+		siblings = n.Parent.Children
+	}
+	if k := slices.Index(siblings, n); k > 0 {
+		above = siblings[k-1]
+	}
+	return n, above, nil
 }
 
 // UnnestOneLevel makes the task numbered strID, with its subtree, a

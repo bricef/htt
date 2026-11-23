@@ -119,8 +119,7 @@ func runRepl() error {
 				fmt.Fprintf(os.Stderr, "%q is not available inside the REPL\n", name)
 			} else {
 				resetReplFlags()
-				RootCmd.SetArgs(parsed)
-				if err := RootCmd.Execute(); err != nil {
+				if err := Execute(parsed); err != nil {
 					fmt.Fprintln(os.Stderr, err)
 				}
 			}
@@ -361,8 +360,8 @@ Common commands (run implicitly as todo <command>):
   add <entry...>            add a task to the current context
   delete <index>            archive the task at <index>
   do <index>                complete the task
-  + <index>                 raise priority
-  - <index>                 lower priority
+  up <index>                raise priority one step
+  down <index>              lower priority one step
   priority <index> <A|B|C>  set priority explicitly
   move <index> <context>    move task to another context
   replace <index> <entry>   replace the task

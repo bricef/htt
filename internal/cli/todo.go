@@ -6,6 +6,7 @@ import (
 	"math/rand"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -274,10 +275,16 @@ var random = &cobra.Command{
 	},
 }
 
-var priPlus = &cobra.Command{
-	Use:   "+ <item index>",
-	Short: "increase the priority for the selected task",
-	Args:  cobra.ExactArgs(1),
+var priUp = &cobra.Command{
+	Use:     "up <item index>",
+	Aliases: []string{"+"},
+	Short:   "Raise the task's priority one step",
+	Long: `Raise the task's priority one step: a task without a priority gets
+(C), then (B), then (A). A task at (A) stays there. The list is then
+sorted by priority, so task numbers can change.
+
++ is short for up: htt todo + 3.`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx, err := repo().CurrentContext()
 		if err != nil {
@@ -293,10 +300,19 @@ var priPlus = &cobra.Command{
 	},
 }
 
-var priMinus = &cobra.Command{
-	Use:   "- <item index>",
-	Short: "Decrease the priority for the selected task",
-	Args:  cobra.ExactArgs(1),
+// priDown lists - as an alias, for its help, but cobra never finds a
+// command by it: minusAsDown gives cobra down instead.
+var priDown = &cobra.Command{
+	Use:     "down <item index>",
+	Aliases: []string{"-"},
+	Short:   "Lower the task's priority one step",
+	Long: `Lower the task's priority one step: (A) becomes (B), then (C), and
+lowering (C) takes the priority away. A task without a priority stays
+without. The list is then sorted by priority, so task numbers can
+change.
+
+- is short for down: htt todo - 3.`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx, err := repo().CurrentContext()
 		if err != nil {
@@ -310,6 +326,45 @@ var priMinus = &cobra.Command{
 		fmt.Printf("After:  %s\n", neu.ConsoleString())
 		return nil
 	},
+}
+
+// minusAsDown returns args with a bare - where todo's command goes
+// read as down, so `htt todo - 3` runs `htt todo down 3`. An alias
+// can't do this, as + does for up: cobra takes any word starting with
+// - for a flag, before it looks up a command, so it never finds one
+// named -.
+//
+// The first word of args that isn't a flag has to be todo or its
+// alias, and the next one a bare -. A - after todo's command is that
+// command's (`htt todo add - milk` adds "- milk"), and a "--" ends the
+// search, as it ends the flags. The flags it steps over (--no-color,
+// --help) take no value. args itself is left as it is.
+func minusAsDown(args []string) []string {
+	i := nextWord(args, 0)
+	if i < 0 || (args[i] != TodoCommand.Name() && !TodoCommand.HasAlias(args[i])) {
+		return args
+	}
+	j := nextWord(args, i+1)
+	if j < 0 || args[j] != "-" {
+		return args
+	}
+	out := slices.Clone(args)
+	out[j] = priDown.Name()
+	return out
+}
+
+// nextWord is the index of the first word of args from i on that isn't
+// a flag (a bare - is a word), or -1 if a "--" or the end comes first.
+func nextWord(args []string, i int) int {
+	for ; i < len(args); i++ {
+		switch {
+		case args[i] == "--":
+			return -1
+		case len(args[i]) < 2 || args[i][0] != '-':
+			return i
+		}
+	}
+	return -1
 }
 
 var priority = &cobra.Command{
@@ -458,8 +513,8 @@ func init() {
 	TodoCommand.AddCommand(editArchive)
 	TodoCommand.AddCommand(deleteTodo)
 	TodoCommand.AddCommand(random)
-	TodoCommand.AddCommand(priPlus)
-	TodoCommand.AddCommand(priMinus)
+	TodoCommand.AddCommand(priUp)
+	TodoCommand.AddCommand(priDown)
 	TodoCommand.AddCommand(priority)
 	TodoCommand.AddCommand(replace)
 	TodoCommand.AddCommand(context)

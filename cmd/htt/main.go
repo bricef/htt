@@ -61,7 +61,7 @@ func main() {
 		}
 	}
 
-	err = cli.RootCmd.Execute()
+	err = cli.Execute(os.Args[1:])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "❌", err)
 	}

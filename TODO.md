@@ -10,7 +10,7 @@ Scoped work lives in [GitHub Issues](https://github.com/bricef/htt/issues).
 
 ## Known issues
 
-Each confirmed against `main` on 2026-11-03.
+Each confirmed against `main` on 2026-11-23.
 
 - **`:` in the TUI keymap does nothing yet** (command mode).
 - **Where the clocks go forward at midnight, a timesheet ends that

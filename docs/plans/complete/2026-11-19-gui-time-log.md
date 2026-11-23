@@ -115,14 +115,26 @@ Left open:
   They're in the binary and served by `htt gui`, but Apache-2.0
   asks redistributors to give a copy of the licence and NOTICE;
   `scripts/dist.sh` could add them (htt's Go dependencies' licences
-  aren't shipped either).
+  aren't shipped either). Done 2026-11-20 (merge 0b87ecc), in every
+  archive from v0.6.0: `third-party/` holds the licences, notices and
+  sources README from `internal/gui/web/vendor`. The Go dependencies'
+  licences weren't part of it.
 - **`/i` runs the TUI inside the REPL**: the REPL refuses
   `interactive` but not its alias `i`. Found while adding `gui`; not
-  fixed here.
+  fixed here. Done 2026-11-20 (merge d3b0955): the REPL opens the TUI
+  on purpose, with `/interactive` or `/i`, and hands the terminal
+  back when it quits. It refuses `repl` and `gui` by the command
+  itself, so an alias can't slip past.
 - **`htt report` could share the aggregates** (the wishlist's calendar
-  modes, `--week` and `--month`).
+  modes, `--week` and `--month`). Done 2026-11-20 (merge 2f14c28):
+  `htt report --week` and `--month` print the GUI's figures from the
+  same domain functions; see
+  `docs/plans/complete/2026-11-20-report-periods.md`.
 - **The browser test hasn't run on CI yet.** CI's Linux and Windows
-  runners have Chrome, so it will run there.
+  runners have Chrome, so it will run there. Done the same day: it ran
+  on `feat/gui`'s CI, Linux and Windows, before the merge (PR #14),
+  and failed there on Chrome asking for `/favicon.ico`, which the
+  headless shell used locally never does (fixed in bce58eb).
 - Out of scope as planned: a native window, editing, task views,
   colours in the config, push updates.
 

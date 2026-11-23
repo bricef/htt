@@ -428,6 +428,12 @@ in the lines; `--flat` lists the lines without indenting them, and so
 do sorted and filtered views and `search`, where the tags still say
 what belongs to what.
 
+Upgrading from 1.0 with a file that already uses `id:N` or `p:N` as
+ordinary words (`Read p:12 of the book`)? htt can't tell them from
+links, as topydo can't: from 1.1 such a task shows under the task
+with that `id:`, or warns that its `p:` names no task, and the next
+change htt makes writes the file in tree order. No line is lost.
+
 **Order in the file.** htt writes every subtree directly below its
 parent, a parent's subtasks in priority order (`(A)` first, those
 without a priority last, ties as they were), top-level tasks as they
@@ -514,7 +520,11 @@ $ htt todo show
 **Moving and deleting.** A subtree goes as one. `htt todo move N
 CONTEXT` takes the task and everything below it, and lists them; the
 task becomes a top-level task there, and any of their ids the other
-context already uses is renumbered there, the links with it.
+context already uses is renumbered there, the links with it. A done
+task moved from the done file back to the context it was completed
+in links up again: its subtasks there are under it once more, and a
+subtask goes back under its parent. A task whose only text is its
+`p:` can't lose it, so `move` and `unnest` refuse it.
 `htt todo delete N` archives the task and everything below it, and
 lists what it archived.
 
@@ -754,7 +764,8 @@ timelog:
   your first real entry is uncategorised, unless you give `@start` a
   category.
 - `htt workon` logs the task's text, tags included, so a task's
-  `+project` picks its category.
+  `+project` picks its category. A subtask's `id:` and `p:` are left
+  out.
 - A category that exists only to be the default needs no tags: give
   it a name (and `work: false` if its time shouldn't count) and name
   it in `default_category`. Any other category needs at least one tag,

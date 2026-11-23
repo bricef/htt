@@ -236,9 +236,15 @@ of the task above it, and a task that `Unnest` or `UnnestOneLevel`
 takes out of a subtree already sits right after it, where arranging,
 which keeps the order of the top level and of siblings of a priority,
 leaves it.
-`Move` takes the subtree, and into a context file `fitInto` removes
-the moved task's `p:` and renumbers the subtree's ids the target
-already uses (as an `id:` or a `p:`), with their `p:` links. `Delete`
+`Move` takes the subtree (refused to the same context, names compared
+as files are named, `ContextFileName`), and into a context file
+`fitInto` removes the moved task's `p:` and renumbers the subtree's
+ids the target already uses (as an `id:` or a `p:`), with their `p:`
+links; a done task going back to the context it was completed in
+keeps the id the `p:` there name it by, and its `p:` when its parent
+is there. Taking a task's `p:` away (`takeParent`: `Unnest`,
+`UnnestOneLevel` to the top, `fitInto`) refuses a task with no other
+text (`ErrOnlyLink`). `Delete`
 archives the subtree. `Complete` takes a `Subtasks` choice:
 `SubtasksAsk` (the zero value) refuses a task with open tasks below it,
 `SubtasksLeave` completes it alone, `SubtasksComplete` with every open
@@ -489,9 +495,15 @@ a line runs).
   what happens next (carry on, `tea.Quit`, `tea.ClearScreen`, run a
   program); `Action.Act` is the one place that logs it: every action
   at debug, an error wrapping `errUnavailable` (the action can't run
-  right now) at warn, any other error at error. Mutating actions call
-  `m.context.X(...)`, which persists through the repo, then `refresh`
-  and `showTasks`; context-switching actions call `m.repo.SetCurrent`.
+  right now) at warn, any other error at error. Mutating actions first
+  `reload` the list's file and find the selected task in it by the
+  line the TUI showed (`shownAt`), so they act on the file as it is,
+  saving nothing older than what another htt wrote; a task changed or
+  removed elsewhere is left alone, and the status line says so (Tab
+  also checks the task above it, and the answer to `x`'s question the
+  subtasks it counted). Then they call `m.context.X(...)`, which
+  persists through the repo, then `refresh` and `showTasks`;
+  context-switching actions call `m.repo.SetCurrent`.
 - **The task list** is a `bubbles/list` model (`tasklist.go`). Each
   item is a `taskItem`: a task and its index in the context. Actions
   take that index from `selectedTask()`, never the row on screen,

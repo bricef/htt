@@ -55,6 +55,8 @@ type model struct {
 	now           func() time.Time // the clock searches use for due-date filters
 	datesChecked  *domain.Context  // the context noteDateWarnings last looked at
 	datesWarned   map[string]bool  // the date warnings shown so far; see noteDateWarnings
+	folded        map[string]bool  // folded tasks, by foldKey, for the session
+	asking        *question        // the question x asked about open subtasks, until the next key
 }
 
 var controller = NewKeyBindingController().
@@ -112,6 +114,22 @@ var controller = NewKeyBindingController().
 	AddBinding(DecreasePriority, key.NewBinding(
 		key.WithKeys("-"),
 		key.WithHelp("-", "decrease priority"),
+	)).
+	AddBinding(NewSubtask, key.NewBinding(
+		key.WithKeys("s"),
+		key.WithHelp("s", "new subtask"),
+	)).
+	AddBinding(NestTask, key.NewBinding(
+		key.WithKeys("tab"),
+		key.WithHelp("tab", "nest under the task above"),
+	)).
+	AddBinding(UnnestTask, key.NewBinding(
+		key.WithKeys("shift+tab"),
+		key.WithHelp("shift+tab", "unnest a level"),
+	)).
+	AddBinding(ToggleFold, key.NewBinding(
+		key.WithKeys(" "),
+		key.WithHelp("space", "fold/unfold subtasks"),
 	))
 
 // Model constructs the TUI model rooted at ctx, backed by repo for all
@@ -170,6 +188,7 @@ func Model(repo domain.Repository, ctx *domain.Context, opts Options) model {
 		updateNotice:  opts.UpdateNotice,
 		now:           time.Now,
 		datesWarned:   map[string]bool{},
+		folded:        map[string]bool{},
 	}
 	m.showTasks(-1)
 	m.noteDateWarnings()
@@ -203,21 +222,31 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return next, cmd
 }
 
-// noteDateWarnings puts the date warnings (Task.DateWarnings) of the
-// list on show on the status line when it has been loaded since the
-// last look: the first, with a count of the rest. Each line's warning
-// is shown once a session, by list, task text and message, so
-// reloading a list, sorting it or changing a task's priority doesn't
-// repeat it. It runs after an action, so it adds to anything the
-// action said rather than being overwritten by it.
+// noteDateWarnings puts the date warnings (Task.DateWarnings) and the
+// broken links of subtasks (domain.LinkProblem) of the list on show on
+// the status line when it has been loaded since the last look: the
+// first, with a count of the rest. Each line's warning is shown once a
+// session, by list, task text and message, so reloading a list, sorting
+// it or changing a task's priority doesn't repeat it. It runs after an
+// action, so it adds to anything the action said rather than being
+// overwritten by it.
 func (m *model) noteDateWarnings() {
 	if m.context == nil || m.context == m.datesChecked {
 		return
 	}
 	m.datesChecked = m.context
+	links := map[int][]string{}
+	for _, p := range m.tree().Problems {
+		links[p.Index] = append(links[p.Index], p.Message)
+	}
 	var fresh []string
+	allDates := true
 	for i, task := range m.context.Tasks {
-		for _, w := range task.DateWarnings() {
+		dates := task.DateWarnings()
+		if len(links[i]) > 0 {
+			allDates = false
+		}
+		for _, w := range append(dates, links[i]...) {
 			key := m.context.Name + "\n" + task.Entry() + "\n" + w
 			if m.datesWarned[key] {
 				continue
@@ -233,11 +262,15 @@ func (m *model) noteDateWarnings() {
 		return
 	}
 	note := fresh[0]
+	kind := "date warning"
+	if !allDates {
+		kind = "warning"
+	}
 	switch more := len(fresh) - 1; {
 	case more == 1:
-		note += " (and 1 more date warning in this list)"
+		note += " (and 1 more " + kind + " in this list)"
 	case more > 1:
-		note += fmt.Sprintf(" (and %d more date warnings in this list)", more)
+		note += fmt.Sprintf(" (and %d more %ss in this list)", more, kind)
 	}
 	note += "."
 	if m.status != "" {
@@ -263,6 +296,9 @@ func (m model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		// A status message lasts until the user does something else.
 		m.status = ""
+		if m.asking != nil {
+			return answer(m, msg)
+		}
 		switch {
 		case m.textInput.Focused():
 			switch msg.Type {
@@ -301,8 +337,22 @@ func (m model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // updateList passes a message to the list and keeps the search title
 // line current.
 func (m model) updateList(msg tea.Msg) (tea.Model, tea.Cmd) {
+	selected, wasSearching := -1, m.list.FilterState() != list.Unfiltered
+	if it, ok := m.selectedTask(); ok {
+		selected = it.index
+	}
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
+	if searching := m.list.FilterState() != list.Unfiltered; searching != wasSearching && len(m.folded) > 0 {
+		// A search looks through folded tasks too; when it ends, the
+		// list folds again, still on the task it was on.
+		if searching {
+			selected = -1 // the list starts a search at the top
+		} else {
+			m.unfoldTo(selected)
+		}
+		m.showTasks(selected)
+	}
 	m.syncSearchTitle()
 	return m, cmd
 }
@@ -405,7 +455,10 @@ func (m model) footerView() string {
 	}
 
 	var keys help.KeyMap = m.keys
-	if m.input != inputClosed {
+	switch {
+	case m.asking != nil:
+		keys = questionKeys{}
+	case m.input != inputClosed:
 		keys = inputKeys{}
 	}
 	return lipgloss.NewStyle().

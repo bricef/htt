@@ -116,11 +116,15 @@ var Do = mkAction("do", func(m model) (tea.Model, tea.Cmd, error) {
 	if !ok {
 		return m, nil, errNoTaskSelected
 	}
+	open, err := m.context.OpenSubtasks(strID(it.index))
+	if err != nil {
+		return m, tea.Quit, fmt.Errorf("complete task %d: %w", it.index, err)
+	}
+	if len(open) > 0 {
+		m.ask(it.index, len(open)) // the next key answers (see answer)
+		return m, nil, nil
+	}
 	if _, err := m.context.Complete(strID(it.index), domain.SubtasksAsk); err != nil {
-		if errors.Is(err, domain.ErrOpenSubtasks) {
-			m.status = fmt.Sprintf("Task %d has open subtasks.", it.index)
-			return m, nil, fmt.Errorf("%w: %w", errUnavailable, err)
-		}
 		return m, tea.Quit, fmt.Errorf("complete task %d: %w", it.index, err)
 	}
 	if err := refresh(&m); err != nil {
@@ -294,6 +298,9 @@ var AddTask = mkAction("add task", func(m model) (tea.Model, tea.Cmd, error) {
 		m.closeInput()
 		return m, tea.ClearScreen, nil
 	}
+	if m.input == inputSubtask && len(d.problems) == 0 {
+		_, d.problems = m.subtaskDraft(d.raw)
+	}
 	if len(d.problems) > 0 {
 		return m, nil, fmt.Errorf("%w: %s", errUnavailable, d.problems[0])
 	}
@@ -311,7 +318,12 @@ var AddTask = mkAction("add task", func(m model) (tea.Model, tea.Cmd, error) {
 	if err != nil {
 		return m, nil, fmt.Errorf("%w: %v", errUnavailable, err)
 	}
-	if err := target.AddTask(task); err != nil {
+	if m.input == inputSubtask {
+		if err := target.AddSubtask(strID(m.editIndex), task); err != nil {
+			m.status = fmt.Sprintf("Couldn't save the subtask: %v", err)
+			return m, nil, fmt.Errorf("add subtask of task %d: %w", m.editIndex, err)
+		}
+	} else if err := target.AddTask(task); err != nil {
 		m.status = fmt.Sprintf("Couldn't save the task: %v", err)
 		return m, nil, fmt.Errorf("add task: %w", err)
 	}
@@ -319,8 +331,11 @@ var AddTask = mkAction("add task", func(m model) (tea.Model, tea.Cmd, error) {
 	if err := refresh(&m); err != nil {
 		return m, tea.ClearScreen, err
 	}
-	// AddTask appends, so the new task is the last one.
-	m.showTasks(len(m.context.Tasks) - 1)
+	// Saving arranged the context: the task is where it was put, in the
+	// order the reload has too.
+	index := slices.Index(target.Tasks, task)
+	m.unfoldTo(index)
+	m.showTasks(index)
 	return m, tea.ClearScreen, nil
 })
 
@@ -329,13 +344,17 @@ var Delete = mkAction("delete", func(m model) (tea.Model, tea.Cmd, error) {
 	if !ok {
 		return m, nil, errNoTaskSelected
 	}
-	if _, err := m.context.Delete(strID(it.index)); err != nil {
+	gone, err := m.context.Delete(strID(it.index))
+	if err != nil {
 		return m, tea.Quit, fmt.Errorf("delete task %d: %w", it.index, err)
 	}
 	if err := refresh(&m); err != nil {
 		return m, tea.Quit, err
 	}
 	m.showTasks(-1)
+	if len(gone) > 1 {
+		m.status = fmt.Sprintf("Deleted task %d and %s.", it.index, plural(len(gone)-1, "subtask"))
+	}
 	return m, tea.ClearScreen, nil
 })
 

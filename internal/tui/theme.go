@@ -216,6 +216,7 @@ type styles struct {
 	helpDesc   lipgloss.Style
 	helpSep    lipgloss.Style
 	plain      lipgloss.Style                      // text left in the terminal's colours
+	muted      lipgloss.Style                      // id: and p:, and the notes after a row
 	tokens     map[domain.TokenKind]lipgloss.Style // the parts of a task line, priorities aside
 	priorities map[string]lipgloss.Style           // priorities, by token text: "(A)"
 }
@@ -230,6 +231,7 @@ func newStyles(t Theme) styles {
 		helpDesc: lipgloss.NewStyle().Foreground(t.Help),
 		helpSep:  lipgloss.NewStyle().Foreground(t.Separator),
 		plain:    lipgloss.NewStyle(),
+		muted:    fg(t.Muted),
 		tokens: map[domain.TokenKind]lipgloss.Style{
 			domain.TokenDate:       fg(t.Date),
 			domain.TokenPlusTag:    fg(t.PlusTag),
@@ -247,8 +249,12 @@ func newStyles(t Theme) styles {
 
 // token is the style of one word of a task line on an unselected row.
 // Plain words, the completion mark and priorities other than A to C
-// keep the terminal's colours.
+// keep the terminal's colours. The id: and p: annotations that link
+// subtasks are muted, so the task's own text stands out.
 func (s styles) token(kind domain.TokenKind, word string) lipgloss.Style {
+	if kind == domain.TokenAnnotation && (strings.HasPrefix(word, "id:") || strings.HasPrefix(word, "p:")) {
+		return s.muted
+	}
 	if kind == domain.TokenPriority {
 		if st, ok := s.priorities[word]; ok {
 			return st

@@ -137,11 +137,11 @@ func (c *Context) OpenSubtasks(strID string) ([]*Task, error) {
 	return open, nil
 }
 
-// idFor returns the id a subtask of parent names, giving parent the
-// next free id (NextID, counting extra too) if it has none. A parent
-// whose id another task holds too is refused: a p: naming it would be a
-// broken link.
-func (c *Context) idFor(parent *Task, extra ...*Task) (string, error) {
+// subtaskID returns the id a subtask of parent names: parent's own, or,
+// when it has none, the next free id (NextID, counting extra too), which
+// fresh says parent would need. A parent whose id another task holds
+// too is refused: a p: naming it would be a broken link.
+func (c *Context) subtaskID(parent *Task, extra ...*Task) (id string, fresh bool, err error) {
 	if id := parent.ID(); id != "" {
 		holders := 0
 		for _, t := range c.Tasks {
@@ -150,15 +150,46 @@ func (c *Context) idFor(parent *Task, extra ...*Task) (string, error) {
 			}
 		}
 		if holders > 1 {
-			return "", fmt.Errorf("%w (id:%s)", ErrSharedID, id)
+			return "", false, fmt.Errorf("%w (id:%s)", ErrSharedID, id)
 		}
-		return id, nil
+		return id, false, nil
 	}
-	id := NextID(append(slices.Clone(c.Tasks), extra...))
+	return NextID(append(slices.Clone(c.Tasks), extra...)), true, nil
+}
+
+// idFor is subtaskID, giving parent the id when it needs one.
+func (c *Context) idFor(parent *Task, extra ...*Task) (string, error) {
+	id, fresh, err := c.subtaskID(parent, extra...)
+	if err != nil || !fresh {
+		return id, err
+	}
 	if _, err := parent.Annotate(idKey, id); err != nil {
 		return "", fmt.Errorf("give the parent an id: %w", err)
 	}
 	return id, nil
+}
+
+// SubtaskLine returns the line AddSubtask would save task as, under the
+// task numbered parentID, changing nothing: for a preview that can't
+// differ from the file.
+func (c *Context) SubtaskLine(parentID string, task *Task) (string, error) {
+	if !c.IsTree() {
+		return "", ErrNotATree
+	}
+	parent, err := c.GetTaskByStrId(parentID)
+	if err != nil {
+		return "", err
+	}
+	id, _, err := c.subtaskID(parent, task)
+	if err != nil {
+		return "", err
+	}
+	draft, err := NewTask(task.Raw)
+	if err != nil {
+		return "", err
+	}
+	draft.setParent(id)
+	return draft.StampCreated(time.Now()).Raw, nil
 }
 
 // leadsTo reports whether following first p: links up from from, each

@@ -1,6 +1,6 @@
 # Subtasks
 
-**Status:** Agreed design, 2026-11-23 (Brice). Not yet built.
+**Status:** Agreed design, 2026-11-23 (Brice), with the TUI's one-level nest and unnest and priority order among subtasks added the same day. Not yet built.
 
 A task can hold other tasks: its subtasks, which can hold their own.
 This document says how htt records them in todo.txt files and how they
@@ -72,9 +72,15 @@ tags as text. topydo shows the same tree as htt.
 ## Order in the file
 
 When htt writes a context file, it puts every subtree directly below
-its parent, after the parent and before the parent's next sibling. The
-order of siblings, and of top-level tasks, is kept as it was. So the
-file reads as an outline from top to bottom, whoever last edited it.
+its parent, after the parent and before the parent's next sibling. So
+the file reads as an outline from top to bottom, whoever last edited
+it.
+
+- **A parent's subtasks are in priority order:** `(A)` first, then
+  `(B)` and on, then those without a priority. Subtasks with the same
+  priority keep their order. Changing a subtask's priority moves it
+  among its siblings.
+- **Top-level tasks keep their order** as it was.
 
 - **No loss:** this reordering never drops or changes a line. A file
   already in that order is written back unchanged.
@@ -95,6 +101,23 @@ file reads as an outline from top to bottom, whoever last edited it.
   A nesting that would make a loop is refused.
 - **`htt todo unnest N`** makes task N a top-level task. Its own
   subtree stays with it.
+
+The TUI arranges the tree a level at a time, as outliners do, with a
+key for each:
+
+- **Nest under the task above:** the selected task becomes a subtask
+  of the task above it at the same level (its previous sibling), with
+  its subtree. For a top-level task, that's the top-level task above
+  it, however many subtasks sit between them. The first task at its
+  level has nothing above it to nest under, so nothing changes, and
+  the status line says why.
+- **Unnest one level:** the selected task becomes a sibling of its
+  parent, with its subtree. A subtask of a top-level task becomes a
+  top-level task, placed right after its old parent's subtree. On a
+  top-level task, nothing changes, and the status line says why.
+
+Wherever a task lands, it takes its place among its new siblings in
+priority order.
 
 ### Completing
 
@@ -160,9 +183,10 @@ lines are left as they are.
   so do sorted and filtered views, where the tags still say what
   belongs to what.
 - **The TUI** shows the tree, unfolded by default, and can fold and
-  unfold a task's subtree. It has keys to add a subtask and to nest or
-  unnest the selected task (outliners' Tab and Shift-Tab are the
-  natural ones for nesting).
+  unfold a task's subtree. It has keys to add a subtask, to nest the
+  selected task under the task above, and to unnest it one level (see
+  "Adding and arranging"; outliners' Tab and Shift-Tab are the natural
+  keys for the last two).
 
 ## Compatibility
 

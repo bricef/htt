@@ -55,6 +55,9 @@ func TestSubtasks_ShowIndentsTheTree(t *testing.T) {
 	// The REPL's view is the tree, and its show takes --flat once.
 	r := e.mustRunWithInput("show --flat\nshow\nq\n", "repl")
 	assertInOrder(t, "repl", r.stdout, launchTree, flat, launchTree)
+	if n := strings.Count(r.stdout, flat); n != 1 {
+		t.Errorf("the REPL listed the tasks flat %d times, want once (show --flat):\n%s", n, r.stdout)
+	}
 }
 
 // A task whose parent was completed shows at the top level, marked; the

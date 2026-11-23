@@ -179,6 +179,39 @@ func TestFileTransact_AContextKeptFromATransactionRunsItsOwn(t *testing.T) {
 	}
 }
 
+// An editor saving the day's log between Append's read and its check:
+// Append runs again, and both entries are kept.
+func TestFileTransact_AnEditorsSaveOfTheLogIsKept(t *testing.T) {
+	dir := t.TempDir()
+	logs := NewFileTimelogRepository(dir)
+	now := time.Now()
+	path := logs.LogPath(now)
+	day, err := logs.Day(now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ran := 0
+	logs.hooks.underneath = func(run int) {
+		ran = run
+		if run == 1 {
+			writeFile(t, path, "edited in ts:2026-01-01T00:00:00Z\n")
+		}
+	}
+	if err := day.Append(mustTask(t, "mine")); err != nil {
+		t.Fatal(err)
+	}
+	if ran != 2 {
+		t.Errorf("ran %d times, want 2", ran)
+	}
+	got := readString(t, path)
+	if !strings.HasPrefix(got, "edited in ts:2026-01-01T00:00:00Z\nmine ts:") || strings.Count(got, "\n") != 2 {
+		t.Errorf("the log = %q, want both entries", got)
+	}
+	if bak := readString(t, path+".bak"); bak != "edited in ts:2026-01-01T00:00:00Z\n" {
+		t.Errorf("the .bak = %q, want the edited version", bak)
+	}
+}
+
 // Goroutines each with a repository of its own, as separate htt
 // processes are, adding to and completing from one context at once:
 // every change lands.

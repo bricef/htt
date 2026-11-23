@@ -15,6 +15,9 @@ func (*stubTimelogRepository) Day(time.Time) (*Timelog, error) { panic("stub") }
 func (*stubTimelogRepository) Save(*Timelog) error             { panic("stub") }
 func (*stubTimelogRepository) CurrentLogPath() string          { panic("stub") }
 func (*stubTimelogRepository) LogPath(time.Time) string        { panic("stub") }
+func (*stubTimelogRepository) Transact(func(TimelogRepository) error) error {
+	panic("stub")
+}
 
 func TestNewTimelog_InjectsRepo(t *testing.T) {
 	// Mirrors TestNewContext_InjectsRepo: NewTimelog must store the

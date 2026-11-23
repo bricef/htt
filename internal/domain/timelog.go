@@ -20,6 +20,10 @@ type Timelog struct {
 	Date    time.Time
 	Entries []*Task
 	repo    TimelogRepository
+
+	// changing is true while a transaction runs on the log (transact):
+	// its repository is then the transaction's.
+	changing bool
 }
 
 // NewTimelog returns a Timelog wired with the given repository.
@@ -62,13 +66,45 @@ func entryTimestamp(t *Task) (time.Time, error) {
 //
 // The entry goes at the end, whatever the times of the entries before
 // it; AppendAt places an entry by its time.
+//
+// Like AppendAt, it runs as one transaction of the log's repository
+// (transact), on the day's log as the store holds it then.
 func (l *Timelog) Append(task *Task) error {
-	now := time.Now().UTC()
-	if _, err := task.Annotate(TimelogTimestampLabel, now.Format(time.RFC3339)); err != nil {
-		return fmt.Errorf("annotate entry timestamp: %w", err)
+	stamp := time.Now().UTC().Format(time.RFC3339)
+	return l.transact(func() error {
+		if _, err := task.Annotate(TimelogTimestampLabel, stamp); err != nil {
+			return fmt.Errorf("annotate entry timestamp: %w", err)
+		}
+		l.Entries = append(l.Entries, task)
+		return l.repo.Save(l)
+	})
+}
+
+// transact runs body as one transaction of l's repository
+// (TimelogRepository.Transact), on the day's log as the store holds it
+// then, as Context's persistent methods run (Context.transact): l's
+// entries become those the transaction reads, l's own entry objects
+// when they're the same lines, and l's repository is the
+// transaction's while body runs. body may run more than once.
+func (l *Timelog) transact(body func() error) error {
+	if l.changing {
+		return body()
 	}
-	l.Entries = append(l.Entries, task)
-	return l.repo.Save(l)
+	outer, held := l.repo, rawLines(l.Entries)
+	first := true
+	return outer.Transact(func(tx TimelogRepository) error {
+		now, err := tx.Day(l.Date)
+		if err != nil {
+			return err
+		}
+		if !first || !slices.Equal(rawLines(now.Entries), held) {
+			l.Entries = now.Entries
+		}
+		first = false
+		l.repo, l.changing = tx, true
+		defer func() { l.repo, l.changing = outer, false }()
+		return body()
+	})
 }
 
 // ErrFutureEntry is AppendAt's error for a time later than now.
@@ -102,19 +138,21 @@ func (l *Timelog) AppendAt(task *Task, at, now time.Time) error {
 	if y, m, d := local.Date(); y != l.Date.Year() || m != l.Date.Month() || d != l.Date.Day() {
 		return fmt.Errorf("%s isn't on the log's day, %s", local.Format(time.RFC3339), l.Date.Format("2006-01-02"))
 	}
-	place := 0 // the new entry's index
-	for i, entry := range l.Entries {
-		logged, err := entryTimestamp(entry)
-		if err != nil {
-			return fmt.Errorf("entry %d: %w", i, err)
+	return l.transact(func() error {
+		place := 0 // the new entry's index
+		for i, entry := range l.Entries {
+			logged, err := entryTimestamp(entry)
+			if err != nil {
+				return fmt.Errorf("entry %d: %w", i, err)
+			}
+			if !logged.After(at) {
+				place = i + 1
+			}
 		}
-		if !logged.After(at) {
-			place = i + 1
+		if _, err := task.Annotate(TimelogTimestampLabel, at.UTC().Format(time.RFC3339)); err != nil {
+			return fmt.Errorf("annotate entry timestamp: %w", err)
 		}
-	}
-	if _, err := task.Annotate(TimelogTimestampLabel, at.UTC().Format(time.RFC3339)); err != nil {
-		return fmt.Errorf("annotate entry timestamp: %w", err)
-	}
-	l.Entries = slices.Insert(l.Entries, place, task)
-	return l.repo.Save(l)
+		l.Entries = slices.Insert(l.Entries, place, task)
+		return l.repo.Save(l)
+	})
 }

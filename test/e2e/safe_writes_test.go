@@ -142,6 +142,98 @@ func TestSafeWrites_ConcurrentChangesAcrossFilesAllLand(t *testing.T) {
 	}
 }
 
+// Twenty htt processes logging an entry each at once: all twenty are in
+// the day's log.
+func TestSafeWrites_ConcurrentLogEntriesAllLand(t *testing.T) {
+	e := safeEnv(t)
+	e.mustRun("log", "add", "already logged")
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	var procs []*started
+	for i := range concurrently {
+		procs = append(procs, e.start(ctx, "log", "add", fmt.Sprintf("logged by process %02d", i)))
+	}
+	for _, p := range procs {
+		p.wait(t)
+	}
+
+	// The day is the one the entries were logged on: around midnight,
+	// some could fall on the next.
+	var lines []string
+	for _, day := range []time.Time{time.Now().AddDate(0, 0, -1), time.Now()} {
+		if path := filepath.Join("timelogs", day.Format("2006-01-02")+".log"); e.dataExists(path) {
+			lines = append(lines, strings.Split(strings.TrimSuffix(e.readData(path), "\n"), "\n")...)
+		}
+	}
+	for i := range concurrently {
+		entry := fmt.Sprintf("logged by process %02d ts:", i)
+		if n := countContaining(lines, entry); n != 1 {
+			t.Errorf("%q is in the log %d times, want once", entry, n)
+		}
+	}
+	if n := countContaining(lines, "already logged ts:"); n != 1 {
+		t.Errorf("the entry logged first is there %d times, want once", n)
+	}
+}
+
+// Switching contexts again and again, htt never leaves the
+// current-context pointer empty or half-written for a reader: it names
+// one of the contexts each time.
+func TestSafeWrites_ThePointerIsAlwaysWhole(t *testing.T) {
+	e := safeEnv(t)
+	e.mustRun("todo", "context", "first_context")
+	path := filepath.Join(e.dataDir, "current-context")
+	names := []string{"first_context", "second_context"}
+
+	const switches = 30
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		for i := range switches {
+			if r := e.run("todo", "context", names[i%2]); r.exitCode != 0 {
+				t.Errorf("switch %d: exit %d: %s", i, r.exitCode, r.stderr)
+				return
+			}
+		}
+	}()
+	var reads, bad int
+	var example string
+	deadline := time.After(2 * time.Minute)
+	for done := false; !done; reads++ {
+		select {
+		case <-finished:
+			done = true
+		case <-deadline:
+			t.Fatal("the switches took over two minutes")
+		default:
+		}
+		b, err := os.ReadFile(path)
+		if err != nil || !slices.Contains(names, string(b)) {
+			bad++
+			if example == "" {
+				example = fmt.Sprintf("%q, %v", b, err)
+			}
+		}
+	}
+	if bad > 0 {
+		t.Errorf("of %d reads, %d found the pointer missing or partial, as %s", reads, bad, example)
+	}
+	if e.dataExists("current-context.bak") {
+		t.Errorf("the pointer got a .bak")
+	}
+}
+
+func countContaining(lines []string, s string) int {
+	n := 0
+	for _, l := range lines {
+		if strings.Contains(l, s) {
+			n++
+		}
+	}
+	return n
+}
+
 func countSuffix(lines []string, suffix string) int {
 	n := 0
 	for _, l := range lines {

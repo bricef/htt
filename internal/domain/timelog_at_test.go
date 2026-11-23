@@ -10,9 +10,12 @@ import (
 )
 
 // recordingTimelogRepository is a TimelogRepository that records what
-// each Save is given, for AppendAt's tests. The other methods panic.
+// each Save is given, for AppendAt's tests. It holds one day, whose
+// lines Day hands out, and has no transactions: Transact runs the
+// change with it. The other methods panic.
 type recordingTimelogRepository struct {
 	stubTimelogRepository
+	day   []string   // the day's lines
 	saves [][]string // each Save's entries, by Raw
 }
 
@@ -22,16 +25,34 @@ func (r *recordingTimelogRepository) Save(l *Timelog) error {
 		saved[i] = entry.Raw
 	}
 	r.saves = append(r.saves, saved)
+	r.day = saved
 	return nil
 }
 
-// wiredDayLog is dayLog, wired to a recording repository.
+func (r *recordingTimelogRepository) Day(date time.Time) (*Timelog, error) {
+	l := NewTimelog(r, date)
+	for _, line := range r.day {
+		entry, err := NewTask(line)
+		if err != nil {
+			return nil, err
+		}
+		l.Entries = append(l.Entries, entry)
+	}
+	return l, nil
+}
+
+func (r *recordingTimelogRepository) Transact(change func(TimelogRepository) error) error {
+	return change(r)
+}
+
+// wiredDayLog is dayLog, wired to a recording repository holding it.
 func wiredDayLog(t *testing.T, loc *time.Location, date string, lines ...string) (*Timelog, *recordingTimelogRepository) {
 	t.Helper()
 	repo := &recordingTimelogRepository{}
 	built := dayLog(t, loc, date, lines...)
 	l := NewTimelog(repo, built.Date)
 	l.Entries = built.Entries
+	repo.day = rawEntries(built)
 	return l, repo
 }
 
@@ -258,6 +279,7 @@ func TestTimelog_AppendAtNeedsTheEntriesTimes(t *testing.T) {
 	for _, bad := range []string{"no time", "bad time ts:yesterday"} {
 		l, repo := wiredDayLog(t, loc, "2026-11-17", "09:00 @start")
 		l.Entries = append(l.Entries, mustTask(t, bad))
+		repo.day = rawEntries(l) // the hand edit is in the file
 		before := rawEntries(l)
 		entry := mustTask(t, "new")
 		err := l.AppendAt(entry, localTime(t, loc, "2026-11-17 10:00"), localTime(t, loc, "2026-11-18 12:00"))
@@ -328,7 +350,7 @@ func TestTimelog_AppendAtProperty(t *testing.T) {
 	sortedDays := 0
 	for range 1000 {
 		g := generateDay(t, r, zones)
-		repo := &recordingTimelogRepository{}
+		repo := &recordingTimelogRepository{day: rawEntries(g.log)}
 		l := NewTimelog(repo, g.log.Date)
 		l.Entries = g.log.Entries
 

@@ -9,7 +9,10 @@ package domain_test
 
 import (
 	"errors"
+	"slices"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/bricef/htt/internal/domain"
 	"github.com/bricef/htt/internal/storage"
@@ -221,6 +224,63 @@ func TestContext_TransactSavesNothingOnAnError(t *testing.T) {
 		t.Fatalf("err = %v, want the body's", err)
 	}
 	wantLines(t, "todo", rawsOf(t, repo, "todo"), "one")
+}
+
+// Logging an entry runs again on an entry logged underneath, keeping
+// both, in time order with AppendAt.
+func TestTransact_LoggingRunsAgainOnAnEntryLoggedUnderneath(t *testing.T) {
+	logs := storage.NewMemoryTimelogRepository()
+	now := time.Now()
+	day, err := logs.Day(now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runs := 0
+	logs.Underneath = func(run int) {
+		runs = run
+		if run == 1 {
+			other, _ := logs.Day(now)
+			other.Entries = append(other.Entries, mustTask(t, "elsewhere ts:"+now.Add(-time.Minute).UTC().Format(time.RFC3339)))
+			if err := logs.Save(other); err != nil { // straight to the store
+				t.Fatal(err)
+			}
+		}
+	}
+	if err := day.Append(mustTask(t, "mine")); err != nil {
+		t.Fatal(err)
+	}
+	if runs != 2 {
+		t.Errorf("ran %d times, want 2", runs)
+	}
+	stored, _ := logs.Day(now)
+	if got := rawsOfTasks(stored.Entries); len(got) != 2 || !strings.HasPrefix(got[0], "elsewhere ") || !strings.HasPrefix(got[1], "mine ts:") {
+		t.Errorf("the log: %q, want both entries", got)
+	}
+	if got := rawsOfTasks(day.Entries); len(got) != 2 {
+		t.Errorf("the caller's log: %q, want both entries", got)
+	}
+
+	// AppendAt places by time in the log as it is when it runs.
+	logs.Underneath = func(run int) {
+		if run == 1 {
+			other, _ := logs.Day(now)
+			other.Entries = append([]*domain.Task{mustTask(t, "earliest ts:"+now.Add(-time.Hour).UTC().Format(time.RFC3339))}, other.Entries...)
+			if err := logs.Save(other); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if err := day.AppendAt(mustTask(t, "between"), now.Add(-30*time.Minute), now); err != nil {
+		t.Fatal(err)
+	}
+	stored, _ = logs.Day(now)
+	var texts []string
+	for _, e := range stored.Entries {
+		texts = append(texts, strings.Fields(e.Raw)[0])
+	}
+	if !slices.Equal(texts, []string{"earliest", "between", "elsewhere", "mine"}) {
+		t.Errorf("the log: %q", rawsOfTasks(stored.Entries))
+	}
 }
 
 func itoa(i int) string {

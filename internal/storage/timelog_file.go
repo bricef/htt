@@ -97,15 +97,65 @@ func (r *FileTimelogRepository) parseLog(repo domain.TimelogRepository, date tim
 	return l, nil
 }
 
-// Save writes l's file as a transaction of its own (transaction.go).
+// Save writes l's file as a transaction of its own. Timelog.Append and
+// AppendAt save within their own transactions (Transact).
 func (r *FileTimelogRepository) Save(l *domain.Timelog) error {
+	return r.Transact(func(tx domain.TimelogRepository) error { return tx.Save(l) })
+}
+
+// Transact runs change as one transaction
+// (domain.TimelogRepository.Transact) over the log directory, through
+// transaction.go. change gets a fileTimelogTx.
+func (r *FileTimelogRepository) Transact(change func(tx domain.TimelogRepository) error) error {
+	return transact(r.dirs(), r.hooks, func(t *transaction) error {
+		tx := &fileTimelogTx{r: r, t: t}
+		defer func() { tx.over = true }()
+		return change(tx)
+	})
+}
+
+// fileTimelogTx is a FileTimelogRepository within one run of a
+// transaction's change, as fileTx is a FileRepository.
+type fileTimelogTx struct {
+	r    *FileTimelogRepository
+	t    *transaction
+	over bool
+}
+
+var _ domain.TimelogRepository = (*fileTimelogTx)(nil)
+
+func (tx *fileTimelogTx) Today() (*domain.Timelog, error) { return tx.Day(time.Now()) }
+
+func (tx *fileTimelogTx) Day(date time.Time) (*domain.Timelog, error) {
+	data, _, err := tx.t.Read(tx.r.LogPath(date))
+	if err != nil {
+		return nil, err
+	}
+	return tx.r.parseLog(tx, date, data)
+}
+
+func (tx *fileTimelogTx) Save(l *domain.Timelog) error {
 	if l == nil {
 		return errors.New("nil timelog")
 	}
-	return transact(r.dirs(), r.hooks, func(t *transaction) error {
-		t.Write(r.LogPath(l.Date), logFile(l), true)
-		return nil
-	})
+	if tx.over {
+		return errOver
+	}
+	tx.t.Write(tx.r.LogPath(l.Date), logFile(l), true)
+	return nil
+}
+
+func (tx *fileTimelogTx) CurrentLogPath() string { return tx.r.CurrentLogPath() }
+
+func (tx *fileTimelogTx) LogPath(date time.Time) string { return tx.r.LogPath(date) }
+
+// Transact runs change as part of this transaction, while its change
+// runs; afterwards, as a transaction of its own.
+func (tx *fileTimelogTx) Transact(change func(tx domain.TimelogRepository) error) error {
+	if tx.over {
+		return tx.r.Transact(change)
+	}
+	return change(tx)
 }
 
 // logFile is l's file: an entry a line, each entry's Raw. Each entry's

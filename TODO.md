@@ -59,6 +59,13 @@ Each confirmed against `main` on 2026-11-23.
 - [ ] More packaging: a Homebrew tap, and macOS binaries signed and
       notarised (a binary downloaded with a browser is quarantined
       today)
+- [ ] A licence file for go-localereader: v0.0.1, which bubbletea
+      links on Windows, has none, so the Windows archives ship its
+      README (it says MIT) in its place (`licence_elsewhere` in
+      `scripts/dist.sh`). Upstream added an MIT `LICENSE` in 2022
+      (commit 2491eb6) but hasn't tagged a release since; requiring
+      that commit would ship the file. The exception stays while
+      older releases may be rebuilt
 
 ## Future
 

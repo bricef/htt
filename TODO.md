@@ -87,6 +87,14 @@ Each confirmed against `main` on 2026-11-23.
       and nests and unnests a level with `Tab` and `Shift-Tab`. See
       `docs/design/subtasks.md` and
       `docs/plans/complete/2026-11-23-subtasks.md`
+- [x] Lowering a priority one step (2026-11-23): `htt todo - N`
+      failed with `unknown command "-" for "htt todo"`, as did `- N`
+      in the REPL, whose help listed it, so `htt todo priority N C`
+      was the only way down: cobra takes a bare `-` for a flag before
+      it looks up a command. `htt todo up N` and `htt todo down N` are
+      the verbs now, with `+` and `-` short for them; before cobra
+      parses, htt reads a bare `-` where todo's command goes as `down`,
+      for the command line and the REPL alike
 - [x] Calendar modes (2026-11-20): `htt report --week [DATE]` and
       `--month [MONTH]` report a week, Monday to Sunday, or a calendar
       month, with `htt gui`'s figures: the week's days and summary;

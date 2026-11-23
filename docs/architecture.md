@@ -404,6 +404,13 @@ Each is lazily initialized from viper config. Tests inject memory
 impls via `SetRepository` / `SetTimelogRepository`. Cobra commands
 call `repo()` / `timelogRepo()` at the top of each `RunE`.
 
+`Execute` (`root.go`) runs a command: `main` runs the command line
+through it, and the REPL each line. It reads a bare `-` where todo's
+command goes as `down` first (`minusAsDown`), so `htt todo - 3` lowers
+task 3's priority: cobra takes any word starting with `-` for a flag
+before it looks up a command, so an alias can't do it, as `+` does
+for `up`.
+
 `repo()` wraps the configured repository (`baseRepo()`) in
 `warningRepository` (`date_warnings.go`), which prints
 `warning: <file>:<line>: <message>` on stderr for each

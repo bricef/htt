@@ -28,3 +28,12 @@ var RootCmd = &cobra.Command{
 func init() {
 	RootCmd.Version = version()
 }
+
+// Execute runs the command args names, the words after htt: main runs
+// the command line through it, and the REPL each line. A bare - where
+// todo's command goes is read as down first (minusAsDown), which cobra
+// can't do itself.
+func Execute(args []string) error {
+	RootCmd.SetArgs(minusAsDown(args))
+	return RootCmd.Execute()
+}

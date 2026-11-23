@@ -83,12 +83,15 @@ Before: 2026-05-15 submit timesheet
 After:  (A) 2026-05-15 submit timesheet
 ```
 
-`htt todo +` and `htt todo -` bump priority one step up or down (no
-priority → `C` → `B` → `A`). Setting the priority re-sorted the file,
-so `buy milk` is now task `1`:
+`htt todo up` and `htt todo down` move a task's priority one step (no
+priority → `C` → `B` → `A`, and back down). `up` stops at `A`; `down`
+takes a `C` task's priority away, and leaves a task without one as it
+is. `+` and `-` are short for them: `htt todo + 1`, `htt todo - 1`.
+Setting the priority re-sorted the file, so `buy milk` is now task
+`1`:
 
 ```
-$ htt todo + 1
+$ htt todo up 1
 Before: 2026-05-15 buy milk
 After:  (C) 2026-05-15 buy milk
 $ htt todo
@@ -1361,7 +1364,7 @@ list together are taller than the terminal, the top of the output
 scrolls back, as in any shell.
 
 Commands without a prefix dispatch as `todo <cmd>`: `add foo`,
-`delete 0`, `+ 1`, `do 0`, `context home`. Prefix a line with `/`
+`delete 0`, `up 1`, `do 0`, `context home`. Prefix a line with `/`
 to escape to a full CLI command: `/log start`, `/report --since 7d`.
 `/interactive` (or `/i`) opens the TUI on the REPL's screen. Quit it
 (`q`, `Esc` or Ctrl-C, as outside the REPL) and you're back at the

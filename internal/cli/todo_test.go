@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -298,5 +299,71 @@ func TestCobra_Report_DeletedSectionWalksArchive(t *testing.T) {
 
 	if err := runCobra(t, "report", "--since", "7d"); err != nil {
 		t.Errorf("report after delete should succeed, got %v", err)
+	}
+}
+
+func TestMinusAsDown(t *testing.T) {
+	// cobra takes a bare - for a flag, so it never finds a command
+	// named -: htt reads one where todo's command goes as down.
+	cases := []struct {
+		args, want []string
+	}{
+		{[]string{"todo", "-", "3"}, []string{"todo", "down", "3"}},
+		{[]string{"t", "-", "3"}, []string{"t", "down", "3"}},
+		{[]string{"todo", "-"}, []string{"todo", "down"}},
+		{[]string{"--no-color", "todo", "-", "3"}, []string{"--no-color", "todo", "down", "3"}},
+		{[]string{"todo", "--no-color", "-", "3"}, []string{"todo", "--no-color", "down", "3"}},
+		{[]string{"todo", "-", "--help"}, []string{"todo", "down", "--help"}},
+		// A - after a command is that command's.
+		{[]string{"todo", "add", "-", "milk"}, []string{"todo", "add", "-", "milk"}},
+		{[]string{"todo", "down", "-"}, []string{"todo", "down", "-"}},
+		// Only todo's.
+		{[]string{"log", "-"}, []string{"log", "-"}},
+		{[]string{"-", "todo"}, []string{"-", "todo"}},
+		{[]string{"help", "todo", "-"}, []string{"help", "todo", "-"}},
+		// "--" ends the flags, and the search.
+		{[]string{"todo", "--", "-", "3"}, []string{"todo", "--", "-", "3"}},
+		{[]string{"--", "todo", "-", "3"}, []string{"--", "todo", "-", "3"}},
+		{[]string{"todo", "+", "3"}, []string{"todo", "+", "3"}},
+		{[]string{"todo"}, []string{"todo"}},
+		{[]string{}, []string{}},
+	}
+	for _, c := range cases {
+		in := slices.Clone(c.args)
+		if got := minusAsDown(c.args); !slices.Equal(got, c.want) {
+			t.Errorf("minusAsDown(%q) = %q, want %q", in, got, c.want)
+		}
+		if !slices.Equal(c.args, in) {
+			t.Errorf("minusAsDown(%q) changed its argument to %q", in, c.args)
+		}
+	}
+}
+
+func TestExecute_UpAndDownStepThePriority(t *testing.T) {
+	// Execute is what main and the REPL run commands through, and -
+	// reaches down only through it.
+	repo := withMemoryRepo(t)
+	if err := runCobra(t, "todo", "add", "(B) pack the van"); err != nil {
+		t.Fatalf("add: %v", err)
+	}
+	for _, step := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"todo", "up", "0"}, "A"},
+		{[]string{"todo", "down", "0"}, "B"},
+		{[]string{"todo", "-", "0"}, "C"},
+		{[]string{"todo", "+", "0"}, "B"},
+	} {
+		if err := Execute(step.args); err != nil {
+			t.Fatalf("%q: %v", step.args, err)
+		}
+		ctx, err := repo.Context("todo")
+		if err != nil {
+			t.Fatalf("Context: %v", err)
+		}
+		if got := ctx.Tasks[0].Priority; got != step.want {
+			t.Errorf("after %q: priority %q, want %q", step.args, got, step.want)
+		}
 	}
 }

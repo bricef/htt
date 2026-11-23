@@ -247,9 +247,9 @@ func TestInteractive_RunsOnTheTerminalItIsGiven(t *testing.T) {
 }
 
 // TestRepl_DispatchExecutesCommand wires classifyReplInput to a
-// real RootCmd.Execute pass and verifies the effect lands in the
-// memory repo. This pins the end-to-end glue without needing a
-// TTY for readline.
+// real Execute pass, as the REPL runs a line, and verifies the
+// effect lands in the memory repo. This pins the end-to-end glue
+// without needing a TTY for readline.
 func TestRepl_DispatchExecutesCommand(t *testing.T) {
 	repo := withMemoryRepo(t)
 
@@ -261,8 +261,7 @@ func TestRepl_DispatchExecutesCommand(t *testing.T) {
 		t.Fatalf("dispatch unexpectedly refused %q for %v", name, args)
 	}
 	resetReplFlags()
-	RootCmd.SetArgs(args)
-	if err := RootCmd.Execute(); err != nil {
+	if err := Execute(args); err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
 
@@ -436,6 +435,8 @@ func TestPrintReplHelp_MentionsKeyConcepts(t *testing.T) {
 		"quit",
 		"Ctrl-D",
 		"add <entry...>",
+		"up <index>",
+		"down <index>",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("help text missing %q\n--- got ---\n%s", want, out)

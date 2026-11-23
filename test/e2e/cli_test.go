@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -188,20 +189,64 @@ func TestTodoPriority_BeforeAfterReflectsTransition(t *testing.T) {
 	}
 }
 
-func TestTodoPriorityIncrease_LowersLetter(t *testing.T) {
-	e := newEnv(t)
-
-	e.mustRun("todo", "add", "(C) something")
-	e.mustRun("todo", "+", "0")
-
-	// rebuild's todo.txt-compliant ordering: "(B) <date> something".
-	assertContains(t, "todo.txt", e.readData("todo.txt"), "(B) "+today()+" something")
+func TestTodoUpDown_StepThePriority(t *testing.T) {
+	// `htt todo - N` never ran: cobra reads a word starting with - as a
+	// flag before it looks up a command, so it said `unknown command
+	// "-"`. up and down are the verbs; + and - are short for them.
+	cases := []struct {
+		args       []string
+		task, want string
+	}{
+		{[]string{"todo", "up", "0"}, "pack the van", "(C) pack the van"},
+		{[]string{"todo", "up", "0"}, "(C) pack the van", "(B) pack the van"},
+		{[]string{"todo", "up", "0"}, "(B) pack the van", "(A) pack the van"},
+		{[]string{"todo", "up", "0"}, "(A) pack the van", "(A) pack the van"},
+		{[]string{"todo", "down", "0"}, "(A) pack the van", "(B) pack the van"},
+		{[]string{"todo", "down", "0"}, "(B) pack the van", "(C) pack the van"},
+		{[]string{"todo", "down", "0"}, "(C) pack the van", "pack the van"},
+		{[]string{"todo", "down", "0"}, "pack the van", "pack the van"},
+		{[]string{"todo", "+", "0"}, "(B) pack the van", "(A) pack the van"},
+		{[]string{"todo", "-", "0"}, "(B) pack the van", "(C) pack the van"},
+		{[]string{"t", "-", "0"}, "(C) pack the van", "pack the van"},
+	}
+	for _, c := range cases {
+		t.Run(strings.Join(c.args, " ")+" on "+c.task, func(t *testing.T) {
+			e := newEnv(t)
+			e.writeData("todo.txt", c.task+"\n")
+			r := e.mustRun(c.args...)
+			assertEqual(t, "stdout", r.stdout, "Before: "+c.task+"\nAfter:  "+c.want+"\n")
+			assertEqual(t, "todo.txt", e.readData("todo.txt"), c.want+"\n")
+		})
+	}
 }
 
-// NOTE: `htt todo - <id>` is not reachable via subprocess args because
-// Cobra resolves "-" as a flag prefix before any "--" separator. This is a
-// pre-existing CLI bug; the `+` test above covers the symmetric priority-
-// change code path. Revisit when the CLI layer is refactored.
+func TestTodoUpDown_AMinusAfterACommandIsItsOwn(t *testing.T) {
+	// Only a - where todo's command goes means down: one after add is
+	// part of the task.
+	e := newEnv(t)
+	e.mustRun("todo", "add", "-", "fix the gate")
+	assertEqual(t, "todo.txt", e.readData("todo.txt"), today()+" - fix the gate\n")
+}
+
+func TestTodoUpDown_Help(t *testing.T) {
+	e := newEnv(t)
+	commands := map[string]string{}
+	for _, line := range strings.Split(e.mustRun("todo", "--help").stdout, "\n") {
+		if f := strings.Fields(line); len(f) > 1 {
+			commands[f[0]] = line
+		}
+	}
+	assertContains(t, "todo --help: up", commands["up"], "Raise the task's priority one step")
+	assertContains(t, "todo --help: down", commands["down"], "Lower the task's priority one step")
+
+	up := e.mustRun("todo", "up", "--help").stdout
+	assertContains(t, "todo up --help", up, "htt todo up <item index>")
+	assertContains(t, "todo up --help", up, "Aliases:\n  up, +\n")
+	// - --help is down's help, as - 3 is down 3.
+	down := e.mustRun("todo", "-", "--help").stdout
+	assertContains(t, "todo - --help", down, "htt todo down <item index>")
+	assertContains(t, "todo - --help", down, "Aliases:\n  down, -\n")
+}
 
 func TestTodoReplace_OverwritesTask(t *testing.T) {
 	e := newEnv(t)
@@ -655,6 +700,29 @@ func TestRepl_RefusesANestedREPLAndTheGUI(t *testing.T) {
 	assertInOrder(t, "stderr", r.stderr,
 		`"repl" is not available inside the REPL`, `"gui" is not available inside the REPL`)
 	assertEqual(t, "todo.txt", e.readData("todo.txt"), today()+" still here\n")
+}
+
+func TestRepl_UpAndDown(t *testing.T) {
+	// The REPL's help listed `- <index>`, which failed there as it did
+	// on the command line.
+	e := newEnv(t)
+	e.writeData("todo.txt", "(B) pack the van\n")
+	r := e.mustRunWithInput("up 0\nup 0\ndown 0\n- 0\ndown 0\n- 0\n+ 0\n/t - 0\nq\n", "repl")
+	assertEqual(t, "stderr", r.stderr, "")
+	step := func(line, before, after string) []string {
+		return []string{"htt(todo)> " + line + "\n", "Before: " + before + "\nAfter:  " + after + "\n"}
+	}
+	assertInOrder(t, "stdout", r.stdout, slices.Concat(
+		step("up 0", "(B) pack the van", "(A) pack the van"),
+		step("up 0", "(A) pack the van", "(A) pack the van"),
+		step("down 0", "(A) pack the van", "(B) pack the van"),
+		step("- 0", "(B) pack the van", "(C) pack the van"),
+		step("down 0", "(C) pack the van", "pack the van"),
+		step("- 0", "pack the van", "pack the van"),
+		step("+ 0", "pack the van", "(C) pack the van"),
+		step("/t - 0", "(C) pack the van", "pack the van"),
+	)...)
+	assertEqual(t, "todo.txt", e.readData("todo.txt"), "pack the van\n")
 }
 
 // replScreens splits REPL output at each clear-screen sequence: the

@@ -263,8 +263,8 @@ func TestSubtasks_PriorityMovesASubtaskAmongItsSiblings(t *testing.T) {
 			"Write the announcement p:1 +work\n"+
 			"Pack the van\n")
 
-	r = e.mustRun("todo", "priority", "1", "C") // (B) Book the venue, down to (C); `todo -` cobra reads as a flag
-	assertContains(t, "priority C: stdout", r.stdout, "After:  (C) Book the venue p:1 id:2")
+	r = e.mustRun("todo", "-", "1") // (B) Book the venue, down to (C)
+	assertContains(t, "-: stdout", r.stdout, "After:  (C) Book the venue p:1 id:2")
 	r = e.mustRun("todo", "+", "3") // Write the announcement, up to (C)
 	assertEqual(t, "+: stdout", r.stdout,
 		"Before: Write the announcement p:1 +work\nAfter:  (C) Write the announcement p:1 +work\n")

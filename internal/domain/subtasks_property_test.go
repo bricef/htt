@@ -315,6 +315,16 @@ func TestArranging_Properties(t *testing.T) {
 				fail("%q moved from under %v to under %v", task.Raw, oldParent[task], newParents[task])
 			}
 		}
+		if newParent != nil && op != "level" && oldParent[moved] != newParent {
+			// Under its new parent: last of its priority, as a task
+			// added there is. (Nesting a task under its own parent
+			// changes nothing.)
+			siblings := newTree.Nodes[slices.Index(after, newParent)].Children
+			k := slices.IndexFunc(siblings, func(s *Node) bool { return s.Task == moved })
+			if k+1 < len(siblings) && siblings[k+1].Task.Priority == moved.Priority {
+				fail("%q isn't last of its priority under %q", moved.Raw, newParent.Raw)
+			}
+		}
 		if newParent == nil && op != "add" {
 			// At the top level: right after the subtree it was in.
 			anchor := n

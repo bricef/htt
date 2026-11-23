@@ -398,6 +398,19 @@ func TestContext_Move_TakesTheSubtreeAndRenumbersClashes(t *testing.T) {
 		"Garden id:1", "Weed p:1", "orphan p:3", "Book id:2", "Call p:2", "Plan id:4", "Write p:4")
 }
 
+// An id the target uses only in a p: (naming a done parent there, say)
+// clashes too: kept, the moved task would adopt that task.
+func TestContext_Move_AnIDTheTargetNamesInAPClashes(t *testing.T) {
+	repo := newRepo(t)
+	seed(t, repo, "work", "Launch id:7", "Party p:7")
+	seed(t, repo, "home", "left over p:7")
+	ctx := loadCtx(t, repo, "work")
+	if _, err := ctx.Move("0", "home"); err != nil {
+		t.Fatal(err)
+	}
+	wantLines(t, "home", rawsOf(t, repo, "home"), "left over p:7", "Launch id:1", "Party p:1")
+}
+
 func TestContext_Move_IntoTheDoneFileLeavesTheLinesAlone(t *testing.T) {
 	repo := newRepo(t)
 	seed(t, repo, "work", "Plan id:1", "Book p:1 id:2", "Call p:2")

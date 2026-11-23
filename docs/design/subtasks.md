@@ -1,6 +1,6 @@
 # Subtasks
 
-**Status:** Agreed design, 2026-11-23 (Brice), with the TUI's one-level nest and unnest and priority order among subtasks added the same day. Not yet built.
+**Status:** Agreed design, 2026-11-23 (Brice), with the TUI's one-level nest and unnest and priority order among subtasks added the same day. Built 2026-11-23, on the `feat/subtasks` branch.
 
 A task can hold other tasks: its subtasks, which can hold their own.
 This document says how htt records them in todo.txt files and how they
@@ -169,8 +169,9 @@ These are broken links:
 
 htt warns about each, as it does for dates it can't read: once a run
 on the command line (on stderr), on the status line in the TUI. It
-shows the affected tasks at the top level. Nothing is lost, and the
-lines are left as they are.
+shows the affected tasks at the top level, except a task with several
+`p:`, which goes under its first parent (see "The format"). Nothing is
+lost, and the lines are left as they are.
 
 ## Showing subtasks
 
@@ -190,8 +191,15 @@ lines are left as they are.
 
 ## Compatibility
 
-- **It only adds to the format.** Existing files don't change until a
-  subtask is made in them.
+- **It only adds to the format.** Files without `id:` or `p:` tags
+  don't change.
+- **A file that already used `id:N` or `p:N` as ordinary words** (say,
+  `Read p:12 of the book` next to `Pay invoice id:12`) is read as
+  subtasks from 1.1: its numbering follows the tree, the next write
+  puts it in tree order, and a `p:N` naming no task warns. htt can't
+  tell such a word from a link, and topydo reads those files the same
+  way. Brice accepted this on 2026-11-23, documented as part of the
+  1.1 release.
 - **Older htt keeps working.** htt 1.0 reads files with subtasks and
   shows `id:` and `p:` as ordinary tags.
 - **Every file stays valid todo.txt,** readable by any todo.txt tool,

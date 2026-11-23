@@ -2,6 +2,7 @@ package storage
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/bricef/htt/internal/domain"
@@ -280,6 +281,64 @@ func runRepositoryContract(t *testing.T, newRepo func(t *testing.T) domain.Repos
 		}
 		if len(loaded.Tasks) != 1 {
 			t.Errorf("post-save mutation leaked into stored state; len = %d, want 1", len(loaded.Tasks))
+		}
+	})
+
+	// ContextLines hands over the lines Context parses, in file order.
+	t.Run("ContextLines returns the lines unparsed", func(t *testing.T) {
+		r := newRepo(t)
+		source, ok := r.(domain.LineSource)
+		if !ok {
+			t.Fatal("not a domain.LineSource")
+		}
+		if lines, err := source.ContextLines("never-saved"); err != nil || len(lines) != 0 {
+			t.Errorf("never saved: %q, %v", lines, err)
+		}
+		raws := []string{"child p:1", "x 2026-01-01 parent id:1 context:work", "other"}
+		tasks := make([]*domain.Task, len(raws))
+		for i, raw := range raws {
+			tasks[i] = mustTask(t, raw)
+		}
+		if err := r.Save(&domain.Context{Name: domain.DoneContextName, Tasks: tasks}); err != nil {
+			t.Fatal(err)
+		}
+		lines, err := source.ContextLines(domain.DoneContextName)
+		if err != nil || strings.Join(lines, "\n") != strings.Join(raws, "\n") {
+			t.Errorf("lines: %q, %v; want %q", lines, err, raws)
+		}
+	})
+
+	// Subtasks: a context loads in tree order (domain.Context.Arrange),
+	// whatever order it was saved in, numbered in that order, so a
+	// task's number is its place in the tree. The done file and the
+	// archive aren't trees and load as they are.
+	t.Run("Context loads subtasks under their parents, numbered in that order", func(t *testing.T) {
+		r := newRepo(t)
+		raws := []string{"Call three venues p:2", "other", "Book the venue p:1 id:2", "(B) Write p:1", "Plan id:1"}
+		for _, name := range []string{"work", domain.DoneContextName, domain.ArchiveContextName} {
+			tasks := make([]*domain.Task, len(raws))
+			for i, raw := range raws {
+				tasks[i] = mustTask(t, raw)
+			}
+			if err := r.Save(&domain.Context{Name: name, Tasks: tasks}); err != nil {
+				t.Fatalf("save %s: %v", name, err)
+			}
+		}
+		want := map[string][]string{
+			"work":                    {"other", "Plan id:1", "(B) Write p:1", "Book the venue p:1 id:2", "Call three venues p:2"},
+			domain.DoneContextName:    raws,
+			domain.ArchiveContextName: raws,
+		}
+		for name, lines := range want {
+			loaded, err := r.Context(name)
+			if err != nil {
+				t.Fatalf("load %s: %v", name, err)
+			}
+			for i, task := range loaded.Tasks {
+				if task.Raw != lines[i] || task.Line != i {
+					t.Errorf("%s: Tasks[%d] = %q (Line %d), want %q (Line %d)", name, i, task.Raw, task.Line, lines[i], i)
+				}
+			}
 		}
 	})
 }

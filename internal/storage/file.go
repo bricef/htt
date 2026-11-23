@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/bricef/htt/internal/domain"
-	"github.com/bricef/htt/internal/utils"
 )
 
 const (
@@ -34,7 +33,7 @@ const (
 // line, causing every read to overwrite the file.
 //
 // Context names are sanitized at the path boundary via
-// utils.StringToFilename (non-word characters become underscores) so
+// domain.ContextFileName (non-word characters become underscores) so
 // `Context("../foo")` and `Save(&Context{Name: "../escape"})` can't
 // write outside dataDir. SetCurrent already sanitized; the rest of
 // the repo now matches it.
@@ -59,7 +58,23 @@ func NewFileRepository(dataDir, pointerDir string) *FileRepository {
 // shellout (`htt todo edit-done`, TUI EditFile) all agree on where
 // the file lives.
 func (r *FileRepository) ContextPath(name string) string {
-	return filepath.Join(r.dataDir, utils.StringToFilename(name)+fileExtension)
+	return filepath.Join(r.dataDir, domain.ContextFileName(name)+fileExtension)
+}
+
+// SameFile reports whether contexts a and b are kept in one file
+// (domain.SameFiler): both files exist and the file system says they're
+// the same, as for TODO.txt and todo.txt on a case-insensitive one, or
+// a symlink. A context with no file yet can't be the same as another.
+func (r *FileRepository) SameFile(a, b string) bool {
+	fa, err := os.Stat(r.ContextPath(a))
+	if err != nil {
+		return false
+	}
+	fb, err := os.Stat(r.ContextPath(b))
+	if err != nil {
+		return false
+	}
+	return os.SameFile(fa, fb)
 }
 
 func (r *FileRepository) currentPointerPath() string {
@@ -118,12 +133,10 @@ func (r *FileRepository) Context(name string) (*domain.Context, error) {
 		if err != nil {
 			return nil, fmt.Errorf("parse %s:%d: %w", r.ContextPath(name), lineNo, err)
 		}
-		// Line is the task's index in ctx.Tasks, the number commands
-		// like delete take. It is not the file line: blank lines are
-		// skipped, so the two differ once a file has one. FileLine is
-		// the file line, for messages about the file (see
-		// Task.DateWarnings).
-		task.Line = len(ctx.Tasks)
+		// FileLine is the file line, for messages about the file (see
+		// Task.DateWarnings). Line, the number commands like delete
+		// take, is the task's index once arranged, below: blank lines
+		// are skipped, and subtasks go under their parents.
 		task.FileLine = lineNo + 1
 		ctx.Tasks = append(ctx.Tasks, task)
 		lineNo++
@@ -131,7 +144,36 @@ func (r *FileRepository) Context(name string) (*domain.Context, error) {
 	if err := scanner.Err(); err != nil {
 		return nil, fmt.Errorf("scan %s: %w", r.ContextPath(name), err)
 	}
+	ctx.Arrange()
 	return ctx, nil
+}
+
+// ContextLines returns the named context's lines as Context reads them,
+// trimmed, blank lines left out, without parsing them
+// (domain.LineSource). A context never saved has none.
+func (r *FileRepository) ContextLines(name string) ([]string, error) {
+	if name == "" {
+		return nil, domain.ErrInvalidContextName
+	}
+	f, err := os.Open(r.ContextPath(name))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("open %s: %w", r.ContextPath(name), err)
+	}
+	defer func() { _ = f.Close() }()
+	var lines []string
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		if line := strings.TrimSpace(scanner.Text()); line != "" {
+			lines = append(lines, line)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scan %s: %w", r.ContextPath(name), err)
+	}
+	return lines, nil
 }
 
 func (r *FileRepository) Contexts() ([]*domain.Context, error) {
@@ -207,7 +249,7 @@ func (r *FileRepository) CurrentContext() (*domain.Context, error) {
 }
 
 func (r *FileRepository) SetCurrent(name string) error {
-	sanitized := utils.StringToFilename(name)
+	sanitized := domain.ContextFileName(name)
 	if sanitized == "" {
 		return domain.ErrInvalidContextName
 	}

@@ -20,10 +20,13 @@ const CURSOR = ">"
 
 // taskItem is one row of the task list. index is the task's position
 // in the context, which is what actions pass to the domain: a search
-// changes which row a task is on, never its index.
+// or a fold changes which row a task is on, never its index.
 type taskItem struct {
-	task  *domain.Task
-	index int
+	task       *domain.Task
+	index      int
+	depth      int  // its level in the tree, 0 at the top
+	folded     int  // the tasks its folded subtree hides; 0 when unfolded
+	doneParent bool // at the top level because its parent is in the done file
 }
 
 // FilterValue is what a search matches text against: the whole line.
@@ -31,7 +34,11 @@ func (i taskItem) FilterValue() string { return i.task.Raw }
 
 // taskDelegate draws a row as "> NNNN text": the cursor, the task's
 // index in its context (left out in the done tab) and the task's line
-// (see styles.line). A row wider than the list ends in "…".
+// (see styles.line), a subtask indented two spaces a level after the
+// index, and, in the muted colour, "(N folded)" after a folded task and
+// "(parent done)" after a task whose parent is in the done file. A
+// search shows its rows flat, as the CLI's views are. A row wider than
+// the list ends in "…".
 type taskDelegate struct {
 	styles    styles
 	showIndex bool
@@ -52,6 +59,15 @@ func (d taskDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 		cursor = CURSOR
 	}
 	text := d.styles.line(it.task.Raw, it.task.Tokens(), m.MatchesForItem(index), selected)
+	if m.FilterState() == list.Unfiltered {
+		text = strings.Repeat("  ", it.depth) + text
+		if it.doneParent {
+			text += d.styles.muted.Render("  (parent done)")
+		}
+		if it.folded > 0 {
+			text += d.styles.muted.Render(fmt.Sprintf("  (%d folded)", it.folded))
+		}
+	}
 	row := fmt.Sprintf("%s %s", cursor, text)
 	if d.showIndex {
 		row = fmt.Sprintf("%s %4d %s", cursor, it.index, text)
@@ -164,7 +180,8 @@ func newTaskList(st styles) list.Model {
 // keep their file order, so the indexes on screen still ascend.
 //
 // targets are the items' filter values in item order, which is the
-// order of tasks.
+// order of tasks: while a search is on, every task of the context, the
+// folded ones too.
 func searchFilter(tasks []*domain.Task, now func() time.Time) list.FilterFunc {
 	return func(term string, targets []string) []list.Rank {
 		var filters []domain.Filter
@@ -203,21 +220,41 @@ func searchFilter(tasks []*domain.Task, now func() time.Time) list.FilterFunc {
 	}
 }
 
-// showTasks loads m.context's tasks into the list, keeping any applied
-// search and, when select is a task index, putting the cursor on that
-// task. The search is re-applied synchronously, so the list is ready to
+// showTasks loads m.context's tasks into the list, in tree order, the
+// subtrees of folded tasks left out, keeping any applied search and,
+// when select is a task index, putting the cursor on that task. A
+// search (being typed or applied) looks through every task, folded or
+// not. The search is re-applied synchronously, so the list is ready to
 // act on as soon as this returns.
 func (m *model) showTasks(selectIndex int) {
-	items := make([]list.Item, len(m.context.Tasks))
-	for i, t := range m.context.Tasks {
-		items[i] = taskItem{task: t, index: i}
+	searching := m.list.FilterState() != list.Unfiltered
+	var items []list.Item
+	var tasks []*domain.Task
+	hidden := map[*domain.Node]bool{}
+	for _, n := range m.tree().Order() {
+		if n.Parent != nil && hidden[n.Parent] {
+			hidden[n] = true
+			if !searching {
+				continue
+			}
+		}
+		it := taskItem{task: n.Task, index: n.Index, depth: n.Depth, doneParent: n.DoneParent}
+		if len(n.Children) > 0 && m.folded[m.foldKey(n.Task)] {
+			hidden[n] = true
+			it.folded = len(n.Subtree()) - 1
+		}
+		items = append(items, it)
+		tasks = append(tasks, n.Task)
 	}
 	m.list.SetDelegate(taskDelegate{
 		styles:    m.styles,
 		showIndex: m.context.Name != domain.DoneContextName,
 	})
-	m.list.Filter = searchFilter(m.context.Tasks, m.now)
-	_ = m.list.SetItems(items)
+	m.list.Filter = searchFilter(tasks, m.now)
+	if cmd := m.list.SetItems(items); cmd != nil && m.list.FilterState() == list.Filtering {
+		// Typing a search: its matches among the new items, now.
+		m.list, _ = m.list.Update(cmd())
+	}
 	if m.list.IsFiltered() {
 		position := m.list.Index()
 		m.list.SetFilterText(m.list.FilterValue())
@@ -228,6 +265,35 @@ func (m *model) showTasks(selectIndex int) {
 	}
 	m.clampSelection()
 	m.syncSearchTitle()
+}
+
+// tree is the context's tree. A done file the tree can't read (for
+// done parents) leaves it without them: the list still shows.
+func (m *model) tree() *domain.Tree {
+	tree, err := m.context.Tree()
+	if err != nil {
+		m.logger.Error("read the done file for done parents", "err", err)
+		return domain.NewTree(m.context.Tasks, nil)
+	}
+	return tree
+}
+
+// foldKey names a task's fold: its context and its id. A task with
+// subtasks has an id no other task in its context holds.
+func (m *model) foldKey(t *domain.Task) string {
+	return m.context.Name + "\x00" + t.ID()
+}
+
+// unfoldTo unfolds every task above the task with the given index, so
+// the list shows it.
+func (m *model) unfoldTo(index int) {
+	tree := domain.NewTree(m.context.Tasks, nil)
+	if index < 0 || index >= len(tree.Nodes) {
+		return
+	}
+	for n := tree.Nodes[index].Parent; n != nil; n = n.Parent {
+		delete(m.folded, m.foldKey(n.Task))
+	}
 }
 
 // selectTask puts the cursor on the task with the given index in the

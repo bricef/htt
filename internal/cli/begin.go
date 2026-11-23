@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 
-	"github.com/bricef/htt/internal/domain"
 	"github.com/spf13/cobra"
 )
 
@@ -12,7 +11,8 @@ var Begin = &cobra.Command{
 	Short: "Log that work has begun on numbered item in the current context.",
 	Long: `Log the task with that number in the current context as a time-log
 entry, so you don't retype it: its text, tags included, so its
-+project picks its category.
++project picks its category. Its id: and p: tags, which link subtasks
+to their parents, are left out.
 
 ` + atHelp + `
 
@@ -33,10 +33,11 @@ Example, for a task you started at 9:30:
 		// stays in the timelog and doesn't bleed back into the
 		// context's in-memory state. Legacy behaviour was equivalent
 		// (ctx was never saved after the AddEntry call), but the copy
-		// makes the boundary explicit.
-		entry, err := domain.NewTask(t.Raw)
+		// makes the boundary explicit. It leaves out id: and p:, which
+		// link to nothing in the time log.
+		entry, err := t.WithoutLinks()
 		if err != nil {
-			return fmt.Errorf("copy task: %w", err)
+			return fmt.Errorf("log task %s: %w", args[0], err)
 		}
 		_, err = logEntry(entry, logAt)
 		return err

@@ -70,7 +70,7 @@ func init() {
 // `/interactive` runs the TUI on the REPL's terminal, which the REPL
 // hands over for the run (replTerminal.handOver).
 func runRepl() error {
-	rt := &replTerminal{open: openReplReader, isTerminal: replOnTerminal}
+	rt := &replTerminal{open: openReplReader, isTerminal: onTerminal}
 	lines, err := rt.open()
 	if err != nil {
 		return err
@@ -240,9 +240,10 @@ func (f failedReader) Readline() (string, error) { return "", f.err }
 func (failedReader) SetPrompt(string)            {}
 func (failedReader) Close() error                { return nil }
 
-// replOnTerminal reports whether the REPL reads from and writes to a
-// terminal, as the TUI needs.
-func replOnTerminal() bool {
+// onTerminal reports whether htt reads from and writes to a terminal, as
+// the TUI and the question before completing a task with open subtasks
+// need: stdin and stdout both one. Tests stand in for it.
+var onTerminal = func() bool {
 	return isatty.IsTerminal(os.Stdin.Fd()) && isatty.IsTerminal(os.Stdout.Fd())
 }
 
@@ -313,13 +314,15 @@ func (r replReader) Close() error {
 //
 // New stateful flags added elsewhere need to be added here.
 func resetReplFlags() {
-	addDue = ""
-	addToDue = ""
+	addDue, addUnder = "", ""
+	addToDue, addToUnder = "", ""
+	doLeaveSubtasks, doWithSubtasks = false, false
 	logAt = atFlag{}
 	reportSince, reportSinceGiven = "7d", false
 	reportWeek, reportMonth = false, false
 	showSortKey = ""
 	showFilters = nil
+	showFlat = false
 	tuiLogFile = ""
 	tuiLogLevel = "debug"
 	guiPort = 0
@@ -342,7 +345,7 @@ func renderReplView() {
 		fmt.Fprintln(os.Stderr, "Could not load current context:", err)
 		return
 	}
-	ctx.Show()
+	printContext(ctx, false)
 }
 
 // printReplHelp writes the REPL keymap to w. Curated rather than
@@ -358,15 +361,20 @@ const replHelpText = `htt REPL — todo-mode shell
 
 Common commands (run implicitly as todo <command>):
   add <entry...>            add a task to the current context
-  delete <index>            archive the task at <index>
-  do <index>                complete the task
+  add --under <index> ...   add a subtask of the task at <index>
+  delete <index>            archive the task at <index>, with its subtasks
+  do <index>                complete the task (asks first if it has open
+                            subtasks; --leave-subtasks / --with-subtasks)
+  nest <index> <parent>     put the task, with its subtasks, under <parent>
+  unnest <index>            make the task a top-level task
   up <index>                raise priority one step
   down <index>              lower priority one step
   priority <index> <A|B|C>  set priority explicitly
-  move <index> <context>    move task to another context
+  move <index> <context>    move task, with its subtasks, to another context
   replace <index> <entry>   replace the task
   context [name]            show or switch context
-  show                      re-render the view (or hit Enter on empty line)
+  show                      re-render the view (or hit Enter on empty line);
+                            --flat lists it without indenting subtasks
   search <regex>            filter the current view
   random                    pick a task at random
   edit <index>              open the task in your editor

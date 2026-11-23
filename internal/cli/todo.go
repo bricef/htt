@@ -7,6 +7,7 @@ import (
 	"os"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,12 +28,12 @@ var TodoCommand = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("load current context: %w", err)
 		}
-		ctx.Show()
+		printContext(ctx, false)
 		return nil
 	},
 }
 
-var addDue string
+var addDue, addUnder string
 
 var add = &cobra.Command{
 	Use:     "add <entry...>",
@@ -44,53 +45,90 @@ The --due flag accepts an absolute date (YYYY-MM-DD) or a natural-
 language phrase ("Friday", "tomorrow", "in two weeks", "next Monday").
 The phrase is resolved to a date and stored as a due: annotation on
 the task — the file always carries a structured date, regardless of
-how the user typed it.`,
+how the user typed it.
+
+--under N adds the task as a subtask of task N: the task gets p:ID,
+and task N gets id:ID if it has none (the smallest number no id: or
+p: in the file uses). The subtask goes after task N's last subtask,
+or among them by priority, so the numbers below it shift by one.`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx, err := repo().CurrentContext()
 		if err != nil {
 			return fmt.Errorf("load current context: %w", err)
 		}
-		task, err := domain.NewTask(strings.Join(args, " "))
-		if err != nil {
-			return fmt.Errorf("parse task: %w", err)
-		}
-		if err := applyDueFlag(task, addDue); err != nil {
-			return err
-		}
-		if err := ctx.AddTask(task); err != nil {
-			return fmt.Errorf("add task: %w", err)
-		}
-		fmt.Printf("Added: %v\n", task.ConsoleString())
-		warnTypedTask(ctx, task)
-		return nil
+		return addTask(ctx, args, addDue, addUnder, "")
 	},
 }
 
-var addToDue string
+// addTask adds the task typed as args to ctx, with its --due, and
+// under the task --under names when it names one, and says so. to is
+// what follows "Added: <task>" (" to <context>" for add-to).
+func addTask(ctx *domain.Context, args []string, due, under, to string) error {
+	task, err := domain.NewTask(strings.Join(args, " "))
+	if err != nil {
+		return fmt.Errorf("parse task: %w", err)
+	}
+	if err := applyDueFlag(task, due); err != nil {
+		return err
+	}
+	if under == "" {
+		if err := ctx.AddTask(task); err != nil {
+			return fmt.Errorf("add task%s: %w", to, err)
+		}
+		fmt.Printf("Added: %v%s\n", task.ConsoleString(), to)
+		warnTypedTask(ctx, task)
+		return nil
+	}
+	parent, err := ctx.GetTaskByStrId(under)
+	if err != nil {
+		return fmt.Errorf("--under: %w", err)
+	}
+	if err := ctx.AddSubtask(under, task); err != nil {
+		return fmt.Errorf("add subtask of task %s%s: %w", under, to, err)
+	}
+	fmt.Printf("Added: %v%s\n", task.ConsoleString(), to)
+	fmt.Printf("Under: %v\n", parent.ConsoleString())
+	warnTypedTask(ctx, task)
+	return nil
+}
+
+var addToDue, addToUnder string
+
+// taskNumber is a string flag that takes a task number, a whole number,
+// and refuses anything else: an empty --under would otherwise read as
+// no --under at all, and add a top-level task.
+type taskNumber struct{ value *string }
+
+func (f taskNumber) String() string {
+	if f.value == nil { // pflag's zero value, for its help
+		return ""
+	}
+	return *f.value
+}
+
+func (f taskNumber) Set(s string) error {
+	if n, err := strconv.Atoi(s); err != nil || n < 0 {
+		return errors.New("not a task number")
+	}
+	*f.value = s
+	return nil
+}
+
+func (f taskNumber) Type() string { return "string" }
 
 var addTo = &cobra.Command{
 	Use:   "add-to <context> <entry...>",
 	Short: "Add an item to a specific tasklist",
-	Args:  cobra.MinimumNArgs(2),
+	Long: `Add an item to a specific tasklist, as add does to the current one.
+--under N names a task of that list.`,
+	Args: cobra.MinimumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx, err := repo().Context(args[0])
 		if err != nil {
 			return fmt.Errorf("load context %s: %w", args[0], err)
 		}
-		task, err := domain.NewTask(strings.Join(args[1:], " "))
-		if err != nil {
-			return fmt.Errorf("parse task: %w", err)
-		}
-		if err := applyDueFlag(task, addToDue); err != nil {
-			return err
-		}
-		if err := ctx.AddTask(task); err != nil {
-			return fmt.Errorf("add task to %s: %w", args[0], err)
-		}
-		fmt.Printf("Added: %v to %v\n", task.ConsoleString(), ctx.ConsoleString())
-		warnTypedTask(ctx, task)
-		return nil
+		return addTask(ctx, args[1:], addToDue, addToUnder, " to "+ctx.ConsoleString())
 	},
 }
 
@@ -170,25 +208,6 @@ var edit = &cobra.Command{
 	},
 }
 
-var do = &cobra.Command{
-	Use:     "do <item index>",
-	Short:   "Complete a task",
-	Args:    cobra.ExactArgs(1),
-	Aliases: []string{"x"},
-	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx, err := repo().CurrentContext()
-		if err != nil {
-			return fmt.Errorf("load current context: %w", err)
-		}
-		t, err := ctx.Complete(args[0])
-		if err != nil {
-			return fmt.Errorf("complete task: %w", err)
-		}
-		fmt.Printf("Completed: %s\n", t.ConsoleString())
-		return nil
-	},
-}
-
 var editDone = &cobra.Command{
 	Use:     "edit-done",
 	Short:   "Open the done file in your editor ($VISUAL or $EDITOR)",
@@ -219,7 +238,7 @@ var editArchive = &cobra.Command{
 
 var deleteTodo = &cobra.Command{
 	Use:     "delete <item index>",
-	Short:   "Delete the item specified (it moves to the archive)",
+	Short:   "Delete the item specified, with its subtasks (they move to the archive)",
 	Aliases: []string{"rm"},
 	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -227,18 +246,32 @@ var deleteTodo = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("load current context: %w", err)
 		}
-		task, err := ctx.Delete(args[0])
+		tasks, err := ctx.Delete(args[0])
 		if err != nil {
 			return fmt.Errorf("delete task: %w", err)
 		}
-		fmt.Printf("Deleted task: %v\n", task.ConsoleString())
+		for _, task := range tasks {
+			fmt.Printf("Deleted task: %v\n", task.ConsoleString())
+		}
 		return nil
 	},
 }
 
 var move = &cobra.Command{
-	Use:     "move <item index> <new context>",
-	Short:   "Move the task to a different context",
+	Use:   "move <item index> <new context>",
+	Short: "Move the task, with its subtasks, to a different context",
+	Long: `Move the task, with its subtasks, to a different context.
+
+The task becomes a top-level task there (it loses its p:, since a
+parent is always in the same file as its subtasks), and any id: of the
+tasks moved that the other context already uses is renumbered there,
+their p: tags with it. A task whose only text is its p: can't lose it,
+so it can't be moved.
+
+A done task moved from the done file back to the context it was
+completed in links up again: it keeps its p: when its parent is there,
+and its id: when the p: tags there naming that id can name no other
+task, so its subtasks are under it again.`,
 	Aliases: []string{"mv"},
 	Args:    cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -246,13 +279,62 @@ var move = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("load current context: %w", err)
 		}
-		task, err := ctx.Move(args[0], args[1])
+		tasks, err := ctx.Move(args[0], args[1])
 		if err != nil {
 			return fmt.Errorf("move task: %w", err)
 		}
 		fromCtx := &domain.Context{Name: ctx.Name}
 		toCtx := &domain.Context{Name: args[1]}
-		fmt.Printf("Moved %v from %v to %v.\n", task.ConsoleString(), fromCtx.ConsoleString(), toCtx.ConsoleString())
+		for _, task := range tasks {
+			fmt.Printf("Moved %v from %v to %v.\n", task.ConsoleString(), fromCtx.ConsoleString(), toCtx.ConsoleString())
+		}
+		return nil
+	},
+}
+
+var nest = &cobra.Command{
+	Use:   "nest <item index> <parent index>",
+	Short: "Put a task, with its subtasks, under another task",
+	Long: `Put a task, with its subtasks, under another task: the task gets
+p:ID, naming the parent, and the parent gets id:ID if it has none (the
+smallest number no id: or p: in the file uses).
+
+The task goes after the parent's last subtask, or among them by
+priority, so line numbers shift. Nesting a task under itself or under
+one of its own subtasks is refused.`,
+	Args: cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx, err := repo().CurrentContext()
+		if err != nil {
+			return fmt.Errorf("load current context: %w", err)
+		}
+		task, parent, err := ctx.Nest(args[0], args[1])
+		if err != nil {
+			return fmt.Errorf("nest task %s under task %s: %w", args[0], args[1], err)
+		}
+		fmt.Printf("Nested: %v\n", task.ConsoleString())
+		fmt.Printf("Under:  %v\n", parent.ConsoleString())
+		return nil
+	},
+}
+
+var unnest = &cobra.Command{
+	Use:   "unnest <item index>",
+	Short: "Make a subtask a top-level task, with its own subtasks",
+	Long: `Make a subtask a top-level task, with its own subtasks: its p: tags
+go, and it moves to just after the top-level task it was under. Its
+old parent keeps its id:.`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx, err := repo().CurrentContext()
+		if err != nil {
+			return fmt.Errorf("load current context: %w", err)
+		}
+		task, err := ctx.Unnest(args[0])
+		if err != nil {
+			return fmt.Errorf("unnest task %s: %w", args[0], err)
+		}
+		fmt.Printf("Unnested: %v\n", task.ConsoleString())
 		return nil
 	},
 }
@@ -468,7 +550,7 @@ var todoStatus = &cobra.Command{
 		}
 		fmt.Println()
 		fmt.Printf("Current Context: %s\n", current.ConsoleString())
-		current.Show()
+		printContext(current, false)
 		return nil
 	},
 }
@@ -503,6 +585,8 @@ func init() {
 		"Due date: absolute (YYYY-MM-DD) or phrase (Friday, tomorrow, in two weeks)")
 	addTo.Flags().StringVar(&addToDue, "due", "",
 		"Due date: absolute (YYYY-MM-DD) or phrase (Friday, tomorrow, in two weeks)")
+	add.Flags().Var(taskNumber{&addUnder}, "under", "Add it as a subtask of task `N`")
+	addTo.Flags().Var(taskNumber{&addToUnder}, "under", "Add it as a subtask of task `N` of that context")
 
 	TodoCommand.AddCommand(add)
 	TodoCommand.AddCommand(addTo)
@@ -520,6 +604,8 @@ func init() {
 	TodoCommand.AddCommand(context)
 	TodoCommand.AddCommand(todoStatus)
 	TodoCommand.AddCommand(move)
+	TodoCommand.AddCommand(nest)
+	TodoCommand.AddCommand(unnest)
 	TodoCommand.AddCommand(search)
 
 	RootCmd.AddCommand(TodoCommand)

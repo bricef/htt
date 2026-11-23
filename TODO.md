@@ -77,6 +77,16 @@ Each confirmed against `main` on 2026-11-23.
 
 ## Done
 
+- [x] Subtasks (2026-11-23): tasks within tasks, recorded with
+      topydo's `id:` and `p:` tags; `todo add --under`, `nest`,
+      `unnest`; subtrees kept below their parents in the file,
+      subtasks in priority order; `show` indents the tree (`--flat`
+      doesn't); move, delete and complete take the subtree, completing
+      asking first (`--leave-subtasks`, `--with-subtasks` without a
+      terminal); broken links warn; the TUI shows the tree, folds it,
+      and nests and unnests a level with `Tab` and `Shift-Tab`. See
+      `docs/design/subtasks.md` and
+      `docs/plans/complete/2026-11-23-subtasks.md`
 - [x] Lowering a priority one step (2026-11-23): `htt todo - N`
       failed with `unknown command "-" for "htt todo"`, as did `- N`
       in the REPL, whose help listed it, so `htt todo priority N C`

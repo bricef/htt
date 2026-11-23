@@ -332,12 +332,18 @@ func TestEdit_ATaskChangedUnderneathIsNotOverwritten(t *testing.T) {
 	m := inputModel(t, repo)
 	m = send(t, m, keyPress("e"))
 	m = send(t, m, typed(" edited")...)
-	// The task the edit started from is no longer at its index.
+	// Elsewhere, the task the edit started from is replaced.
 	other, _ := domain.NewTask("someone else's change")
-	m.context.Tasks[0] = other
+	ctx, err := repo.Context("todo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ctx.Replace("0", other); err != nil {
+		t.Fatal(err)
+	}
 
 	m = send(t, m, enter)
-	if got := stored(t, repo, "todo"); !slices.Equal(got, []string{"a", "b"}) {
+	if got := stored(t, repo, "todo"); !slices.Equal(got, []string{"someone else's change", "b"}) {
 		t.Errorf("todo = %q; the edit must not overwrite a task that changed", got)
 	}
 	if !strings.Contains(m.status, "changed while you were editing") {

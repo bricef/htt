@@ -9,6 +9,11 @@ also edit by hand.
 - **Todo lists** in todo.txt format, split into contexts (`work`,
   `home`, …), with priorities, natural-language due dates
   (`--due "next Friday"`), search, and sorted or filtered views.
+- **Subtasks**, nested as deep as you like, recorded with the `id:`
+  and `p:` tags topydo writes, so the files stay todo.txt and topydo
+  reads the same tree. `htt todo show` and the TUI show the tree, and a
+  subtree moves, nests, is deleted and is completed as one, with a
+  question first before its open subtasks are left or done.
 - **A time log**: a timestamped record of what you worked on each day,
   with breaks, day ends and categories by tag, and entries logged after
   the fact (`htt log end --at "yesterday 17:30"`).
@@ -20,7 +25,8 @@ also edit by hand.
   on your computer only.
 - **Three ways in**: one-shot commands, a todo-mode shell (`htt repl`)
   and a full-screen TUI (`htt interactive`) with search, in-place
-  editing with a live preview and tag completion, task lines coloured
+  editing with a live preview and tag completion, subtasks folded and
+  nested a level at a time (`Tab`, `Shift-Tab`), task lines coloured
   by priority, tag and date, nine colour themes (see
   [TUI themes](#tui-themes)) and per-colour config.
 

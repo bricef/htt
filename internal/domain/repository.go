@@ -1,6 +1,10 @@
 package domain
 
-import "errors"
+import (
+	"errors"
+	"regexp/syntax"
+	"strings"
+)
 
 // Repository is the domain abstraction for persistence. Storage
 // implementations satisfy this interface; the domain package owns the
@@ -11,9 +15,10 @@ import "errors"
 // and CurrentContext return Contexts wired with this repo so their
 // persistent methods (AddTask, Complete, etc.) can save through it.
 type Repository interface {
-	// Context returns the named context, loaded with its tasks. A name
-	// that has never been persisted returns an empty Context (Tasks
-	// empty), not an error.
+	// Context returns the named context, loaded with its tasks,
+	// arranged (Context.Arrange): in tree order, numbered in it,
+	// whatever order the file holds them in. A name that has never been
+	// persisted returns an empty Context (Tasks empty), not an error.
 	Context(name string) (*Context, error)
 
 	// Contexts returns every persisted context with tasks loaded. Heavier
@@ -61,9 +66,43 @@ type Repository interface {
 	ContextPath(name string) string
 }
 
+// LineSource is a Repository that can also hand over a context's lines
+// unparsed, as Context loads them (trimmed, blank lines left out).
+// Context.Tree uses it to read the done file for done parents, parsing
+// only the lines that could hold one: parsing every line of a large
+// done file would take seconds. Both of storage's repositories are one;
+// Tree falls back to Context for any other.
+type LineSource interface {
+	ContextLines(name string) ([]string, error)
+}
+
+// SameFiler is a Repository that can tell whether two contexts are kept
+// in one file, which comparing their names (ContextFileName) can't: on a
+// case-insensitive file system, macOS's and Windows' default, todo.txt
+// and TODO.txt are one file, and a symlink makes any two names one.
+// Context.Move refuses to move a task between them, which would write
+// it into the file and then save that file without it.
+type SameFiler interface {
+	SameFile(a, b string) bool
+}
+
 // ErrInvalidContextName is returned when a name fails validation (empty,
 // or sanitizes to empty).
 var ErrInvalidContextName = errors.New("invalid context name")
+
+// ContextFileName is the name a context's file takes, without its
+// extension: the context's name with every character but an ASCII
+// letter, a digit or an underscore made an underscore. Names that map
+// to the same file name are one context ("my list" is my_list).
+// Repositories name files, and the current-context pointer, by it.
+func ContextFileName(name string) string {
+	return strings.Map(func(r rune) rune {
+		if syntax.IsWordChar(r) {
+			return r
+		}
+		return '_'
+	}, name)
+}
 
 // DefaultContextName is the name returned by CurrentContextName when no
 // pointer has been set yet. Matches vars.DefaultContext.

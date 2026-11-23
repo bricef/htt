@@ -4,7 +4,6 @@ import (
 	"sort"
 
 	"github.com/bricef/htt/internal/domain"
-	"github.com/bricef/htt/internal/utils"
 )
 
 // MemoryRepository is an in-memory domain.Repository implementation for
@@ -37,7 +36,20 @@ func (r *MemoryRepository) Context(name string) (*domain.Context, error) {
 	ctx := domain.NewContext(r, name)
 	ctx.Tasks = make([]*domain.Task, len(stored))
 	copy(ctx.Tasks, stored)
+	ctx.Arrange() // as FileRepository loads a context
 	return ctx, nil
+}
+
+// ContextLines returns the named context's lines (domain.LineSource).
+func (r *MemoryRepository) ContextLines(name string) ([]string, error) {
+	if name == "" {
+		return nil, domain.ErrInvalidContextName
+	}
+	var lines []string
+	for _, t := range r.contexts[name] {
+		lines = append(lines, t.Raw)
+	}
+	return lines, nil
 }
 
 func (r *MemoryRepository) Contexts() ([]*domain.Context, error) {
@@ -82,7 +94,7 @@ func (r *MemoryRepository) CurrentContext() (*domain.Context, error) {
 }
 
 func (r *MemoryRepository) SetCurrent(name string) error {
-	sanitized := utils.StringToFilename(name)
+	sanitized := domain.ContextFileName(name)
 	if sanitized == "" {
 		return domain.ErrInvalidContextName
 	}

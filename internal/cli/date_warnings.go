@@ -75,11 +75,22 @@ func (r warningTimelogRepository) Day(date time.Time) (*domain.Timelog, error) {
 // warnTypedTask warns about the dates htt can't read in a task the user
 // typed (todo add, add-to, replace, edit), once it's saved in ctx, so a
 // bad date is pointed out as it's written rather than by the next
-// command that reads the file. Saving set the task's FileLine. The
-// warning counts as given for that line: a later load in the same run
-// (the REPL reloads after every command) doesn't repeat it.
+// command that reads the file, and about the links the change broke
+// (a p: typed naming no task, an id: edited away from a parent). Saving
+// set the task's FileLine. The warning counts as given for that line:
+// a later load in the same run (the REPL reloads after every command)
+// doesn't repeat it.
 func warnTypedTask(ctx *domain.Context, task *domain.Task) {
-	warnContext(baseRepo(), ctx, []*domain.Task{task})
+	r := baseRepo()
+	file := contextFile(r, ctx)
+	notes := dateNotes([]*domain.Task{task})
+	links := linkProblems(file, ctx)
+	for _, t := range ctx.Tasks {
+		for _, msg := range links[t] {
+			notes = append(notes, note{t, msg})
+		}
+	}
+	warnOnce(file, notes)
 }
 
 // warnTypedEntry is warnTypedTask for a time-log entry the user typed
@@ -97,39 +108,96 @@ func warnTimelog(r domain.TimelogRepository, tl *domain.Timelog, entries []*doma
 	warnDates(file, entries)
 }
 
-// warnContext warns about tasks, lines of ctx. The archive never warns.
+// warnContext warns about tasks, lines of ctx: the dates htt can't
+// read, and the broken links of subtasks (domain.LinkProblem), each
+// task's in turn. The archive never warns.
 func warnContext(r domain.Repository, ctx *domain.Context, tasks []*domain.Task) {
 	if ctx.Name == domain.ArchiveContextName {
 		return
 	}
-	file := r.ContextPath(ctx.Name)
-	if file == "" {
-		file = ctx.Name // a repository without files, in tests
+	file := contextFile(r, ctx)
+	links := linkProblems(file, ctx)
+	var notes []note
+	for _, task := range tasks {
+		notes = append(notes, dateNotes([]*domain.Task{task})...)
+		for _, msg := range links[task] {
+			notes = append(notes, note{task, msg})
+		}
 	}
-	warnDates(file, tasks)
+	warnOnce(file, notes)
 }
 
-// datesWarned holds the date warnings already given in this run, by
-// file, task text and message, so a line warns once however often it
-// is loaded: `htt report` reads done.txt twice, and the REPL reloads
-// the context after every command, which may have moved the line.
+// contextFile names ctx's file in warnings.
+func contextFile(r domain.Repository, ctx *domain.Context) string {
+	if file := r.ContextPath(ctx.Name); file != "" {
+		return file
+	}
+	return ctx.Name // a repository without files, in tests
+}
+
+// linkProblems returns the broken links of ctx's tasks, by task. The
+// tree reads the done file when a link needs it (Context.Tree); if it
+// can't, that's a warning of its own, and the links aren't checked.
+func linkProblems(file string, ctx *domain.Context) map[*domain.Task][]string {
+	tree, err := ctx.Tree()
+	if err != nil {
+		key := file + "\n\n" + err.Error()
+		if !datesWarned[key] {
+			datesWarned[key] = true
+			fmt.Fprintf(os.Stderr, "warning: %s: subtasks not checked: %v\n", file, err)
+		}
+		return nil
+	}
+	out := map[*domain.Task][]string{}
+	for _, p := range tree.Problems {
+		task := ctx.Tasks[p.Index]
+		out[task] = append(out[task], p.Message)
+	}
+	return out
+}
+
+// note is one warning about one task.
+type note struct {
+	task    *domain.Task
+	message string
+}
+
+// dateNotes are the date warnings of tasks (Task.DateWarnings).
+func dateNotes(tasks []*domain.Task) []note {
+	var out []note
+	for _, task := range tasks {
+		for _, w := range task.DateWarnings() {
+			out = append(out, note{task, w})
+		}
+	}
+	return out
+}
+
+// datesWarned holds the warnings already given in this run, by file,
+// task text and message, so a line warns once however often it is
+// loaded: `htt report` reads done.txt twice, and the REPL reloads the
+// context after every command, which may have moved the line.
 var datesWarned = map[string]bool{}
 
 // warnDates prints the date warnings of tasks, lines of file, that
 // this run hasn't given yet.
 func warnDates(file string, tasks []*domain.Task) {
+	warnOnce(file, dateNotes(tasks))
+}
+
+// warnOnce prints the notes about lines of file that this run hasn't
+// given yet: "warning: <file>:<line>: <message>" on stderr.
+func warnOnce(file string, notes []note) {
 	// Two identical lines in one file both warn; on later loads,
 	// neither does.
 	given := map[string]bool{}
-	for _, task := range tasks {
-		for _, w := range task.DateWarnings() {
-			key := file + "\n" + task.Entry() + "\n" + w
-			if datesWarned[key] {
-				continue
-			}
-			given[key] = true
-			fmt.Fprintf(os.Stderr, "warning: %s:%d: %s\n", file, task.FileLine, w)
+	for _, n := range notes {
+		key := file + "\n" + n.task.Entry() + "\n" + n.message
+		if datesWarned[key] {
+			continue
 		}
+		given[key] = true
+		fmt.Fprintf(os.Stderr, "warning: %s:%d: %s\n", file, n.task.FileLine, n.message)
 	}
 	maps.Copy(datesWarned, given)
 }

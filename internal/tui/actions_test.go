@@ -2,6 +2,7 @@ package tui
 
 import (
 	"bytes"
+	"errors"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -384,12 +385,27 @@ func TestAct_UnavailableActionLogsWarnAndKeepsBehaviour(t *testing.T) {
 	assertLogged(t, buf.String(), `action="add task"`, "can't go in the done tab")
 }
 
+// unsaveable is a repository that can't save: a full disk, say.
+type unsaveable struct{ *storage.MemoryRepository }
+
+func (unsaveable) Save(*domain.Context) error { return errors.New("no space left on device") }
+
+// Context loads the named context wired to save through r.
+func (r unsaveable) Context(name string) (*domain.Context, error) {
+	loaded, err := r.MemoryRepository.Context(name)
+	if err != nil {
+		return nil, err
+	}
+	ctx := domain.NewContext(r, name)
+	ctx.Tasks = loaded.Tasks
+	return ctx, nil
+}
+
 func TestAct_FailedActionLogsErrorAndQuits(t *testing.T) {
-	// The list still shows task 1, but the context no longer has it (as
-	// if the file changed underneath), so completing it fails.
-	m, _ := seedModel(t, "todo", "first", "second")
+	// Completing task 1 can't be saved.
+	m, repo := seedModel(t, "todo", "first", "second")
+	m.repo = unsaveable{repo}
 	m.list.Select(1)
-	m.context.Tasks = m.context.Tasks[:1]
 	m, buf := withLogBuffer(m)
 
 	_, cmd := Do.Act(m)

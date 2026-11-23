@@ -36,7 +36,7 @@ contexts you can switch to, the current context and its tasks.
 		}
 		fmt.Println()
 		fmt.Printf("Current Context: %s\n", current.ConsoleString())
-		current.Show()
+		printContext(current, false)
 		return nil
 	},
 }

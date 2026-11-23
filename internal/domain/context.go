@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
-	"strings"
 
 	"github.com/bricef/htt/internal/vars"
 	"github.com/fatih/color"
@@ -19,6 +18,11 @@ type Context struct {
 	Name  string
 	Tasks []*Task
 	repo  Repository
+
+	// doneIDs are the ids of the context's tasks in the done file, as
+	// Tree read them, kept until the context is next saved: a command
+	// asks for the tree to warn and again to show it.
+	doneIDs map[string]bool
 }
 
 // NewContext returns a Context wired with the given Repository. Intended
@@ -38,17 +42,11 @@ func (c *Context) Equals(other *Context) bool {
 	return c.Name == other.Name
 }
 
+// Sort orders the tasks by priority, (A) first, then (B) and on, then
+// no priority, keeping tasks of the same priority in their order.
 func (c *Context) Sort() *Context {
-	slices.SortFunc(c.Tasks, func(i, j *Task) int {
-		var a = i.Priority
-		var b = j.Priority
-		if a == "" {
-			a = "Z"
-		}
-		if b == "" {
-			b = "Z"
-		}
-		return strings.Compare(a, b)
+	slices.SortStableFunc(c.Tasks, func(a, b *Task) int {
+		return comparePriority(a.Priority, b.Priority)
 	})
 	return c
 }
@@ -94,15 +92,6 @@ func showTasks(ts []*Task) {
 		fmt.Printf("%3d %s\n", todo.Line, todo.ConsoleString())
 	}
 	fmt.Println()
-}
-
-func (c *Context) Show() {
-	if len(c.Tasks) == 0 {
-		fmt.Printf("(%s): Context is empty.\n", c.ConsoleString())
-		return
-	}
-	showTasks(c.Tasks)
-	fmt.Printf("(%s): %d tasks\n", c.ConsoleString(), len(c.Tasks))
 }
 
 func (c *Context) ShowOnly(predicate func(*Task) bool) {

@@ -314,7 +314,7 @@ func (t *Task) ConsoleString() string {
 func (t *Task) markCompleted(context *Context, when time.Time) (*Task, error) {
 	t.Completed = true
 	t.CompletedOn = when
-	if _, err := t.Annotate("context", context.Name); err != nil {
+	if _, err := t.Annotate(contextKey, context.Name); err != nil {
 		return nil, fmt.Errorf("annotate completed task: %w", err)
 	}
 	t.rebuild()

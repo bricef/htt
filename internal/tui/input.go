@@ -20,9 +20,10 @@ import (
 type inputMode int
 
 const (
-	inputClosed inputMode = iota
-	inputAdd              // a new task for the current context
-	inputEdit             // the task at model.editIndex
+	inputClosed  inputMode = iota
+	inputAdd               // a new task for the current context
+	inputEdit              // the task at model.editIndex
+	inputSubtask           // a new subtask of the task at model.editIndex
 )
 
 // draft is the task input read as the line it would save.
@@ -187,6 +188,21 @@ func tagSuggestions(value string, tags map[string][]string) []string {
 	return out
 }
 
+// subtaskDraft is raw as a subtask of the task the input is for would
+// be saved: with p: naming the task, whose id it may get (see
+// domain.Context.SubtaskLine). A task that can't hold one is a problem.
+func (m model) subtaskDraft(raw string) (string, []string) {
+	task, err := domain.NewTask(raw)
+	if err != nil {
+		return raw, []string{err.Error()}
+	}
+	line, err := m.context.SubtaskLine(strID(m.editIndex), task)
+	if err != nil {
+		return raw, []string{err.Error()}
+	}
+	return line, nil
+}
+
 // inputKeys are the keys the task input answers to, for the help bar.
 type inputKeys struct{}
 
@@ -206,12 +222,18 @@ func (k inputKeys) FullHelp() [][]key.Binding { return [][]key.Binding{k.ShortHe
 func (m *model) openInput(mode inputMode, value string, editIndex int) {
 	m.input = mode
 	m.editIndex = editIndex
-	m.editRaw = value
+	m.editRaw = ""
+	if editIndex >= 0 {
+		m.editRaw = m.context.Tasks[editIndex].Raw
+	}
 	m.textInput.Prompt = "New task > "
 	m.textInput.Placeholder = "(A) do a thing for +project @place due:friday"
-	if mode == inputEdit {
+	switch mode {
+	case inputEdit:
 		m.textInput.Prompt = fmt.Sprintf("Edit task %d > ", editIndex)
 		m.textInput.Placeholder = ""
+	case inputSubtask:
+		m.textInput.Prompt = fmt.Sprintf("New subtask of %d > ", editIndex)
 	}
 	m.tags = knownTags(m.repo)
 	m.textInput.SetValue(value)
@@ -252,7 +274,10 @@ func (m model) inputView() string {
 	if m.width > 0 {
 		lines[0] = ansi.Truncate(lines[0], m.width, "")
 	}
-	d := readDraft(m.textInput.Value(), m.now(), m.input == inputAdd)
+	d := readDraft(m.textInput.Value(), m.now(), m.input != inputEdit)
+	if m.input == inputSubtask && d.raw != "" && len(d.problems) == 0 {
+		d.raw, d.problems = m.subtaskDraft(d.raw)
+	}
 	switch {
 	case d.raw != "":
 		label := "  saves as "

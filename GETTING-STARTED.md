@@ -354,7 +354,8 @@ instead.
 
 ## Sorting and filtering
 
-`htt todo show` lists tasks in file order. Two flags turn it into a
+`htt todo show` lists tasks in file order, subtasks indented under
+their parents (see [Subtasks](#subtasks)). Two flags turn it into a
 view of the list instead:
 
 - `--sort` orders by `priority`, `created` or `due`. A `-` prefix
@@ -388,6 +389,171 @@ The number beside each task is still its position in the full list,
 so a sorted view can look out of order. That's deliberate:
 `htt todo do 4` or `htt todo delete 4` acts on the task shown as `4`,
 whatever order the view is in.
+
+## Subtasks
+
+A task can hold other tasks, its subtasks, which can hold their own.
+`htt todo add --under N` (and `add-to --under N`) adds a subtask of
+task N:
+
+```
+$ htt todo add "(A) Plan the launch +work"
+Added: (A) 2026-11-23 Plan the launch +work
+$ htt todo add Pack the van
+Added: 2026-11-23 Pack the van
+$ htt todo add --under 0 Write the announcement +work
+Added: 2026-11-23 Write the announcement +work p:1
+Under: (A) 2026-11-23 Plan the launch +work id:1
+$ htt todo add --under 0 Book the venue
+Added: 2026-11-23 Book the venue p:1
+Under: (A) 2026-11-23 Plan the launch +work id:1
+$ htt todo add --under 2 Call three venues
+Added: 2026-11-23 Call three venues p:2
+Under: 2026-11-23 Book the venue p:1 id:2
+$ htt todo show
+
+  0 (A) 2026-11-23 Plan the launch +work id:1
+  1   2026-11-23 Write the announcement +work p:1
+  2   2026-11-23 Book the venue p:1 id:2
+  3     2026-11-23 Call three venues p:2
+  4 2026-11-23 Pack the van
+
+(todo): 5 tasks
+```
+
+The links are two tags, the ones [topydo](https://github.com/topydo/topydo)
+writes: a task with subtasks carries `id:N`, and each of its subtasks
+`p:N`. A task gets its id when it first gets a subtask, the smallest
+number no `id:` or `p:` in the file uses, and keeps it. They're
+ordinary `key:value` words, so the file stays todo.txt: other tools
+show them as text, and topydo shows the same tree. `show` keeps them
+in the lines; `--flat` lists the lines without indenting them, and so
+do sorted and filtered views and `search`, where the tags still say
+what belongs to what.
+
+Upgrading from 1.0 with a file that already uses `id:N` or `p:N` as
+ordinary words (`Read p:12 of the book`)? htt can't tell them from
+links, as topydo can't: from 1.1 such a task shows under the task
+with that `id:`, or warns that its `p:` names no task, and the next
+change htt makes writes the file in tree order. No line is lost.
+
+**Order in the file.** htt writes every subtree directly below its
+parent, a parent's subtasks in priority order (`(A)` first, those
+without a priority last, ties as they were), top-level tasks as they
+were. So the numbers read the tree top to bottom, and adding a
+subtask shifts the numbers below it, as deleting a task does. A file
+edited by hand or by another tool, its lines in any order, shows the
+same way, and is written in this order next time htt changes it;
+no line is lost or changed by the reordering. Changing a subtask's
+priority moves it among its siblings:
+
+```
+$ htt todo priority 2 B
+Before: 2026-11-23 Book the venue p:1 id:2
+After:  (B) 2026-11-23 Book the venue p:1 id:2
+$ htt todo show
+
+  0 (A) 2026-11-23 Plan the launch +work id:1
+  1   (B) 2026-11-23 Book the venue p:1 id:2
+  2     2026-11-23 Call three venues p:2
+  3   2026-11-23 Write the announcement +work p:1
+  4 2026-11-23 Pack the van
+
+(todo): 5 tasks
+```
+
+**Arranging.** `htt todo nest N M` puts task N, with its subtasks,
+under task M (a task can't go under itself or one of its own
+subtasks); `htt todo unnest N` makes it a top-level task again, after
+the top-level task it was under, its subtasks with it:
+
+```
+$ htt todo nest 4 0
+Nested: 2026-11-23 Pack the van p:1
+Under:  (A) 2026-11-23 Plan the launch +work id:1
+$ htt todo unnest 1
+Unnested: (B) 2026-11-23 Book the venue id:2
+$ htt todo show
+
+  0 (A) 2026-11-23 Plan the launch +work id:1
+  1   2026-11-23 Write the announcement +work p:1
+  2   2026-11-23 Pack the van p:1
+  3 (B) 2026-11-23 Book the venue id:2
+  4   2026-11-23 Call three venues p:2
+
+(todo): 5 tasks
+```
+
+**Completing.** A task with no open subtasks completes as before, and
+completing the last open subtask of a task doesn't complete it.
+Completing a task with open subtasks asks first:
+
+```
+$ htt todo do 0
+Task 0 has 2 open subtasks.
+[x] Mark it done, and leave the subtasks as they are.
+[A] Mark the subtasks done too.
+Anything else cancels.
+```
+
+Type `x` or `A`, exactly (a lower-case `a` cancels), and Enter. `x`
+completes the task alone: its subtasks stay open, still naming it with
+`p:`, and show at the top level marked `(parent done)`. `A` completes
+it and every open task below it, at any depth. Anything else, or
+Ctrl-D, changes nothing. Without a terminal to ask on (a script, piped
+input), htt doesn't complete the task unless it's told the answer:
+
+```
+$ htt todo do 0 < /dev/null
+❌ task 0 has 2 open subtasks, and there's no terminal to ask on: give --leave-subtasks to complete it alone, or --with-subtasks to complete them too
+$ htt todo do 0 --leave-subtasks
+Completed: x (A) 2026-11-23 2026-11-23 Plan the launch +work id:1 context:todo
+$ htt todo show
+
+  0 2026-11-23 Write the announcement +work p:1  (parent done)
+  1 2026-11-23 Pack the van p:1  (parent done)
+  2 (B) 2026-11-23 Book the venue id:2
+  3   2026-11-23 Call three venues p:2
+
+(todo): 4 tasks
+```
+
+`--leave-subtasks` answers `x`, `--with-subtasks` answers `A`.
+
+**Moving and deleting.** A subtree goes as one. `htt todo move N
+CONTEXT` takes the task and everything below it, and lists them; the
+task becomes a top-level task there, and any of their ids the other
+context already uses is renumbered there, the links with it. A done
+task moved from the done file back to the context it was completed
+in links up again: its subtasks there are under it once more, and a
+subtask goes back under its parent. A task whose only text is its
+`p:` can't lose it, so `move` and `unnest` refuse it.
+`htt todo delete N` archives the task and everything below it, and
+lists what it archived.
+
+**Broken links.** A `p:` naming no task (nor one completed from this
+context), a loop, an `id:` on two tasks and several `p:` on one task
+are pointed out on stderr, as dates htt can't read are. The tasks
+affected show at the top level (a task with several `p:`, under the
+first), and the lines stay as they are:
+
+```
+$ htt todo show
+warning: /home/you/.htt/data/todo.txt:1: p:2 makes a loop (the task would be below itself), so it is shown at the top level
+warning: /home/you/.htt/data/todo.txt:2: p:1 makes a loop (the task would be below itself), so it is shown at the top level
+warning: /home/you/.htt/data/todo.txt:3: p:9 names no task, so the task is shown at the top level
+
+  0 loop a id:1 p:2
+  1 loop b id:2 p:1
+  2 lost p:9
+  3 fine
+
+(todo): 4 tasks
+```
+
+The done file and the archive collect tasks from every context, so
+they're always flat. In the TUI, see
+[Optional: interactive mode](#optional-interactive-mode).
 
 ## Time logging
 
@@ -601,7 +767,8 @@ timelog:
   your first real entry is uncategorised, unless you give `@start` a
   category.
 - `htt workon` logs the task's text, tags included, so a task's
-  `+project` picks its category.
+  `+project` picks its category. A subtask's `id:` and `p:` are left
+  out.
 - A category that exists only to be the default needs no tags: give
   it a name (and `work: false` if its time shouldn't count) and name
   it in `default_category`. Any other category needs at least one tag,
@@ -1001,11 +1168,15 @@ files. The keys:
 | `g` / `G` (`Home`/`End`) | first / last task                           |
 | `←`/`h`, `→`/`l`     | switch context tab                              |
 | `/`                  | search (see below); `Enter` applies it, `Esc` clears it |
-| `x`                  | complete the task                               |
-| `d`                  | delete the task (it moves to the archive)       |
+| `x`                  | complete the task (one with open subtasks asks first: `x`, `A` or any other key to cancel) |
+| `d`                  | delete the task, with its subtasks (they move to the archive) |
 | `+` / `-`            | raise / lower its priority                      |
 | `n` or `a`           | add a task: type it, `Enter` to add, `Esc` to cancel |
 | `e`                  | edit the task: change it, `Enter` to save, `Esc` to cancel |
+| `s`                  | add a subtask of the task                       |
+| `Tab`                | nest the task under the task above it at its level |
+| `Shift-Tab`          | unnest the task a level                         |
+| `Space`              | fold or unfold the task's subtasks              |
 | `f`                  | edit the current tab's file in your editor      |
 | `?`                  | show or hide the full keymap                    |
 | `q`, `Esc`, `Ctrl-C` | quit (`Esc` clears a search first, if there is one) |
@@ -1030,6 +1201,23 @@ clears it.
 
 Changing a task's priority re-sorts the file; the cursor follows the
 task to its new place.
+
+**Subtasks.** The list shows the tree (see [Subtasks](#subtasks)),
+unfolded, each subtask indented under its parent; the `id:` and `p:`
+tags are drawn in the theme's muted colour, so the task's own words
+stand out. `Space` folds a task's subtasks away (the row ends
+`(3 folded)`) and back; a search looks through folded tasks too. `s`
+opens the task input for a subtask of the selected task, its preview
+showing the `p:` it gets. `Tab` makes the selected task, with its
+subtasks, a subtask of the task above it at the same level, as in an
+outliner (for a top-level task, the top-level task above it, however
+many subtasks lie between); `Shift-Tab` makes it a sibling of its
+parent, after the parent's subtasks. Either way it takes its place
+among its new siblings by priority, and the cursor stays on it. The
+first task at its level and a top-level task stay put, and the line
+above the keymap says why. `x` on a task with open subtasks asks the
+same question as `htt todo do`, on that line; the next key answers it.
+A broken link is mentioned there too, as dates htt can't read are.
 
 **Adding and editing.** `n` opens an empty task input; `e` opens the
 task under the cursor in it, to change any part of the line. As you

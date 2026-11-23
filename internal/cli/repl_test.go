@@ -288,10 +288,13 @@ func TestResetReplFlags_ClearsBleedingState(t *testing.T) {
 	// poisoning the next dispatch.
 	addDue = "Friday"
 	addToDue = "tomorrow"
+	addUnder, addToUnder = "3", "4"
+	doLeaveSubtasks, doWithSubtasks = true, true
 	logAt = atFlag{value: "9:30", given: true}
 	reportSince = "yesterday"
 	showSortKey = "-due"
 	showFilters = []string{"overdue"}
+	showFlat = true
 	tuiLogFile = "tui.log"
 	tuiLogLevel = "error"
 	guiPort = 8080
@@ -305,6 +308,12 @@ func TestResetReplFlags_ClearsBleedingState(t *testing.T) {
 	if addToDue != "" {
 		t.Errorf("addToDue = %q, want empty", addToDue)
 	}
+	if addUnder != "" || addToUnder != "" {
+		t.Errorf("addUnder = %q, addToUnder = %q, want empty", addUnder, addToUnder)
+	}
+	if doLeaveSubtasks || doWithSubtasks {
+		t.Errorf("doLeaveSubtasks = %v, doWithSubtasks = %v, want false", doLeaveSubtasks, doWithSubtasks)
+	}
 	if logAt != (atFlag{}) {
 		t.Errorf("logAt = %+v, want it not given", logAt)
 	}
@@ -316,6 +325,9 @@ func TestResetReplFlags_ClearsBleedingState(t *testing.T) {
 	}
 	if showFilters != nil {
 		t.Errorf("showFilters = %v, want nil", showFilters)
+	}
+	if showFlat {
+		t.Error("showFlat = true, want false")
 	}
 	if tuiLogFile != "" {
 		t.Errorf("tuiLogFile = %q, want empty", tuiLogFile)

@@ -4,9 +4,11 @@ package e2e
 
 import (
 	"bytes"
+	"context"
 	"os/exec"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/creack/pty"
 )
@@ -63,12 +65,19 @@ func TestSubtasks_DoNeedsStdoutOnATerminalToo(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = ptmx.Close(); _ = tty.Close() }()
-	cmd := exec.Command(binaryPath, "--no-color", "todo", "do", "0")
+	// htt asking on the terminal would wait there for an answer: ten
+	// seconds is plenty for the refusal.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, binaryPath, "--no-color", "todo", "do", "0")
 	cmd.Env = append(e.homeEnv(), e.extraEnv...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = tty, &stdout, &stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true, Setctty: true}
 	err = cmd.Run()
+	if ctx.Err() != nil {
+		t.Fatalf("htt waited on the terminal; it wrote:\n%s", stdout.String())
+	}
 	if _, failed := err.(*exec.ExitError); !failed {
 		t.Errorf("exit: %v, want a failure", err)
 	}

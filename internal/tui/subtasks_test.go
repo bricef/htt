@@ -395,6 +395,22 @@ func TestTree_PriorityKeysFollowTheTask(t *testing.T) {
 	if got := selected(t, m); got != "Book the venue p:1 id:2" {
 		t.Errorf("selected %q after -", got)
 	}
+
+	// A subtask raised above its parent's priority stays under it, the
+	// numbers still in order down the tree, and actions still act on
+	// the task they're shown with.
+	m, repo := seedTreeModel(t, "Plan id:1", "Book p:1", "(B) Other")
+	m = selectRow(t, m, 1)
+	m = press(t, m, "+")
+	wantRows(t, "Book raised above Plan", m,
+		"     0 (B) Other",
+		"     1 Plan id:1",
+		">    2   (C) Book p:1",
+	)
+	press(t, m, "d")
+	if got := repo.raws(t, "todo"); !slices.Equal(got, []string{"(B) Other", "Plan id:1"}) {
+		t.Errorf("deleting the task shown as 2 left %q", got)
+	}
 }
 
 // Broken links are pointed out on the status line, as dates htt can't

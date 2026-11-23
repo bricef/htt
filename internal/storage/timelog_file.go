@@ -2,9 +2,9 @@ package storage
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -20,14 +20,15 @@ const timelogFileExt = ".log"
 // matches the legacy on-disk format byte-for-byte so existing data
 // migrates without conversion.
 //
-// Save rewrites the whole file (with a `.bak` rotation for crash
-// recovery), rather than the legacy append-only approach. Whole-file
-// rewrite lets the persistent Timelog.Append method use a simple
-// Save call without tracking which entries are new since the last
-// save. The `.bak` slot holds the prior version, mirroring the
-// Context save pattern.
+// Save rewrites the whole file, rather than the legacy append-only
+// approach. Whole-file rewrite lets the persistent Timelog.Append
+// method use a simple Save call without tracking which entries are new
+// since the last save. Like every write, it goes through
+// transaction.go: locked against other htt processes, checked against
+// other programs, and atomic, the prior version kept as .bak.
 type FileTimelogRepository struct {
 	dataDir string
+	hooks   hooks // seams for storage's own tests
 }
 
 func NewFileTimelogRepository(dataDir string) *FileTimelogRepository {
@@ -36,6 +37,12 @@ func NewFileTimelogRepository(dataDir string) *FileTimelogRepository {
 
 func (r *FileTimelogRepository) logDir() string {
 	return filepath.Join(r.dataDir, vars.DefaultTimelogDirName)
+}
+
+// dirs are the directories r writes, which a transaction of r's locks:
+// the log directory.
+func (r *FileTimelogRepository) dirs() []string {
+	return []string{r.logDir()}
 }
 
 // LogPath is the file that holds date's timelog.
@@ -52,18 +59,19 @@ func (r *FileTimelogRepository) Today() (*domain.Timelog, error) {
 }
 
 func (r *FileTimelogRepository) Day(date time.Time) (*domain.Timelog, error) {
-	l := domain.NewTimelog(r, date)
-
-	f, err := os.Open(r.LogPath(date))
+	file, err := readFile(r.LogPath(date))
 	if err != nil {
-		if os.IsNotExist(err) {
-			return l, nil
-		}
-		return nil, fmt.Errorf("open %s: %w", r.LogPath(date), err)
+		return nil, err
 	}
-	defer func() { _ = f.Close() }()
+	return r.parseLog(r, date, file.data)
+}
 
-	scanner := bufio.NewScanner(f)
+// parseLog makes date's timelog of its file's content, data (nil for a
+// file that doesn't exist yet), wired to repo: r, or a transaction of
+// r's.
+func (r *FileTimelogRepository) parseLog(repo domain.TimelogRepository, date time.Time, data []byte) (*domain.Timelog, error) {
+	l := domain.NewTimelog(repo, date)
+	scanner := bufio.NewScanner(bytes.NewReader(data))
 	lineNo := 0
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -89,35 +97,25 @@ func (r *FileTimelogRepository) Day(date time.Time) (*domain.Timelog, error) {
 	return l, nil
 }
 
+// Save writes l's file as a transaction of its own (transaction.go).
 func (r *FileTimelogRepository) Save(l *domain.Timelog) error {
 	if l == nil {
 		return errors.New("nil timelog")
 	}
+	return transact(r.dirs(), r.hooks, func(t *transaction) error {
+		t.Write(r.LogPath(l.Date), logFile(l), true)
+		return nil
+	})
+}
 
-	if err := os.MkdirAll(r.logDir(), dirMode); err != nil {
-		return fmt.Errorf("ensure timelog dir: %w", err)
-	}
-
-	path := r.LogPath(l.Date)
-	if _, err := os.Stat(path); err == nil {
-		if err := os.Rename(path, path+".bak"); err != nil {
-			return fmt.Errorf("backup existing timelog: %w", err)
-		}
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("stat existing timelog: %w", err)
-	}
-
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, fileMode)
-	if err != nil {
-		return fmt.Errorf("create %s: %w", path, err)
-	}
-	defer func() { _ = f.Close() }()
-
+// logFile is l's file: an entry a line, each entry's Raw. Each entry's
+// FileLine becomes its line there, for messages about it.
+func logFile(l *domain.Timelog) []byte {
+	var b bytes.Buffer
 	for i, entry := range l.Entries {
-		if _, err := fmt.Fprintln(f, entry.Raw); err != nil {
-			return fmt.Errorf("write entry: %w", err)
-		}
-		entry.FileLine = i + 1 // where it is now, for messages about it
+		b.WriteString(entry.Raw)
+		b.WriteByte('\n')
+		entry.FileLine = i + 1
 	}
-	return nil
+	return b.Bytes()
 }

@@ -2,6 +2,7 @@ package storage
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -32,6 +33,10 @@ const (
 // where todo.Context.Read called Add (which called Sync) on every
 // line, causing every read to overwrite the file.
 //
+// Every write goes through transaction.go: locked against other htt
+// processes, checked against other programs, and atomic, the previous
+// version kept as .bak.
+//
 // Context names are sanitized at the path boundary via
 // domain.ContextFileName (non-word characters become underscores) so
 // `Context("../foo")` and `Save(&Context{Name: "../escape"})` can't
@@ -40,6 +45,7 @@ const (
 type FileRepository struct {
 	dataDir    string
 	pointerDir string
+	hooks      hooks // seams for storage's own tests
 }
 
 // NewFileRepository constructs a repo with separate directories for
@@ -81,6 +87,12 @@ func (r *FileRepository) currentPointerPath() string {
 	return filepath.Join(r.pointerDir, currentContextFile)
 }
 
+// dirs are the directories r writes, each of which a transaction of
+// r's locks: the data directory and the pointer's.
+func (r *FileRepository) dirs() []string {
+	return []string{r.dataDir, r.pointerDir}
+}
+
 func (r *FileRepository) ContextNames() ([]string, error) {
 	entries, err := os.ReadDir(r.dataDir)
 	if err != nil {
@@ -109,19 +121,19 @@ func (r *FileRepository) Context(name string) (*domain.Context, error) {
 	if name == "" {
 		return nil, domain.ErrInvalidContextName
 	}
-
-	ctx := domain.NewContext(r, name)
-
-	f, err := os.Open(r.ContextPath(name))
+	file, err := readFile(r.ContextPath(name))
 	if err != nil {
-		if os.IsNotExist(err) {
-			return ctx, nil
-		}
-		return nil, fmt.Errorf("open %s: %w", r.ContextPath(name), err)
+		return nil, err
 	}
-	defer func() { _ = f.Close() }()
+	return r.parseContext(r, name, file.data)
+}
 
-	scanner := bufio.NewScanner(f)
+// parseContext makes the named context of its file's content, data (nil
+// for a file that doesn't exist yet), wired to repo: r, or a
+// transaction of r's.
+func (r *FileRepository) parseContext(repo domain.Repository, name string, data []byte) (*domain.Context, error) {
+	ctx := domain.NewContext(repo, name)
+	scanner := bufio.NewScanner(bytes.NewReader(data))
 	lineNo := 0
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -155,16 +167,18 @@ func (r *FileRepository) ContextLines(name string) ([]string, error) {
 	if name == "" {
 		return nil, domain.ErrInvalidContextName
 	}
-	f, err := os.Open(r.ContextPath(name))
+	file, err := readFile(r.ContextPath(name))
 	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("open %s: %w", r.ContextPath(name), err)
+		return nil, err
 	}
-	defer func() { _ = f.Close() }()
+	return r.lines(name, file.data)
+}
+
+// lines returns the lines of the named context's file content, data,
+// trimmed, blank lines left out.
+func (r *FileRepository) lines(name string, data []byte) ([]string, error) {
 	var lines []string
-	scanner := bufio.NewScanner(f)
+	scanner := bufio.NewScanner(bytes.NewReader(data))
 	for scanner.Scan() {
 		if line := strings.TrimSpace(scanner.Text()); line != "" {
 			lines = append(lines, line)
@@ -192,37 +206,28 @@ func (r *FileRepository) Contexts() ([]*domain.Context, error) {
 	return out, nil
 }
 
+// Save writes ctx's file as a transaction of its own (transaction.go):
+// locked, atomically, the previous version kept as .bak.
 func (r *FileRepository) Save(ctx *domain.Context) error {
 	if ctx == nil || ctx.Name == "" {
 		return domain.ErrInvalidContextName
 	}
+	return transact(r.dirs(), r.hooks, func(t *transaction) error {
+		t.Write(r.ContextPath(ctx.Name), contextFile(ctx), true)
+		return nil
+	})
+}
 
-	if err := os.MkdirAll(r.dataDir, dirMode); err != nil {
-		return fmt.Errorf("ensure data dir: %w", err)
-	}
-
-	path := r.ContextPath(ctx.Name)
-	if _, err := os.Stat(path); err == nil {
-		if err := os.Rename(path, path+".bak"); err != nil {
-			return fmt.Errorf("backup existing file: %w", err)
-		}
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("stat existing file: %w", err)
-	}
-
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, fileMode)
-	if err != nil {
-		return fmt.Errorf("create %s: %w", path, err)
-	}
-	defer func() { _ = f.Close() }()
-
+// contextFile is ctx's file: a task a line, each task's Raw. Each
+// task's FileLine becomes its line there, for messages about it.
+func contextFile(ctx *domain.Context) []byte {
+	var b bytes.Buffer
 	for i, task := range ctx.Tasks {
-		if _, err := fmt.Fprintln(f, task.Raw); err != nil {
-			return fmt.Errorf("write task: %w", err)
-		}
-		task.FileLine = i + 1 // where it is now, for messages about it
+		b.WriteString(task.Raw)
+		b.WriteByte('\n')
+		task.FileLine = i + 1
 	}
-	return nil
+	return b.Bytes()
 }
 
 func (r *FileRepository) CurrentContextName() (string, error) {
@@ -233,11 +238,17 @@ func (r *FileRepository) CurrentContextName() (string, error) {
 		}
 		return "", fmt.Errorf("read current-context: %w", err)
 	}
+	return pointerName(b), nil
+}
+
+// pointerName is the context the current-context pointer's content, b,
+// names: DefaultContextName when it's empty.
+func pointerName(b []byte) string {
 	name := strings.TrimSpace(string(b))
 	if name == "" {
-		return domain.DefaultContextName, nil
+		return domain.DefaultContextName
 	}
-	return name, nil
+	return name
 }
 
 func (r *FileRepository) CurrentContext() (*domain.Context, error) {
@@ -248,16 +259,15 @@ func (r *FileRepository) CurrentContext() (*domain.Context, error) {
 	return r.Context(name)
 }
 
+// SetCurrent writes the current-context pointer as a transaction of its
+// own (transaction.go).
 func (r *FileRepository) SetCurrent(name string) error {
 	sanitized := domain.ContextFileName(name)
 	if sanitized == "" {
 		return domain.ErrInvalidContextName
 	}
-	if err := os.MkdirAll(r.dataDir, dirMode); err != nil {
-		return fmt.Errorf("ensure data dir: %w", err)
-	}
-	if err := os.WriteFile(r.currentPointerPath(), []byte(sanitized), fileMode); err != nil {
-		return fmt.Errorf("write current-context: %w", err)
-	}
-	return nil
+	return transact(r.dirs(), r.hooks, func(t *transaction) error {
+		t.Write(r.currentPointerPath(), []byte(sanitized), false)
+		return nil
+	})
 }

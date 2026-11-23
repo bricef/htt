@@ -90,6 +90,19 @@ type SameFiler interface {
 // or sanitizes to empty).
 var ErrInvalidContextName = errors.New("invalid context name")
 
+// What a change to the files can meet that nothing resolves
+// (docs/design/safe-writes.md, "What a caller can see"). Repositories
+// return them; nothing was saved.
+var (
+	// ErrBusy: another htt held the files for longer than a change
+	// waits for them, a few seconds.
+	ErrBusy = errors.New("another htt is busy with your files; try again")
+	// ErrKeepsChanging: a file the change read changed under it, by
+	// another program, every time it ran. Repositories put the file's
+	// name in front: "<file> keeps changing; nothing was saved".
+	ErrKeepsChanging = errors.New("keeps changing; nothing was saved")
+)
+
 // ContextFileName is the name a context's file takes, without its
 // extension: the context's name with every character but an ASCII
 // letter, a digit or an underscore made an underscore. Names that map

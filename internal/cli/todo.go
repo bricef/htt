@@ -184,27 +184,6 @@ var edit = &cobra.Command{
 	},
 }
 
-var do = &cobra.Command{
-	Use:     "do <item index>",
-	Short:   "Complete a task",
-	Args:    cobra.ExactArgs(1),
-	Aliases: []string{"x"},
-	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx, err := repo().CurrentContext()
-		if err != nil {
-			return fmt.Errorf("load current context: %w", err)
-		}
-		done, err := ctx.Complete(args[0], domain.SubtasksAsk)
-		if err != nil {
-			return fmt.Errorf("complete task: %w", err)
-		}
-		for _, t := range done {
-			fmt.Printf("Completed: %s\n", t.ConsoleString())
-		}
-		return nil
-	},
-}
-
 var editDone = &cobra.Command{
 	Use:     "edit-done",
 	Short:   "Open the done file in your editor ($VISUAL or $EDITOR)",

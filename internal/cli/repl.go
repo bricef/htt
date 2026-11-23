@@ -70,7 +70,7 @@ func init() {
 // `/interactive` runs the TUI on the REPL's terminal, which the REPL
 // hands over for the run (replTerminal.handOver).
 func runRepl() error {
-	rt := &replTerminal{open: openReplReader, isTerminal: replOnTerminal}
+	rt := &replTerminal{open: openReplReader, isTerminal: onTerminal}
 	lines, err := rt.open()
 	if err != nil {
 		return err
@@ -241,9 +241,10 @@ func (f failedReader) Readline() (string, error) { return "", f.err }
 func (failedReader) SetPrompt(string)            {}
 func (failedReader) Close() error                { return nil }
 
-// replOnTerminal reports whether the REPL reads from and writes to a
-// terminal, as the TUI needs.
-func replOnTerminal() bool {
+// onTerminal reports whether htt reads from and writes to a terminal, as
+// the TUI and the question before completing a task with open subtasks
+// need: stdin and stdout both one. Tests stand in for it.
+var onTerminal = func() bool {
 	return isatty.IsTerminal(os.Stdin.Fd()) && isatty.IsTerminal(os.Stdout.Fd())
 }
 
@@ -316,6 +317,7 @@ func (r replReader) Close() error {
 func resetReplFlags() {
 	addDue, addUnder = "", ""
 	addToDue, addToUnder = "", ""
+	doLeaveSubtasks, doWithSubtasks = false, false
 	logAt = atFlag{}
 	reportSince, reportSinceGiven = "7d", false
 	reportWeek, reportMonth = false, false

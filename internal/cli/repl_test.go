@@ -290,6 +290,7 @@ func TestResetReplFlags_ClearsBleedingState(t *testing.T) {
 	addDue = "Friday"
 	addToDue = "tomorrow"
 	addUnder, addToUnder = "3", "4"
+	doLeaveSubtasks, doWithSubtasks = true, true
 	logAt = atFlag{value: "9:30", given: true}
 	reportSince = "yesterday"
 	showSortKey = "-due"
@@ -309,6 +310,9 @@ func TestResetReplFlags_ClearsBleedingState(t *testing.T) {
 	}
 	if addUnder != "" || addToUnder != "" {
 		t.Errorf("addUnder = %q, addToUnder = %q, want empty", addUnder, addToUnder)
+	}
+	if doLeaveSubtasks || doWithSubtasks {
+		t.Errorf("doLeaveSubtasks = %v, doWithSubtasks = %v, want false", doLeaveSubtasks, doWithSubtasks)
 	}
 	if logAt != (atFlag{}) {
 		t.Errorf("logAt = %+v, want it not given", logAt)

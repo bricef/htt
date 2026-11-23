@@ -43,6 +43,23 @@ const (
 	SubtasksComplete
 )
 
+// SubtasksQuestion is what htt asks before completing task n, which has
+// open tasks below it, at any depth: four lines, the CLI's and the
+// TUI's alike. x answers SubtasksLeave, A SubtasksComplete, anything
+// else cancels.
+func SubtasksQuestion(n string, open int) []string {
+	first := fmt.Sprintf("Task %s has %d open subtasks.", n, open)
+	if open == 1 {
+		first = fmt.Sprintf("Task %s has 1 open subtask.", n)
+	}
+	return []string{
+		first,
+		"[x] Mark it done, and leave the subtasks as they are.",
+		"[A] Mark the subtasks done too.",
+		"Anything else cancels.",
+	}
+}
+
 // Tree returns the context's tree (NewTree), telling done parents from
 // broken links by the context's tasks in the done file: those whose
 // context: annotation names it, as Complete writes them. The done file

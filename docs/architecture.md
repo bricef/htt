@@ -418,19 +418,25 @@ hooks, change)` runs a change as a transaction:
 2. **Read** through the `transaction`: each file read once, fresh, its
    bytes kept; a file the change has written reads as written.
 3. **Change:** writes are held, in order.
-4. **Check** that every file read still has the bytes read (or still
-   doesn't exist). If not, another program wrote it: run the change
-   again from 2, up to 5 runs, then `domain.ErrKeepsChanging`
-   ("<file> keeps changing; nothing was saved"), writing nothing.
-5. **Write** each file in the order the change wrote it: the previous
-   version first to `<file>.bak` (not for the pointer), then the file,
-   each atomically (`replace`): a temporary file beside it
-   (`.<name>.<random>.tmp`, created exclusively, the files' mode and
-   the umask as always), synced, closed, renamed over it. On Windows a
-   rename over a file another process has open fails (Go opens files
-   without `FILE_SHARE_DELETE`), so it's tried again for up to two
-   seconds.
-6. **Unlock.**
+4. **Write** (`stage`): each file the change wrote, and its previous
+   version for `<file>.bak` (not for the pointer), goes to a temporary
+   file beside it (`.<name>.<random>.tmp`, created exclusively, the
+   files' mode and the umask as always), written, synced and closed.
+   The `.bak` is the bytes read, which the check covers; a file written
+   unread is read now and checked too.
+5. **Check** that every file read still has the bytes read (or still
+   doesn't exist). If not, another program wrote it: remove the
+   temporary files and run the change again from 2, up to 5 runs, then
+   `domain.ErrKeepsChanging` ("<file> keeps changing; nothing was
+   saved"), writing nothing.
+6. **Replace:** rename each temporary file over its file (each `.bak`
+   just before its file), in the order the change wrote them. Only
+   renames follow the check, so the moment in which another program's
+   write can go unseen is the renames' alone, not the writes' and
+   syncs' too. On Windows a rename over a file another process has
+   open fails (Go opens files without `FILE_SHARE_DELETE`), so it's
+   tried again for up to two seconds.
+7. **Unlock.**
 
 Reads outside a transaction (showing a list) take no lock: a file is
 always whole.
@@ -442,7 +448,8 @@ whose `Save` and `SetCurrent` hold what they're given; `Transact` on it
 runs a change within the same transaction. `FileTimelogRepository`
 does the same with `fileTimelogTx`. `Save` and `SetCurrent` outside a
 transaction are transactions of one write. `hooks` are seams for
-storage's own tests: `underneath` runs between a change and its check,
+storage's own tests: `writing` before each temporary file is written
+(to fail one), `underneath` between the written files and the check,
 `replacing` before each file is replaced (to fail one).
 
 **The domain** declares `Transact` on both repository interfaces, and

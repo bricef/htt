@@ -383,8 +383,9 @@ func TestTransact_AFileCreatedUnderneathIsAChange(t *testing.T) {
 	}
 }
 
-// The files are written in the order the change wrote them; a failure
-// writing the second leaves the first written and the second as it was.
+// The files are replaced in the order the change wrote them; a failure
+// replacing the second leaves the first replaced and the second as it
+// was, with no temporary file left behind.
 func TestTransact_WritesInOrderAndStopsAtAFailure(t *testing.T) {
 	dir := t.TempDir()
 	gaining := filepath.Join(dir, "done.txt")
@@ -414,6 +415,168 @@ func TestTransact_WritesInOrderAndStopsAtAFailure(t *testing.T) {
 	}
 	if got := readString(t, losing); got != "task\n" {
 		t.Errorf("todo.txt = %q, want it as it was", got)
+	}
+	if left := leftovers(t, dir, "todo.txt", "done.txt"); len(left) > 0 {
+		t.Errorf("left behind: %v", left)
+	}
+}
+
+// appendTo appends s to path in place, as `echo ... >> todo.txt` does:
+// another program that doesn't replace the file, but writes into it.
+func appendTo(t *testing.T, path, s string) {
+	t.Helper()
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString(s); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// completeFirst is a change that moves todo's first line to done, as a
+// completion does: done gains it, written first, and todo loses it.
+func completeFirst(todo, done string) func(tx *transaction) error {
+	return func(tx *transaction) error {
+		data, _, err := tx.Read(todo)
+		if err != nil {
+			return err
+		}
+		first, rest, _ := strings.Cut(string(data), "\n")
+		was, _, err := tx.Read(done)
+		if err != nil {
+			return err
+		}
+		tx.Write(done, append(slices.Clone(was), "x "+first+"\n"...), true)
+		tx.Write(todo, []byte(rest), true)
+		return nil
+	}
+}
+
+// Another program appending to a file in place while htt writes its
+// temporary files and syncs them (the slow part of a save, tens of
+// milliseconds for a completion): the check comes after them, so it
+// sees the line, and the change runs again keeping it. When the
+// temporary files were written after the check, the rename discarded
+// the line.
+func TestTransact_AnAppendWhileTheFilesAreWrittenIsKept(t *testing.T) {
+	dir := t.TempDir()
+	todo, done := filepath.Join(dir, "todo.txt"), filepath.Join(dir, "done.txt")
+	writeFile(t, todo, "finish me\nstay\n")
+	appended := false
+	h := hooks{writing: func(path string) error {
+		if path == done && !appended {
+			appended = true
+			appendTo(t, todo, "appended elsewhere\n")
+		}
+		return nil
+	}}
+	ran := 0
+	change := completeFirst(todo, done)
+	err := transact([]string{dir}, h, func(tx *transaction) error {
+		ran++
+		return change(tx)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !appended {
+		t.Fatal("the append never happened")
+	}
+	if got := readString(t, todo); got != "stay\nappended elsewhere\n" {
+		t.Errorf("todo.txt = %q, want the appended line kept", got)
+	}
+	if got := readString(t, done); got != "x finish me\n" {
+		t.Errorf("done.txt = %q", got)
+	}
+	if ran != 2 {
+		t.Errorf("the change ran %d times, want 2", ran)
+	}
+	if left := leftovers(t, dir, "todo.txt", "done.txt"); len(left) > 0 {
+		t.Errorf("left behind: %v", left)
+	}
+}
+
+// Between the check and the renames nothing is written: every
+// temporary file, the .bak ones included, is written and synced before
+// the check, and only renames follow it, so another program's write
+// can slip in unseen only in the moment the renames take.
+func TestTransact_OnlyRenamesFollowTheCheck(t *testing.T) {
+	dir := t.TempDir()
+	todo, done := filepath.Join(dir, "todo.txt"), filepath.Join(dir, "done.txt")
+	writeFile(t, todo, "finish me\nstay\n")
+	writeFile(t, done, "x old\n")
+	var events []string
+	h := hooks{
+		writing: func(path string) error {
+			events = append(events, "write "+filepath.Base(path))
+			return nil
+		},
+		underneath: func(int) { events = append(events, "check") },
+		replacing: func(path string) error {
+			events = append(events, "rename "+filepath.Base(path))
+			return nil
+		},
+	}
+	if err := transact([]string{dir}, h, completeFirst(todo, done)); err != nil {
+		t.Fatal(err)
+	}
+	check := slices.Index(events, "check")
+	writes, renames := 0, 0
+	for i, e := range events {
+		switch {
+		case strings.HasPrefix(e, "write "):
+			writes++
+			if i > check {
+				t.Errorf("%s after the check", e)
+			}
+		case strings.HasPrefix(e, "rename "):
+			renames++
+			if i < check {
+				t.Errorf("%s before the check", e)
+			}
+		}
+	}
+	// done.txt, todo.txt and the .bak of each.
+	if writes != 4 || renames != 2 || check < 0 {
+		t.Errorf("events %q: want four files written, the check, then two files replaced", events)
+	}
+	if got := readString(t, done+".bak"); got != "x old\n" {
+		t.Errorf("done.txt.bak = %q", got)
+	}
+	if got := readString(t, todo+".bak"); got != "finish me\nstay\n" {
+		t.Errorf("todo.txt.bak = %q", got)
+	}
+}
+
+// A failure writing a temporary file, a full disk say, writes nothing:
+// no file is replaced, since none is until every one is written, and no
+// temporary file is left behind.
+func TestTransact_AFailureWritingTheFilesReplacesNone(t *testing.T) {
+	dir := t.TempDir()
+	todo, done := filepath.Join(dir, "todo.txt"), filepath.Join(dir, "done.txt")
+	writeFile(t, todo, "finish me\nstay\n")
+	h := hooks{writing: func(path string) error {
+		if path == todo {
+			return errors.New("no space left on device")
+		}
+		return nil
+	}}
+	err := transact([]string{dir}, h, completeFirst(todo, done))
+	if err == nil || !strings.Contains(err.Error(), "no space") {
+		t.Fatalf("err = %v, want the failure", err)
+	}
+	if got := readString(t, todo); got != "finish me\nstay\n" {
+		t.Errorf("todo.txt = %q, want it as it was", got)
+	}
+	if _, err := os.Stat(done); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("done.txt was written: %v", err)
+	}
+	if left := leftovers(t, dir, "todo.txt"); len(left) > 0 {
+		t.Errorf("left behind: %v", left)
 	}
 }
 
@@ -461,7 +624,11 @@ func TestReplace_AFileHeldOpenIsReplacedOnceClosed(t *testing.T) {
 		t.Fatal(err)
 	}
 	time.AfterFunc(200*time.Millisecond, func() { _ = f.Close() })
-	if err := replace(path, []byte("after\n")); err != nil {
+	staged, err := stage(path, []byte("after\n"))
+	if err != nil {
+		t.Fatalf("stage: %v", err)
+	}
+	if err := staged.replace(); err != nil {
 		t.Fatalf("replace: %v", err)
 	}
 	if got := readString(t, path); got != "after\n" {

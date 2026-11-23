@@ -9,13 +9,17 @@ package storage
 //  2. Read the files the change asks for, fresh from disk, keeping what
 //     was read.
 //  3. Change: run the change on what was read; its writes are held.
-//  4. Check that no file it read has changed on disk since (another
-//     program wrote it). If one has, go back to 2; after a few runs,
-//     give up, writing nothing.
-//  5. Write each file the change wrote, in the order it wrote them,
-//     atomically: a temporary file beside it, synced, renamed over it.
-//     The previous version is kept as .bak.
-//  6. Unlock.
+//  4. Write: each file the change wrote, and the previous version of
+//     each, its .bak, goes to a temporary file beside it, written and
+//     synced.
+//  5. Check that no file it read has changed on disk since (another
+//     program wrote it). If one has, remove the temporary files and go
+//     back to 2; after a few runs, give up, writing nothing.
+//  6. Replace: rename each temporary file over its file, in the order
+//     the change wrote them, so a reader sees the old file or the new
+//     one. Only renames follow the check, so the moment in which
+//     another program's write can go unseen is as short as it can be.
+//  7. Unlock.
 //
 // The repositories (file.go, timelog_file.go) only parse what a
 // transaction reads and serialise what they save.
@@ -60,13 +64,19 @@ const renameWait = 2 * time.Second
 
 // hooks are seams for storage's own tests. The zero value has none.
 type hooks struct {
-	// underneath runs after each run of the change and before the
-	// check, with the run's number from 1: a test changes a file there
-	// as another program would.
+	// writing runs before each temporary file is written, with the path
+	// it is for (a file the change wrote, or its .bak); an error from it
+	// fails the write there, as a full disk would, and nothing is
+	// replaced.
+	writing func(path string) error
+	// underneath runs after each run of the change, its files written,
+	// and before the check, with the run's number from 1: a test changes
+	// a file there as another program would.
 	underneath func(run int)
-	// replacing runs before each file a transaction writes is
-	// replaced; an error from it fails the write there, as a full disk
-	// would, leaving that file and those after it as they were.
+	// replacing runs before each file the change wrote is replaced,
+	// after the check (its .bak just before it); an error from it fails
+	// the rename there, leaving that file and those after it as they
+	// were.
 	replacing func(path string) error
 }
 
@@ -139,10 +149,11 @@ func (t *transaction) written(path string) int {
 
 // transact runs change as one transaction over the files in dirs, which
 // are the directories it may write: lock, then run change on fresh
-// reads until nothing it read has changed underneath, a few runs at
-// most, then write and unlock. An error from change writes nothing and
-// is returned as it is. Another htt holding the lock too long is
-// domain.ErrBusy; a file changing under every run is
+// reads and write what it wrote to temporary files, until nothing it
+// read has changed underneath, a few runs at most; then rename the
+// temporary files over their files, and unlock. An error from change
+// writes nothing and is returned as it is. Another htt holding the lock
+// too long is domain.ErrBusy; a file changing under every run is
 // domain.ErrKeepsChanging, naming the file.
 func transact(dirs []string, h hooks, change func(t *transaction) error) error {
 	unlock, err := lock(dirs)
@@ -158,16 +169,22 @@ func transact(dirs []string, h hooks, change func(t *transaction) error) error {
 		if len(t.writes) == 0 {
 			return nil // nothing to lose
 		}
+		files, err := t.stage(dirs, h)
+		if err != nil {
+			return err
+		}
 		if h.underneath != nil {
 			h.underneath(run)
 		}
 		changed, err := t.changed()
 		if err != nil {
+			files.discard()
 			return err
 		}
 		if changed == "" {
-			return t.commit(dirs, h)
+			return files.replace(h)
 		}
+		files.discard()
 		if run == runs {
 			return fmt.Errorf("%s %w", changed, domain.ErrKeepsChanging)
 		}
@@ -195,41 +212,97 @@ func (t *transaction) changed() (string, error) {
 	return "", nil
 }
 
-// commit writes the transaction's files in the order the change wrote
-// them, keeping each one's previous version as .bak where asked. The
-// change wrote the file gaining tasks before the one losing them, so a
-// failure part-way leaves a task in both, never in neither.
-func (t *transaction) commit(dirs []string, h hooks) error {
+// stage writes each file the change wrote, in the order it wrote them,
+// to a temporary file beside it, and the file's previous version to one
+// beside its .bak where asked, each synced: everything but the renames,
+// so before the check. The .bak is the file as the transaction read it,
+// which the check makes sure is still the file's; a file written
+// without being read is read now, and checked too. A failure removes
+// what was written and returns the error.
+func (t *transaction) stage(dirs []string, h hooks) (staged, error) {
 	for _, w := range t.writes {
 		if !slices.ContainsFunc(dirs, func(d string) bool { return filepath.Clean(d) == filepath.Dir(w.path) }) {
-			return fmt.Errorf("write %s: outside the directories locked (%v)", w.path, dirs)
+			return nil, fmt.Errorf("write %s: outside the directories locked (%v)", w.path, dirs)
 		}
 	}
-	for _, w := range t.writes {
-		if h.replacing != nil {
-			if err := h.replacing(w.path); err != nil {
+	var files staged
+	add := func(w write, bak bool, data []byte) error {
+		path := w.path
+		if bak {
+			path += ".bak"
+		}
+		if h.writing != nil {
+			if err := h.writing(path); err != nil {
 				return err
 			}
 		}
+		f, err := stage(path, data)
+		if err != nil {
+			return err
+		}
+		f.of, f.bak = w.path, bak
+		files = append(files, f)
+		return nil
+	}
+	for _, w := range t.writes {
 		if w.bak {
-			was, ok := t.read[w.path] // checked: still the file's
-			if !ok {                  // written without being read
+			was, ok := t.read[w.path]
+			if !ok { // written without being read: checked from now on
 				var err error
 				if was, err = readFile(w.path); err != nil {
-					return err
+					files.discard()
+					return nil, err
 				}
+				t.read[w.path] = was
 			}
 			if was.exists {
-				if err := replace(w.path+".bak", was.data); err != nil {
-					return fmt.Errorf("back up %s: %w", w.path, err)
+				if err := add(w, true, was.data); err != nil {
+					files.discard()
+					return nil, fmt.Errorf("back up %s: %w", w.path, err)
 				}
 			}
 		}
-		if err := replace(w.path, w.data); err != nil {
+		if err := add(w, false, w.data); err != nil {
+			files.discard()
+			return nil, err
+		}
+	}
+	return files, nil
+}
+
+// staged are the temporary files of a transaction's writes, in the
+// order the change wrote them, each file's .bak just before it.
+type staged []stagedFile
+
+// replace renames each temporary file over its file, in order. The
+// change wrote the file gaining tasks before the one losing them, so a
+// failure part-way leaves a task in both, never in neither. A failure
+// removes the temporary files not yet renamed.
+func (files staged) replace(h hooks) error {
+	for i, f := range files {
+		first := i == 0 || files[i-1].of != f.of // the write's .bak, or the file
+		if h.replacing != nil && first {
+			if err := h.replacing(f.of); err != nil {
+				files[i:].discard()
+				return err
+			}
+		}
+		if err := f.replace(); err != nil {
+			files[i+1:].discard()
+			if f.bak {
+				return fmt.Errorf("back up %s: %w", f.of, err)
+			}
 			return err
 		}
 	}
 	return nil
+}
+
+// discard removes the temporary files, replacing nothing.
+func (files staged) discard() {
+	for _, f := range files {
+		f.discard()
+	}
 }
 
 // readFile reads path whole. A file that doesn't exist isn't an error:
@@ -253,14 +326,23 @@ func readFile(path string) (snapshot, error) {
 	return snapshot{data: b, exists: true}, nil
 }
 
-// replace makes data path's content atomically: it goes to a temporary
-// file beside path, which is synced and renamed over path, so a reader
-// sees the old file or the new one and never anything in between. A
-// failure leaves path as it was and no temporary file behind.
-func replace(path string, data []byte) error {
+// stagedFile is new content for path, in a temporary file beside it,
+// written and synced, for replace to rename over path. of is the file
+// the change wrote, path itself or, for its .bak (bak), the file it
+// backs up.
+type stagedFile struct {
+	tmp, path, of string
+	bak           bool
+}
+
+// stage writes data to a temporary file beside path and syncs it, so
+// that renaming it over path (replace) makes data path's content
+// atomically: a reader sees the old file or the new one and never
+// anything in between. A failure leaves no temporary file behind.
+func stage(path string, data []byte) (stagedFile, error) {
 	f, err := createTemp(path)
 	if err != nil {
-		return err
+		return stagedFile{}, err
 	}
 	tmp := f.Name()
 	err = func() error {
@@ -272,17 +354,27 @@ func replace(path string, data []byte) error {
 			_ = f.Close()
 			return err
 		}
-		if err := f.Close(); err != nil {
-			return err
-		}
-		return rename(tmp, path)
+		return f.Close()
 	}()
 	if err != nil {
 		_ = os.Remove(tmp)
-		return fmt.Errorf("write %s: %w", path, err)
+		return stagedFile{}, fmt.Errorf("write %s: %w", path, err)
+	}
+	return stagedFile{tmp: tmp, path: path, of: path}, nil
+}
+
+// replace renames the temporary file over its path. A failure leaves
+// the path as it was and no temporary file behind.
+func (f stagedFile) replace() error {
+	if err := rename(f.tmp, f.path); err != nil {
+		f.discard()
+		return fmt.Errorf("write %s: %w", f.path, err)
 	}
 	return nil
 }
+
+// discard removes the temporary file.
+func (f stagedFile) discard() { _ = os.Remove(f.tmp) }
 
 // createTemp creates a new file beside path, named after it
 // (.<name>.<random>.tmp, which no reader of htt's files takes for a

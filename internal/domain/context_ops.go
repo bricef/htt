@@ -264,6 +264,7 @@ func (c *Context) priorityTransform(strID string, transform func(*Task) *Task) (
 // below its parent. Every persistent method saves through it.
 func (c *Context) save() error {
 	c.Arrange()
+	c.doneIDs = nil // a completion may have added to them
 	return c.repo.Save(c)
 }
 

@@ -13,11 +13,15 @@ import (
 // fakeRepo is a Repository in memory, for the domain's own tests (the
 // storage package's MemoryRepository imports the domain). It loads a
 // context arranged, as the real ones do.
-type fakeRepo struct{ files map[string][]*Task }
+type fakeRepo struct {
+	files map[string][]*Task
+	loads map[string]int // Context calls, by name
+}
 
-func newFakeRepo() *fakeRepo { return &fakeRepo{files: map[string][]*Task{}} }
+func newFakeRepo() *fakeRepo { return &fakeRepo{files: map[string][]*Task{}, loads: map[string]int{}} }
 
 func (r *fakeRepo) Context(name string) (*Context, error) {
+	r.loads[name]++
 	c := NewContext(r, name)
 	c.Tasks = slices.Clone(r.files[name])
 	c.Arrange()
@@ -30,6 +34,83 @@ func (r *fakeRepo) CurrentContext() (*Context, error)   { return r.Context("work
 func (r *fakeRepo) CurrentContextName() (string, error) { return "work", nil }
 func (r *fakeRepo) SetCurrent(string) error             { return nil }
 func (r *fakeRepo) ContextPath(string) string           { return "" }
+
+// lineRepo is fakeRepo as a LineSource, as storage's repositories are.
+type lineRepo struct{ *fakeRepo }
+
+func (r lineRepo) ContextLines(name string) ([]string, error) {
+	var out []string
+	for _, t := range r.files[name] {
+		out = append(out, t.Raw)
+	}
+	return out, nil
+}
+
+// Read from the lines that could hold one, or from every task of the
+// done file, the done parents are the same.
+func TestTree_DoneParentsFromLinesOrTasks(t *testing.T) {
+	r := rand.New(rand.NewPCG(91, 5))
+	for range 300 {
+		repo := newFakeRepo()
+		repo.files["work"] = randomTreeTasks(t, r, 12)
+		var done []*Task
+		for range r.IntN(12) {
+			line := "x 2026-01-01 " + randomTreeLine(r)
+			if ctx := []string{"work", "home", "worker", ""}[r.IntN(4)]; ctx != "" {
+				line += " context:" + ctx
+			}
+			done = append(done, mustTask(t, line))
+		}
+		repo.files[DoneContextName] = done
+		plain, _ := repo.Context("work")
+		viaLines := NewContext(lineRepo{repo}, "work")
+		viaLines.Tasks = plain.Tasks
+		a, errA := plain.Tree()
+		b, errB := viaLines.Tree()
+		if errA != nil || errB != nil {
+			t.Fatal(errA, errB)
+		}
+		for i := range a.Nodes {
+			if a.Nodes[i].DoneParent != b.Nodes[i].DoneParent {
+				t.Fatalf("task %q: done parent %v from tasks, %v from lines", a.Nodes[i].Task.Raw, a.Nodes[i].DoneParent, b.Nodes[i].DoneParent)
+			}
+		}
+		if len(a.Problems) != len(b.Problems) {
+			t.Fatalf("problems differ: %v and %v", a.Problems, b.Problems)
+		}
+	}
+}
+
+// The done file is read once for a context's tree, however often it's
+// asked for, until the context changes.
+func TestTree_ReadsTheDoneFileOnce(t *testing.T) {
+	repo := newFakeRepo()
+	repo.files["work"] = tasksOf(t, "a id:1", "b p:1", "c p:2", "d p:3")
+	repo.files[DoneContextName] = tasksOf(t, "x parent id:2 context:work")
+	c, _ := repo.Context("work")
+	for range 3 {
+		tree, err := c.Tree()
+		if err != nil || !tree.Nodes[2].DoneParent {
+			t.Fatalf("tree: %v, done parent %v", err, tree.Nodes[2].DoneParent)
+		}
+	}
+	if repo.loads[DoneContextName] != 1 {
+		t.Errorf("done read %d times, want once", repo.loads[DoneContextName])
+	}
+	// Completing a: c's done parent is still there, and so is a now.
+	if _, err := c.Complete("0", SubtasksLeave); err != nil {
+		t.Fatal(err)
+	}
+	tree, err := c.Tree()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range tree.Nodes {
+		if want := n.Task.Raw != "d p:3"; n.DoneParent != want {
+			t.Errorf("%q: done parent %v, want %v", n.Task.Raw, n.DoneParent, want)
+		}
+	}
+}
 
 // nonTagWords is a line's words but its id: and p: tags, which the
 // subtask operations may change.

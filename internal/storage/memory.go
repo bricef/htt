@@ -41,6 +41,18 @@ func (r *MemoryRepository) Context(name string) (*domain.Context, error) {
 	return ctx, nil
 }
 
+// ContextLines returns the named context's lines (domain.LineSource).
+func (r *MemoryRepository) ContextLines(name string) ([]string, error) {
+	if name == "" {
+		return nil, domain.ErrInvalidContextName
+	}
+	var lines []string
+	for _, t := range r.contexts[name] {
+		lines = append(lines, t.Raw)
+	}
+	return lines, nil
+}
+
 func (r *MemoryRepository) Contexts() ([]*domain.Context, error) {
 	names, err := r.ContextNames()
 	if err != nil {

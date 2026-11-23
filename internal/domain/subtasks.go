@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -79,17 +80,49 @@ func (c *Context) Tree() (*Tree, error) {
 	if !tree.Unresolved || c.repo == nil {
 		return tree, nil
 	}
-	done, err := c.repo.Context(DoneContextName)
-	if err != nil {
-		return nil, fmt.Errorf("read the done file for %s's done parents: %w", c.Name, err)
-	}
-	ids := map[string]bool{}
-	for _, t := range done.Tasks {
-		if id := t.ID(); id != "" && t.Annotations["context"] == c.Name {
-			ids[id] = true
+	if c.doneIDs == nil {
+		done, err := c.doneTasks()
+		if err != nil {
+			return nil, fmt.Errorf("read the done file for %s's done parents: %w", c.Name, err)
+		}
+		c.doneIDs = map[string]bool{}
+		for _, t := range done {
+			if id := t.ID(); id != "" && t.Annotations["context"] == c.Name {
+				c.doneIDs[id] = true
+			}
 		}
 	}
-	return NewTree(c.Tasks, ids), nil
+	return NewTree(c.Tasks, c.doneIDs), nil
+}
+
+// doneTasks returns the tasks of the done file that could be done
+// parents of c's tasks: from a LineSource, only the lines with an id:
+// and c's context: in them, parsed; from any other repository, all.
+func (c *Context) doneTasks() ([]*Task, error) {
+	source, ok := c.repo.(LineSource)
+	if !ok {
+		done, err := c.repo.Context(DoneContextName)
+		if err != nil {
+			return nil, err
+		}
+		return done.Tasks, nil
+	}
+	lines, err := source.ContextLines(DoneContextName)
+	if err != nil {
+		return nil, err
+	}
+	var out []*Task
+	for _, l := range lines {
+		if !strings.Contains(l, idKey+":") || !strings.Contains(l, "context:"+c.Name) {
+			continue // can't hold an id completed from c
+		}
+		t, err := NewTask(l)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, nil
 }
 
 // node finds the task numbered strID in the context's tree.

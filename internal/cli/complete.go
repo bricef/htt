@@ -26,7 +26,8 @@ A task with open subtasks asks first, on the terminal:
   [A] Mark the subtasks done too.
   Anything else cancels.
 
-Answer with x or A, exactly as written (A is a capital), then Enter.
+Answer with x or A, exactly as written (case matters: x is lower case,
+A a capital), then Enter.
 x completes the task alone: its subtasks stay open, still naming it
 with p:. A completes it and every open task below it, at any depth.
 Anything else, or the end of the input, changes nothing.

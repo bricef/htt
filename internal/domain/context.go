@@ -18,6 +18,11 @@ type Context struct {
 	Name  string
 	Tasks []*Task
 	repo  Repository
+
+	// doneIDs are the ids of the context's tasks in the done file, as
+	// Tree read them, kept until the context is next saved: a command
+	// asks for the tree to warn and again to show it.
+	doneIDs map[string]bool
 }
 
 // NewContext returns a Context wired with the given Repository. Intended

@@ -62,6 +62,16 @@ type Repository interface {
 	ContextPath(name string) string
 }
 
+// LineSource is a Repository that can also hand over a context's lines
+// unparsed, as Context loads them (trimmed, blank lines left out).
+// Context.Tree uses it to read the done file for done parents, parsing
+// only the lines that could hold one: parsing every line of a large
+// done file would take seconds. Both of storage's repositories are one;
+// Tree falls back to Context for any other.
+type LineSource interface {
+	ContextLines(name string) ([]string, error)
+}
+
 // ErrInvalidContextName is returned when a name fails validation (empty,
 // or sanitizes to empty).
 var ErrInvalidContextName = errors.New("invalid context name")

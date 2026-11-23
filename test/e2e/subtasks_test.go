@@ -202,6 +202,12 @@ func TestSubtasks_BrokenLinksWarnOnStderr(t *testing.T) {
 	e.writeData("todo.txt", "fine\n")
 	r = e.mustRun("todo", "add", "stray p:7")
 	assertEqual(t, "add: stderr", r.stderr, "warning: "+todo+":2: p:7 names no task, so the task is shown at the top level\n")
+
+	// So does a link a typed task breaks: a parent replaced without its
+	// id leaves its subtask naming nothing.
+	e.writeData("todo.txt", "parent id:1\nchild p:1\n")
+	r = e.mustRun("todo", "replace", "0", "parent, renamed")
+	assertEqual(t, "replace: stderr", r.stderr, "warning: "+todo+":2: p:1 names no task, so the task is shown at the top level\n")
 }
 
 // A subtask whose parent was completed names a task in the done file: a

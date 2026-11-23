@@ -133,6 +133,34 @@ func (r *FileRepository) Context(name string) (*domain.Context, error) {
 	return ctx, nil
 }
 
+// ContextLines returns the named context's lines as Context reads them,
+// trimmed, blank lines left out, without parsing them
+// (domain.LineSource). A context never saved has none.
+func (r *FileRepository) ContextLines(name string) ([]string, error) {
+	if name == "" {
+		return nil, domain.ErrInvalidContextName
+	}
+	f, err := os.Open(r.ContextPath(name))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("open %s: %w", r.ContextPath(name), err)
+	}
+	defer func() { _ = f.Close() }()
+	var lines []string
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		if line := strings.TrimSpace(scanner.Text()); line != "" {
+			lines = append(lines, line)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scan %s: %w", r.ContextPath(name), err)
+	}
+	return lines, nil
+}
+
 func (r *FileRepository) Contexts() ([]*domain.Context, error) {
 	names, err := r.ContextNames()
 	if err != nil {

@@ -2,6 +2,7 @@ package storage
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/bricef/htt/internal/domain"
@@ -280,6 +281,30 @@ func runRepositoryContract(t *testing.T, newRepo func(t *testing.T) domain.Repos
 		}
 		if len(loaded.Tasks) != 1 {
 			t.Errorf("post-save mutation leaked into stored state; len = %d, want 1", len(loaded.Tasks))
+		}
+	})
+
+	// ContextLines hands over the lines Context parses, in file order.
+	t.Run("ContextLines returns the lines unparsed", func(t *testing.T) {
+		r := newRepo(t)
+		source, ok := r.(domain.LineSource)
+		if !ok {
+			t.Fatal("not a domain.LineSource")
+		}
+		if lines, err := source.ContextLines("never-saved"); err != nil || len(lines) != 0 {
+			t.Errorf("never saved: %q, %v", lines, err)
+		}
+		raws := []string{"child p:1", "x 2026-01-01 parent id:1 context:work", "other"}
+		tasks := make([]*domain.Task, len(raws))
+		for i, raw := range raws {
+			tasks[i] = mustTask(t, raw)
+		}
+		if err := r.Save(&domain.Context{Name: domain.DoneContextName, Tasks: tasks}); err != nil {
+			t.Fatal(err)
+		}
+		lines, err := source.ContextLines(domain.DoneContextName)
+		if err != nil || strings.Join(lines, "\n") != strings.Join(raws, "\n") {
+			t.Errorf("lines: %q, %v; want %q", lines, err, raws)
 		}
 	})
 

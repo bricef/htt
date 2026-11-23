@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/bricef/htt/internal/domain"
-	"github.com/bricef/htt/internal/utils"
 )
 
 const (
@@ -34,7 +33,7 @@ const (
 // line, causing every read to overwrite the file.
 //
 // Context names are sanitized at the path boundary via
-// utils.StringToFilename (non-word characters become underscores) so
+// domain.ContextFileName (non-word characters become underscores) so
 // `Context("../foo")` and `Save(&Context{Name: "../escape"})` can't
 // write outside dataDir. SetCurrent already sanitized; the rest of
 // the repo now matches it.
@@ -59,7 +58,7 @@ func NewFileRepository(dataDir, pointerDir string) *FileRepository {
 // shellout (`htt todo edit-done`, TUI EditFile) all agree on where
 // the file lives.
 func (r *FileRepository) ContextPath(name string) string {
-	return filepath.Join(r.dataDir, utils.StringToFilename(name)+fileExtension)
+	return filepath.Join(r.dataDir, domain.ContextFileName(name)+fileExtension)
 }
 
 func (r *FileRepository) currentPointerPath() string {
@@ -234,7 +233,7 @@ func (r *FileRepository) CurrentContext() (*domain.Context, error) {
 }
 
 func (r *FileRepository) SetCurrent(name string) error {
-	sanitized := utils.StringToFilename(name)
+	sanitized := domain.ContextFileName(name)
 	if sanitized == "" {
 		return domain.ErrInvalidContextName
 	}

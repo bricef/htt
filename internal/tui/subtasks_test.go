@@ -287,6 +287,22 @@ func TestTree_ShiftTabUnnestsALevel(t *testing.T) {
 	}
 }
 
+// A subtask whose only text is its p: can't go to the top level: it
+// would be an empty line. The status line says so, and the TUI stays.
+func TestTree_ShiftTabKeepsATasksOnlyText(t *testing.T) {
+	m, repo := seedTreeModel(t, "Parent id:1", "p:1", "Other")
+	m = selectRow(t, m, 1)
+	next, cmd := m.Update(shiftTab)
+	m = asModel(t, next)
+	if isQuit(cmd) {
+		t.Fatal("Shift-Tab on a task with only its link quit the TUI")
+	}
+	viewHas(t, m, "Task 1 has no text besides its link: at the top level it would be empty.")
+	if got := repo.raws(t, "todo"); !slices.Equal(got, []string{"Parent id:1", "p:1", "Other"}) {
+		t.Errorf("todo: %q", got)
+	}
+}
+
 func TestTree_DoAsksAboutOpenSubtasks(t *testing.T) {
 	question := []string{
 		"Task 0 has 3 open subtasks.",

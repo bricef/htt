@@ -4,7 +4,6 @@ import (
 	"sort"
 
 	"github.com/bricef/htt/internal/domain"
-	"github.com/bricef/htt/internal/utils"
 )
 
 // MemoryRepository is an in-memory domain.Repository implementation for
@@ -95,7 +94,7 @@ func (r *MemoryRepository) CurrentContext() (*domain.Context, error) {
 }
 
 func (r *MemoryRepository) SetCurrent(name string) error {
-	sanitized := utils.StringToFilename(name)
+	sanitized := domain.ContextFileName(name)
 	if sanitized == "" {
 		return domain.ErrInvalidContextName
 	}

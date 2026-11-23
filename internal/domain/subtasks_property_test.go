@@ -428,6 +428,143 @@ func TestMove_Properties(t *testing.T) {
 	}
 }
 
+// Moving a done task from the done file to a context: it goes, every
+// word kept but its links. Going back to the context it was completed
+// in, it keeps its id when the p: there naming it can name nothing
+// else, and those tasks are under it again; it keeps its p: when its
+// parent is there, one task and not below it. Every other link reads as
+// before, an id is renumbered only for a clash, and no loop is made.
+func TestMove_FromTheDoneFile_Properties(t *testing.T) {
+	r := rand.New(rand.NewPCG(97, 13))
+	var keptIDs, keptParents, relinked int
+	for range 1200 {
+		repo := newFakeRepo()
+		repo.files["home"] = randomTreeTasks(t, r, 12)
+		for range 1 + r.IntN(6) {
+			line := "x 2026-01-01 " + randomTreeLine(r)
+			if ctx := []string{"home", "home", "work", ""}[r.IntN(4)]; ctx != "" {
+				line += " context:" + ctx
+			}
+			repo.files[DoneContextName] = append(repo.files[DoneContextName], mustTask(t, line))
+		}
+		done, _ := repo.Context(DoneContextName)
+		i := r.IntN(len(done.Tasks))
+		task := done.Tasks[i]
+		doneBefore := slices.Clone(done.Tasks)
+		target := slices.Clone(repo.files["home"])
+		raws := map[*Task]string{}
+		for _, x := range append(slices.Clone(doneBefore), target...) {
+			raws[x] = x.Raw
+		}
+		words, id, ps := nonTagWords(task), task.ID(), task.ParentIDs()
+		back := task.Annotations[contextKey] == "home"
+		home, _ := repo.Context("home")
+		before, err := home.Tree()
+		if err != nil {
+			t.Fatal(err)
+		}
+		parentBefore, doneParentBefore := parents(before), map[*Task]bool{}
+		for _, n := range before.Nodes {
+			doneParentBefore[n.Task] = n.DoneParent
+		}
+		taken := false
+		for _, x := range target {
+			taken = taken || slices.Contains(append(x.annotationValues(idKey), x.ParentIDs()...), id)
+		}
+		fromHome := 0
+		for _, x := range doneBefore {
+			if x.ID() == id && x.Annotations[contextKey] == "home" {
+				fromHome++
+			}
+		}
+		// A task's second id: holds its number for new ids, but names
+		// nothing: the p: naming the number name the done task alone.
+		eligible := back && id != "" && idHolders(target, id) == 0 && fromHome == 1
+
+		moved, err := done.Move(strconv.Itoa(i), "home")
+		fail := func(format string, args ...any) {
+			t.Helper()
+			t.Fatalf("moving %q: %s\ntarget before:\n%starget after:\n%s", raws[task], sprintfT(format, args...),
+				outline(before), outline(NewTree(repo.files["home"], nil)))
+		}
+		if err != nil {
+			fail("%v", err)
+		}
+		if len(moved) != 1 || moved[0] != task {
+			fail("moved %d tasks", len(moved))
+		}
+		if want := slices.DeleteFunc(slices.Clone(doneBefore), func(x *Task) bool { return x == task }); !slices.Equal(repo.files[DoneContextName], want) {
+			fail("the done file isn't what it was without the task")
+		}
+		for _, x := range append(slices.Clone(doneBefore), target...) {
+			if x != task && x.Raw != raws[x] {
+				fail("%q, which stayed, changed", raws[x])
+			}
+		}
+		if len(repo.files["home"]) != len(target)+1 || !slices.Contains(repo.files["home"], task) {
+			fail("the target has %d tasks, want %d", len(repo.files["home"]), len(target)+1)
+		}
+		if !slices.Equal(nonTagWords(task), words) {
+			fail("became %q", task.Raw)
+		}
+
+		// Its id: kept unless it clashes, and kept on a clash with p:
+		// that can name nothing else.
+		switch now := task.ID(); {
+		case id == "":
+		case !taken && now != id:
+			fail("its id was renumbered with no clash")
+		case taken && eligible && now != id:
+			fail("its id was renumbered, but the p: naming it named it alone")
+		case taken && !eligible && now == id:
+			fail("its id clashes")
+		case now == id && taken:
+			keptIDs++
+		}
+
+		home, _ = repo.Context("home")
+		after, err := home.Tree()
+		if err != nil {
+			t.Fatal(err)
+		}
+		parentAfter := parents(after)
+
+		// Its p:: kept when its parent is there, one task, not below it.
+		var holder *Task
+		if len(ps) > 0 && idHolders(target, ps[0]) == 1 {
+			holder = target[slices.IndexFunc(target, func(x *Task) bool { return x.ID() == ps[0] })]
+		}
+		keep := back && holder != nil && !reaches(repo.files["home"], holder, task)
+		if got := task.ParentIDs(); keep != (len(got) > 0) || keep && !slices.Equal(got, ps) {
+			fail("its p: tags are %q (were %q), want them kept: %v", got, ps, keep)
+		}
+		if keep {
+			keptParents++
+			if parentAfter[task] != holder {
+				fail("it isn't under %q", raws[holder])
+			}
+		} else if parentAfter[task] != nil {
+			fail("it isn't at the top level")
+		}
+
+		// Every other link reads as before, but those naming it.
+		for _, x := range target {
+			want, wantDone := parentBefore[x], doneParentBefore[x]
+			if eligible && wantDone && x.ParentIDs()[0] == id {
+				want, wantDone = task, false
+				relinked++
+			}
+			n := after.Nodes[slices.Index(home.Tasks, x)]
+			if parentAfter[x] != want || n.DoneParent != wantDone {
+				fail("%q: its parent changed", raws[x])
+			}
+		}
+	}
+	if keptIDs == 0 || keptParents == 0 || relinked == 0 {
+		t.Errorf("the generator never kept an id on a clash (%d), a p: (%d), or relinked a subtask (%d)", keptIDs, keptParents, relinked)
+	}
+}
+
 // Deleting and completing take what the design says, and leave the rest.
 func TestDeleteAndComplete_Properties(t *testing.T) {
 	r := rand.New(rand.NewPCG(83, 2))

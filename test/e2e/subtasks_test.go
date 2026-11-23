@@ -104,6 +104,63 @@ func TestSubtasks_MoveTakesTheSubtree(t *testing.T) {
 			"(A) Plan the launch +work id:3\nWrite the announcement p:3 +work\n")
 }
 
+// "my list" names my_list's file: moving there is moving to the current
+// context, refused, and the subtree stays.
+func TestSubtasks_MoveToTheCurrentContextUnderAnotherSpelling(t *testing.T) {
+	e := newEnv(t)
+	e.mustRun("todo", "context", "my list")
+	e.writeData("my_list.txt", "Parent id:1\nChild p:1\nOther\n")
+
+	r := e.run("todo", "move", "0", "my list")
+	if r.exitCode == 0 || !strings.Contains(r.stderr, "current context") {
+		t.Errorf("move to \"my list\" from my_list: exit %d, stdout %q, stderr %q", r.exitCode, r.stdout, r.stderr)
+	}
+	assertEqual(t, "my_list.txt", e.readData("my_list.txt"), "Parent id:1\nChild p:1\nOther\n")
+}
+
+// A done task moved back to the context it was completed in links up
+// again: a parent keeps its id, its subtasks under it; a subtask keeps
+// its p: when its parent is there.
+func TestSubtasks_MoveADoneTaskBack(t *testing.T) {
+	e := newEnv(t)
+	e.writeData("todo.txt", "Plan id:1\nWrite p:1\nBook p:1\n")
+	e.mustRun("todo", "do", "2") // Book
+	e.mustRun("todo", "do", "0", "--leave-subtasks")
+	d := today()
+
+	e.mustRun("todo", "context", "done")
+	r := e.mustRun("todo", "move", "1", "todo") // Plan
+	assertEqual(t, "move Plan back: stdout", r.stdout, "Moved x "+d+" Plan id:1 context:todo from done to todo.\n")
+	r = e.mustRun("todo", "move", "0", "todo") // Book
+	assertEqual(t, "move Book back: stdout", r.stdout, "Moved x "+d+" Book p:1 context:todo from done to todo.\n")
+
+	e.mustRun("todo", "context", "todo")
+	r = e.mustRun("todo", "show")
+	assertEqual(t, "show: stderr", r.stderr, "")
+	assertInOrder(t, "show", r.stdout, "0 x "+d+" Plan id:1", "1   Write p:1", "2   x "+d+" Book p:1")
+}
+
+// A task whose only text is its p: would be an empty line without it:
+// unnesting or moving it is refused, and nothing changes.
+func TestSubtasks_ATaskWithOnlyItsLinkKeepsIt(t *testing.T) {
+	e := newEnv(t)
+	e.writeData("todo.txt", "Parent id:1\np:1\nOther\n")
+
+	r := e.run("todo", "unnest", "1")
+	assertEqual(t, "unnest: stderr", r.stderr,
+		"❌ unnest task 1: it has no text besides its link, so without it the task would be empty: p:1\n")
+	r = e.run("todo", "move", "1", "work")
+	assertEqual(t, "move: stderr", r.stderr,
+		"❌ move task: it has no text besides its link, so without it the task would be empty: p:1\n")
+	if r.exitCode == 0 {
+		t.Error("move: exit 0")
+	}
+	assertEqual(t, "todo.txt", e.readData("todo.txt"), "Parent id:1\np:1\nOther\n")
+	if e.dataExists("work.txt") {
+		t.Errorf("work.txt: %q", e.readData("work.txt"))
+	}
+}
+
 func TestSubtasks_DeleteTakesTheSubtree(t *testing.T) {
 	e := newEnv(t)
 	e.writeData("todo.txt", launchTodo)

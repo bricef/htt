@@ -1,6 +1,10 @@
 package domain
 
-import "errors"
+import (
+	"errors"
+	"regexp/syntax"
+	"strings"
+)
 
 // Repository is the domain abstraction for persistence. Storage
 // implementations satisfy this interface; the domain package owns the
@@ -75,6 +79,20 @@ type LineSource interface {
 // ErrInvalidContextName is returned when a name fails validation (empty,
 // or sanitizes to empty).
 var ErrInvalidContextName = errors.New("invalid context name")
+
+// ContextFileName is the name a context's file takes, without its
+// extension: the context's name with every character but an ASCII
+// letter, a digit or an underscore made an underscore. Names that map
+// to the same file name are one context ("my list" is my_list).
+// Repositories name files, and the current-context pointer, by it.
+func ContextFileName(name string) string {
+	return strings.Map(func(r rune) rune {
+		if syntax.IsWordChar(r) {
+			return r
+		}
+		return '_'
+	}, name)
+}
 
 // DefaultContextName is the name returned by CurrentContextName when no
 // pointer has been set yet. Matches vars.DefaultContext.

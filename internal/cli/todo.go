@@ -241,7 +241,13 @@ var move = &cobra.Command{
 The task becomes a top-level task there (it loses its p:, since a
 parent is always in the same file as its subtasks), and any id: of the
 tasks moved that the other context already uses is renumbered there,
-their p: tags with it.`,
+their p: tags with it. A task whose only text is its p: can't lose it,
+so it can't be moved.
+
+A done task moved from the done file back to the context it was
+completed in links up again: it keeps its p: when its parent is there,
+and its id: when the p: tags there naming that id can name no other
+task, so its subtasks are under it again.`,
 	Aliases: []string{"mv"},
 	Args:    cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {

@@ -472,6 +472,55 @@ func TestContext_Move_SameContextRejected(t *testing.T) {
 	}
 }
 
+// A name its file shares is the same context: "my list" is my_list.
+// Moving there wrote the subtree to the file, then saved the context
+// without it over the same file.
+func TestContext_Move_SameContextUnderAnotherSpellingRejected(t *testing.T) {
+	dir := t.TempDir()
+	repo := storage.NewFileRepository(dir, dir)
+	for _, name := range []string{"my list", "my-list", "my_list"} {
+		ctx, err := repo.Context("my_list")
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx.Tasks = []*domain.Task{mustTask(t, "Parent id:1"), mustTask(t, "Child p:1"), mustTask(t, "Other")}
+		if err := repo.Save(ctx); err != nil {
+			t.Fatal(err)
+		}
+		ctx, err = repo.Context("my_list")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := ctx.Move("0", name); err == nil {
+			t.Errorf("moving to %q from my_list: no error", name)
+		}
+		stored, err := repo.Context("my_list")
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []string
+		for _, task := range stored.Tasks {
+			got = append(got, task.Raw)
+		}
+		wantLines(t, "my_list after moving to "+name, got, "Parent id:1", "Child p:1", "Other")
+	}
+}
+
+func TestContextFileName(t *testing.T) {
+	for name, want := range map[string]string{
+		"todo":            "todo",
+		"my list":         "my_list",
+		"weekend hacks!":  "weekend_hacks_",
+		"../escape":       "___escape",
+		"café":            "caf_",
+		"under_score_123": "under_score_123",
+	} {
+		if got := domain.ContextFileName(name); got != want {
+			t.Errorf("ContextFileName(%q) = %q, want %q", name, got, want)
+		}
+	}
+}
+
 func TestContext_Complete_FromDoneContextRejected(t *testing.T) {
 	// bug_002 sibling: Complete from the done context would re-mark and
 	// duplicate via the same load-twice mechanism. Reject up front.

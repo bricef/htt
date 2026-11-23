@@ -26,6 +26,9 @@ var (
 	// ErrOpenSubtasks: completing the task needs an answer about its
 	// open subtasks (see Subtasks).
 	ErrOpenSubtasks = errors.New("it has open subtasks")
+	// ErrOnlyLink: the task has no text besides its p:, so taking the
+	// link away would leave it an empty line.
+	ErrOnlyLink = errors.New("it has no text besides its link, so without it the task would be empty")
 )
 
 // Subtasks says what completing a task does with the open tasks below
@@ -87,7 +90,7 @@ func (c *Context) Tree() (*Tree, error) {
 		}
 		c.doneIDs = map[string]bool{}
 		for _, t := range done {
-			if id := t.ID(); id != "" && t.Annotations["context"] == c.Name {
+			if id := t.ID(); id != "" && t.Annotations[contextKey] == c.Name {
 				c.doneIDs[id] = true
 			}
 		}
@@ -341,7 +344,8 @@ func (c *Context) Nest(strID, parentID string) (*Task, *Task, error) {
 // subtree, just after the subtree of the top-level task it was under,
 // and persists. It removes every p: on the task, so a task shown at
 // the top level for a broken link or a done parent loses the link. A
-// task with no p: is refused (ErrTopLevel).
+// task with no p: is refused (ErrTopLevel), as is one with no text
+// besides them (ErrOnlyLink).
 //
 // The task needn't move in the list: the list is in tree order, so it
 // is already between the top-level task it was under and the next one,
@@ -359,7 +363,9 @@ func (c *Context) Unnest(strID string) (*Task, error) {
 	if len(n.Task.ParentIDs()) == 0 {
 		return nil, ErrTopLevel
 	}
-	n.Task.clearParent()
+	if err := n.Task.takeParent(); err != nil {
+		return nil, err
+	}
 	return n.Task, c.save()
 }
 
@@ -403,9 +409,10 @@ func (c *Context) NestUnderPrevious(strID string) (*Task, error) {
 // sibling of its parent, placed just after the parent's subtree: under
 // its grandparent, or, under a top-level task, at the top level. It
 // persists and returns the task, as saved: the TUI's Shift-Tab. A
-// top-level task is refused (ErrTopLevel). As for Unnest, the task
-// needn't move in the list: it is already between its parent and the
-// parent's next sibling, which arranging, keeping the order of
+// top-level task is refused (ErrTopLevel), as is one with no text
+// besides its p: going to the top level (ErrOnlyLink). As for Unnest,
+// the task needn't move in the list: it is already between its parent
+// and the parent's next sibling, which arranging, keeping the order of
 // siblings of a priority, leaves it between.
 func (c *Context) UnnestOneLevel(strID string) (*Task, error) {
 	if !c.IsTree() {
@@ -421,31 +428,56 @@ func (c *Context) UnnestOneLevel(strID string) (*Task, error) {
 	}
 	if g := n.Parent.Parent; g != nil {
 		n.Task.setParent(g.Task.ID())
-	} else {
-		n.Task.clearParent()
+	} else if err := n.Task.takeParent(); err != nil {
+		return nil, err
 	}
 	return n.Task, c.save()
 }
 
-// fitInto readies tasks, a subtree in tree order, to join target, a
-// context file: a parent is always in its subtasks' file, so the
-// subtree's root loses its p:, and each of the subtree's ids that
-// target already uses, as an id: or a p:, becomes target's smallest
-// free id, the subtree's p: naming it with it.
-func fitInto(tasks []*Task, target []*Task) {
-	if len(tasks[0].ParentIDs()) > 0 {
-		tasks[0].clearParent()
+// fitInto readies tasks, a subtree in tree order moving from c, to join
+// to, a context file, or refuses, changing nothing.
+//
+// Each of the subtree's ids that to already uses, as an id: or a p:,
+// becomes to's smallest free id, the subtree's p: naming it with it. A
+// done task going back from the done file to the context it was
+// completed in (its context: names to's file) keeps its id when to's
+// p: naming it can name nothing else: no task in to holds it, and no
+// other task in the done file completed from to does. Its subtasks
+// there are under it again.
+//
+// A parent is always in its subtasks' file, so the subtree's root loses
+// its p:, unless it's a done task going back and its parent is there,
+// the one task holding the id, and not below it: it keeps it. A root
+// with no text besides its p: is refused (ErrOnlyLink): without it, it
+// would be an empty line.
+func (c *Context) fitInto(tasks []*Task, to *Context) error {
+	root := tasks[0]
+	back := c.Name == DoneContextName &&
+		ContextFileName(root.Annotations[contextKey]) == ContextFileName(to.Name)
+	own := ""
+	if id := root.ID(); back && id != "" && len(holding(to.Tasks, id)) == 0 &&
+		len(completedFrom(holding(c.Tasks, id), to.Name)) == 1 {
+		own = id
+	}
+	if ps := root.ParentIDs(); len(ps) > 0 {
+		parent := holding(to.Tasks, ps[0])
+		keep := back && len(parent) == 1 &&
+			(own == "" || !(&Context{Tasks: append(slices.Clone(to.Tasks), root)}).leadsTo(parent[0], root))
+		if !keep {
+			if err := root.takeParent(); err != nil {
+				return err
+			}
+		}
 	}
 	taken := map[string]bool{}
-	for _, t := range target {
-		for _, v := range t.annotationValues(idKey) {
-			taken[v] = true
-		}
-		for _, v := range t.ParentIDs() {
-			taken[v] = true
+	for _, t := range to.Tasks {
+		for _, v := range append(t.annotationValues(idKey), t.ParentIDs()...) {
+			if v != own { // no task's id there: only p: and second id: tags have it
+				taken[v] = true
+			}
 		}
 	}
-	used := append(slices.Clone(target), tasks...)
+	used := append(slices.Clone(to.Tasks), tasks...)
 	renamed := map[string]bool{}
 	for _, t := range tasks {
 		old := t.ID()
@@ -456,9 +488,35 @@ func fitInto(tasks []*Task, target []*Task) {
 		id := NextID(used)
 		for _, s := range tasks {
 			s.renameAnnotation(idKey, old, id)
+		}
+		for _, s := range tasks[1:] { // the root's p:, if it kept one, names a task of to's
 			s.renameAnnotation(parentKey, old, id)
 		}
 	}
+	return nil
+}
+
+// holding returns the tasks whose id is id.
+func holding(tasks []*Task, id string) []*Task {
+	var out []*Task
+	for _, t := range tasks {
+		if t.ID() == id {
+			out = append(out, t)
+		}
+	}
+	return out
+}
+
+// completedFrom returns the tasks, of the done file, completed from the
+// context named name: their context: names its file.
+func completedFrom(tasks []*Task, name string) []*Task {
+	var out []*Task
+	for _, t := range tasks {
+		if ContextFileName(t.Annotations[contextKey]) == ContextFileName(name) {
+			out = append(out, t)
+		}
+	}
+	return out
 }
 
 // setParent makes the task name id as its parent: its first p: takes
@@ -478,9 +536,15 @@ func (t *Task) setParent(id string) {
 	t.rebuild()
 }
 
-// clearParent removes every p: from the task.
-func (t *Task) clearParent() {
+// takeParent removes every p: from the task, or, when they're all the
+// text it has, refuses (ErrOnlyLink), changing nothing: without them,
+// it would be an empty line, or only a preamble.
+func (t *Task) takeParent() error {
+	if !slices.ContainsFunc(t.body, func(w bodyWord) bool { return w.key != parentKey }) {
+		return fmt.Errorf("%w: %s", ErrOnlyLink, t.Raw)
+	}
 	t.RemoveAnnotation(parentKey)
+	return nil
 }
 
 // renameAnnotation rewrites every key:old on the line as key:new where

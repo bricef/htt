@@ -411,6 +411,147 @@ func TestContext_Move_AnIDTheTargetNamesInAPClashes(t *testing.T) {
 	wantLines(t, "home", rawsOf(t, repo, "home"), "left over p:7", "Launch id:1", "Party p:1")
 }
 
+// A done task moved back from the done file to the context it was
+// completed in: the p: naming it there name it again, so it keeps its
+// id; a subtask keeps its p: when its parent is there.
+func TestContext_Move_ADoneTaskBackHomeKeepsItsLinks(t *testing.T) {
+	repo := newRepo(t)
+	seed(t, repo, "todo", "Plan id:1", "Write p:1", "Book p:1")
+	ctx := loadCtx(t, repo, "todo")
+	if _, err := ctx.Complete("0", domain.SubtasksLeave); err != nil {
+		t.Fatal(err)
+	}
+	ctx = loadCtx(t, repo, "todo")
+	if _, err := ctx.Complete("1", domain.SubtasksAsk); err != nil { // Book
+		t.Fatal(err)
+	}
+	done := loadCtx(t, repo, domain.DoneContextName) // Plan, Book
+	moved, err := done.Move("0", "todo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	plan := "x " + today + " Plan id:1 context:todo"
+	if got := rawsOfTasks(moved); !slices.Equal(got, []string{plan}) {
+		t.Errorf("moved %q", got)
+	}
+	wantLines(t, "todo", rawsOf(t, repo, "todo"), plan, "Write p:1")
+	tree, err := loadCtx(t, repo, "todo").Tree()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tree.Roots) != 1 || len(tree.Problems) != 0 {
+		t.Errorf("Write isn't under Plan again: %d roots, problems %q", len(tree.Roots), treeProblems(tree))
+	}
+
+	// Book, a subtask completed alone, goes back under Plan.
+	done = loadCtx(t, repo, domain.DoneContextName)
+	if _, err := done.Move("0", "todo"); err != nil {
+		t.Fatal(err)
+	}
+	book := "x " + today + " Book p:1 context:todo"
+	wantLines(t, "todo", rawsOf(t, repo, "todo"), plan, "Write p:1", book)
+	wantLines(t, "done", rawsOf(t, repo, domain.DoneContextName))
+}
+
+// Anything else sharing the id is still a clash, and a subtask whose
+// parent isn't there loses its p:.
+func TestContext_Move_ADoneTaskBackHomeStillClashes(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		todo, done []string
+		want       []string // todo after moving done's task 0 there
+	}{{
+		name: "a task there holds the id",
+		todo: []string{"Live id:1", "Sub p:1"},
+		done: []string{"x 2026-01-01 Plan id:1 context:todo"},
+		want: []string{"Live id:1", "Sub p:1", "x 2026-01-01 Plan id:2 context:todo"},
+	}, {
+		name: "another done task from there holds it too",
+		todo: []string{"Sub p:1"},
+		done: []string{"x 2026-01-01 Plan id:1 context:todo", "x 2026-01-02 Again id:1 context:todo"},
+		want: []string{"Sub p:1", "x 2026-01-01 Plan id:2 context:todo"},
+	}, {
+		name: "completed from another context",
+		todo: []string{"Sub p:1"},
+		done: []string{"x 2026-01-01 Plan id:1 context:work"},
+		want: []string{"Sub p:1", "x 2026-01-01 Plan id:2 context:work"},
+	}, {
+		name: "a subtask whose parent isn't there",
+		todo: []string{"Other id:1"},
+		done: []string{"x 2026-01-01 Write p:2 context:todo"},
+		want: []string{"Other id:1", "x 2026-01-01 Write context:todo"},
+	}, {
+		name: "a subtask whose parent's id is on two tasks there",
+		todo: []string{"One id:1", "Two id:1"},
+		done: []string{"x 2026-01-01 Write p:1 context:todo"},
+		want: []string{"One id:1", "Two id:1", "x 2026-01-01 Write context:todo"},
+	}, {
+		name: "a subtask completed from another context",
+		todo: []string{"Plan id:1"},
+		done: []string{"x 2026-01-01 Write p:1 context:work"},
+		want: []string{"Plan id:1", "x 2026-01-01 Write context:work"},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := newRepo(t)
+			seed(t, repo, "todo", tc.todo...)
+			seed(t, repo, domain.DoneContextName, tc.done...)
+			if _, err := loadCtx(t, repo, domain.DoneContextName).Move("0", "todo"); err != nil {
+				t.Fatal(err)
+			}
+			wantLines(t, "todo", rawsOf(t, repo, "todo"), tc.want...)
+		})
+	}
+}
+
+// Back home, its subtasks under it again, a done task can't keep a p:
+// naming one of them: that would make a loop. It comes back at the top
+// level.
+func TestContext_Move_ADoneTaskBackHomeMakesNoLoop(t *testing.T) {
+	repo := newRepo(t)
+	seed(t, repo, "todo", "A id:5 p:3")
+	seed(t, repo, domain.DoneContextName, "x 2026-01-01 T id:3 p:5 context:todo")
+	if _, err := loadCtx(t, repo, domain.DoneContextName).Move("0", "todo"); err != nil {
+		t.Fatal(err)
+	}
+	wantLines(t, "todo", rawsOf(t, repo, "todo"), "x 2026-01-01 T id:3 context:todo", "A id:5 p:3")
+}
+
+// A task with no text besides its p: would be an empty line without
+// it: taking the link away is refused, and nothing changes.
+func TestContext_TakingTheOnlyTextAwayIsRefused(t *testing.T) {
+	for _, line := range []string{"p:1", "p:1 p:3", "2026-11-01 p:1", "(A) p:1", "x 2026-11-01 p:1"} {
+		t.Run(line, func(t *testing.T) {
+			repo := newRepo(t)
+			seed(t, repo, "work", "Parent id:1", line, "Other")
+			before := rawsOf(t, repo, "work")
+
+			if _, err := loadCtx(t, repo, "work").Unnest("1"); !errors.Is(err, domain.ErrOnlyLink) {
+				t.Errorf("unnest: %v, want ErrOnlyLink", err)
+			}
+			if _, err := loadCtx(t, repo, "work").UnnestOneLevel("1"); !errors.Is(err, domain.ErrOnlyLink) {
+				t.Errorf("a level up, to the top: %v, want ErrOnlyLink", err)
+			}
+			if _, err := loadCtx(t, repo, "work").Move("1", "home"); !errors.Is(err, domain.ErrOnlyLink) {
+				t.Errorf("move: %v, want ErrOnlyLink", err)
+			}
+			wantLines(t, "work", rawsOf(t, repo, "work"), before...)
+			wantLines(t, "home", rawsOf(t, repo, "home"))
+		})
+	}
+
+	// Its own id is text enough, and a level up under a grandparent
+	// changes its p: without taking it.
+	repo := newRepo(t)
+	seed(t, repo, "work", "Parent id:1", "Middle p:1 id:2", "p:2", "id:3 p:1")
+	if _, err := loadCtx(t, repo, "work").UnnestOneLevel("2"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadCtx(t, repo, "work").Unnest("3"); err != nil {
+		t.Fatal(err)
+	}
+	wantLines(t, "work", rawsOf(t, repo, "work"), "Parent id:1", "Middle p:1 id:2", "p:1", "id:3")
+}
+
 func TestContext_Move_IntoTheDoneFileLeavesTheLinesAlone(t *testing.T) {
 	repo := newRepo(t)
 	seed(t, repo, "work", "Plan id:1", "Book p:1 id:2", "Call p:2")

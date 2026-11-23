@@ -13,10 +13,12 @@ import (
 // its first p:. Ids are text, matched exactly, as topydo matches them.
 
 // idKey and parentKey are the annotations that link a subtask to its
-// parent.
+// parent. contextKey is the one Complete gives a task it moves to the
+// done file, naming the context it was completed in.
 const (
-	idKey     = "id"
-	parentKey = "p"
+	idKey      = "id"
+	parentKey  = "p"
+	contextKey = "context"
 )
 
 // Node is a task's place in its context's tree.

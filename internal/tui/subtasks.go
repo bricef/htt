@@ -31,6 +31,7 @@ func (m *model) treeChange(index int, err error) error {
 		domain.ErrTopLevel:     "Task %d is already a top-level task.",
 		domain.ErrLoop:         "Task %d can't go there: it would be below itself.",
 		domain.ErrSharedID:     "Task %d can't go there: the task above has an id another task holds too, so nothing can name it.",
+		domain.ErrOnlyLink:     "Task %d has no text besides its link: at the top level it would be empty.",
 	}
 	for sentinel, reason := range reasons {
 		if errors.Is(err, sentinel) {

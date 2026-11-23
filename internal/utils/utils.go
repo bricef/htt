@@ -9,24 +9,12 @@ import (
 	"math"
 	"os"
 	"path/filepath"
-	"regexp/syntax"
 	"strings"
 	"time"
 
 	"github.com/bricef/htt/internal/editor"
 	"github.com/buger/goterm"
 )
-
-// StringToFilename will convert an arbitrary string into a valid filename
-func StringToFilename(raw string) string {
-	return strings.Map(func(c rune) rune {
-		if syntax.IsWordChar(c) {
-			return c
-		} else {
-			return '_'
-		}
-	}, raw)
-}
 
 /*
  *	Logging helpers and prettifiers

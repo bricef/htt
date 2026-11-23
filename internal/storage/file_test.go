@@ -273,7 +273,7 @@ func TestFileRepository_CurrentPointer_LivesInPointerDir(t *testing.T) {
 func TestFileRepository_Context_SanitizesNameAndStaysInDataDir(t *testing.T) {
 	// bug_011: A name containing path separators or .. segments used to
 	// flow straight into filepath.Join, letting Save("../escape") write
-	// outside dataDir. Sanitization via utils.StringToFilename
+	// outside dataDir. Sanitization via domain.ContextFileName
 	// (non-word → underscore) keeps every file inside dataDir.
 	dataDir := t.TempDir()
 	pointerDir := t.TempDir()

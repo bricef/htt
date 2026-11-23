@@ -108,8 +108,9 @@ func (c *Context) Replace(strID string, replacement *Task) (*Task, error) {
 // tree order. Into a context file, the subtree fits in (fitInto): the
 // indexed task loses its p:, since a parent is always in its subtasks'
 // file, and ids the target already uses are renumbered, keeping the
-// subtree's links. Into the done file or the archive, the lines go as
-// they are.
+// subtree's links; a done task going back to the context it was
+// completed in links up again instead. Into the done file or the
+// archive, the lines go as they are.
 //
 // Save order is destination-first: a partial-save failure (ENOSPC,
 // EROFS, EACCES, quota) on the source then leaves the task in *both*
@@ -117,13 +118,18 @@ func (c *Context) Replace(strID string, replacement *Task) (*Task, error) {
 // Source-first would leave the task in *neither* place, a data loss.
 //
 // Same-context moves are rejected up front so the load-twice path
-// can't duplicate the task into itself.
+// can't duplicate the task into itself, or save the context without
+// the subtree over the file it was just written to. Names are compared
+// as files are named (ContextFileName): "my list" is my_list.
 func (c *Context) Move(strID, toName string) ([]*Task, error) {
 	tasks, err := c.below(strID)
 	if err != nil {
 		return nil, err
 	}
-	if toName == c.Name {
+	if ContextFileName(toName) == ContextFileName(c.Name) {
+		if toName != c.Name {
+			return nil, fmt.Errorf("cannot move task to its current context %q: %q names its file", c.Name, toName)
+		}
 		return nil, fmt.Errorf("cannot move task to its current context %q", c.Name)
 	}
 	to, err := c.repo.Context(toName)
@@ -131,7 +137,9 @@ func (c *Context) Move(strID, toName string) ([]*Task, error) {
 		return nil, err
 	}
 	if to.IsTree() {
-		fitInto(tasks, to.Tasks)
+		if err := c.fitInto(tasks, to); err != nil {
+			return nil, err
+		}
 	}
 	for _, t := range tasks {
 		if err := c.remove(t); err != nil {

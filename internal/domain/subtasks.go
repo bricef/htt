@@ -342,6 +342,11 @@ func (c *Context) Nest(strID, parentID string) (*Task, *Task, error) {
 // and persists. It removes every p: on the task, so a task shown at
 // the top level for a broken link or a done parent loses the link. A
 // task with no p: is refused (ErrTopLevel).
+//
+// The task needn't move in the list: the list is in tree order, so it
+// is already between the top-level task it was under and the next one,
+// where arranging, which keeps the top level's order, leaves it: right
+// after the subtree it left.
 func (c *Context) Unnest(strID string) (*Task, error) {
 	if !c.IsTree() {
 		return nil, ErrNotATree
@@ -354,14 +359,6 @@ func (c *Context) Unnest(strID string) (*Task, error) {
 	if len(n.Task.ParentIDs()) == 0 {
 		return nil, ErrTopLevel
 	}
-	top := n
-	for top.Parent != nil {
-		top = top.Parent
-	}
-	if top != n {
-		block := tasksOfNodes(n.Subtree())
-		c.moveAfter(block, lastOutside(top, block))
-	}
 	n.Task.clearParent()
 	return n.Task, c.save()
 }
@@ -370,7 +367,9 @@ func (c *Context) Unnest(strID string) (*Task, error) {
 // under the task above it at its level, its previous sibling (for a
 // top-level task, the top-level task above it), and persists: the
 // TUI's Tab. It returns the task, as saved. The first task at its level
-// is refused (ErrNothingAbove).
+// is refused (ErrNothingAbove). In the list, in tree order, the task
+// already follows the subtree of the task above it, so it's last among
+// that task's subtasks of its priority without moving.
 func (c *Context) NestUnderPrevious(strID string) (*Task, error) {
 	if !c.IsTree() {
 		return nil, ErrNotATree
@@ -396,8 +395,6 @@ func (c *Context) NestUnderPrevious(strID string) (*Task, error) {
 	if err != nil {
 		return nil, err
 	}
-	block := tasksOfNodes(n.Subtree())
-	c.moveAfter(block, lastOutside(above, block))
 	n.Task.setParent(id)
 	return n.Task, c.save()
 }
@@ -406,7 +403,10 @@ func (c *Context) NestUnderPrevious(strID string) (*Task, error) {
 // sibling of its parent, placed just after the parent's subtree: under
 // its grandparent, or, under a top-level task, at the top level. It
 // persists and returns the task, as saved: the TUI's Shift-Tab. A
-// top-level task is refused (ErrTopLevel).
+// top-level task is refused (ErrTopLevel). As for Unnest, the task
+// needn't move in the list: it is already between its parent and the
+// parent's next sibling, which arranging, keeping the order of
+// siblings of a priority, leaves it between.
 func (c *Context) UnnestOneLevel(strID string) (*Task, error) {
 	if !c.IsTree() {
 		return nil, ErrNotATree
@@ -419,8 +419,6 @@ func (c *Context) UnnestOneLevel(strID string) (*Task, error) {
 	if n.Parent == nil {
 		return nil, ErrTopLevel
 	}
-	block := tasksOfNodes(n.Subtree())
-	c.moveAfter(block, lastOutside(n.Parent, block))
 	if g := n.Parent.Parent; g != nil {
 		n.Task.setParent(g.Task.ID())
 	} else {

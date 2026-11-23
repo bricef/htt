@@ -408,6 +408,10 @@ func TestAct_FailedActionLogsErrorAndQuits(t *testing.T) {
 	// Completing task 1 can't be saved.
 	m, repo := seedModel(t, "todo", "first", "second")
 	m.repo = unsaveable{repo}
+	var err error
+	if m.context, err = m.repo.Context("todo"); err != nil { // the list shown saves through it
+		t.Fatal(err)
+	}
 	m.list.Select(1)
 	m, buf := withLogBuffer(m)
 

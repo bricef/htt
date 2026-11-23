@@ -59,6 +59,7 @@ type model struct {
 	folded        map[string]bool  // folded tasks, by foldKey, for the session
 	asking        *question        // the question x asked about open subtasks, until the next key
 	notice        string           // an update notice that came while asking, for after the answer
+	seen          fileLook         // the last look at the file shown (watch.go)
 }
 
 var controller = NewKeyBindingController().
@@ -194,21 +195,26 @@ func Model(repo domain.Repository, ctx *domain.Context, opts Options) model {
 	}
 	m.showTasks(-1)
 	m.noteDateWarnings()
+	m.seen = m.look()
 	return m
 }
 
-// Init waits for the update check in the background, if there is one.
+// Init waits for the update check in the background, if there is one,
+// and starts watching the file shown, if it has one (watch.go).
 func (m model) Init() tea.Cmd {
-	notice := m.updateNotice
-	if notice == nil {
-		return nil
+	var cmds []tea.Cmd
+	if notice := m.updateNotice; notice != nil {
+		cmds = append(cmds, func() tea.Msg {
+			if s := notice(); s != "" {
+				return updateNoticeMsg(s)
+			}
+			return nil
+		})
 	}
-	return func() tea.Msg {
-		if s := notice(); s != "" {
-			return updateNoticeMsg(s)
-		}
-		return nil
+	if m.seen.path != "" {
+		cmds = append(cmds, watchTick())
 	}
+	return tea.Batch(cmds...)
 }
 
 // Update handles a message, notes the date warnings of a list it
@@ -289,6 +295,9 @@ func (m model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case editorFinishedMsg:
 		return editorFinished(m, msg)
+
+	case watchMsg:
+		return m.watched()
 
 	case updateNoticeMsg:
 		m.logger.Info("update available", "notice", string(msg))

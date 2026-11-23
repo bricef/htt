@@ -61,27 +61,48 @@ func strID(i int) string {
 	return fmt.Sprintf("%d", i)
 }
 
-// reload loads the list on show from its file again, for an action
-// that changes tasks, and finds in it the task the TUI showed at index
-// as raw (shownAt). The action then works on the file as it is when the
-// key is pressed, so it saves nothing older, on the task the TUI
-// showed; the list shows the reloaded file. When that task isn't there
-// any more, changed or removed elsewhere (the CLI, say), nothing
-// changes: the status line says so (changed), and the error is
-// errUnavailable's.
-func (m *model) reload(index int, raw, changed string) (int, error) {
-	ctx, err := m.repo.Context(m.context.Name)
-	if err != nil {
-		return -1, fmt.Errorf("reload %s: %w", m.context.Name, err)
-	}
-	m.context = ctx
-	at := shownAt(ctx.Tasks, index, raw)
-	m.showTasks(at)
-	if at < 0 {
+// errGone is an action's on a task the TUI showed that isn't in the
+// file any more (onShown).
+var errGone = fmt.Errorf("%w: the task shown changed elsewhere", errUnavailable)
+
+// onShown runs act, for an action that changes tasks, on the task the
+// TUI showed at index as raw: as one transaction
+// (domain.Context.Transact) on the list's file as it is when the key is
+// pressed, act getting the context and the task's index in it, found by
+// its text (shownAt). What act saves is saved together, over nothing
+// older; if another program changes the file before it's saved, act
+// runs again on the new file, finding the task again. When the task
+// isn't there any more, changed or removed elsewhere (the CLI, say),
+// nothing changes: the status line says so (changed), and the error is
+// errGone. Another htt holding the files too long, or a file that keeps
+// changing, is said on the status line too, and the TUI stays open
+// (quitUnless) to try again. Either way the list shows the file as the
+// transaction left it, on the task found.
+func (m *model) onShown(index int, raw, changed string, act func(c *domain.Context, at int) error) error {
+	found := -1
+	err := m.context.Transact(func(c *domain.Context) error {
+		if found = shownAt(c.Tasks, index, raw); found < 0 {
+			return errGone
+		}
+		return act(c, found)
+	})
+	m.showTasks(found)
+	switch {
+	case errors.Is(err, errGone):
 		m.status = changed
-		return -1, fmt.Errorf("%w: task %d changed elsewhere", errUnavailable, index)
+	case errors.Is(err, domain.ErrBusy), errors.Is(err, domain.ErrKeepsChanging):
+		m.status = sentence(err)
 	}
-	return at, nil
+	return err
+}
+
+// sentence is err's message as a sentence, for the status line.
+func sentence(err error) string {
+	s := err.Error()
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:] + "."
 }
 
 // shownAt finds the task the TUI showed at index as raw among tasks,
@@ -111,9 +132,12 @@ func changedElsewhere(index int, nothing string) string {
 }
 
 // quitUnless is what an action that failed with err does next: quit,
-// unless err is errUnavailable's, when the TUI stays open.
+// unless err is errUnavailable's, or another htt was busy with the
+// files or a file kept changing (domain.ErrBusy, ErrKeepsChanging),
+// when the TUI stays open: nothing was saved, and the action can be
+// tried again.
 func quitUnless(err error) tea.Cmd {
-	if errors.Is(err, errUnavailable) {
+	if errors.Is(err, errUnavailable) || errors.Is(err, domain.ErrBusy) || errors.Is(err, domain.ErrKeepsChanging) {
 		return nil
 	}
 	return tea.Quit
@@ -174,20 +198,28 @@ var Do = mkAction("do", func(m model) (tea.Model, tea.Cmd, error) {
 	if !ok {
 		return m, nil, errNoTaskSelected
 	}
-	at, err := m.reload(it.index, it.task.Raw, changedElsewhere(it.index, "nothing was completed"))
+	var at int
+	var open []*domain.Task
+	err := m.onShown(it.index, it.task.Raw, changedElsewhere(it.index, "nothing was completed"), func(c *domain.Context, i int) error {
+		var err error
+		at = i
+		if open, err = c.OpenSubtasks(strID(at)); err != nil {
+			return fmt.Errorf("complete task %d: %w", at, err)
+		}
+		if len(open) > 0 {
+			return nil // asked first: nothing changes yet
+		}
+		if _, err := c.Complete(strID(at), domain.SubtasksAsk); err != nil {
+			return fmt.Errorf("complete task %d: %w", at, err)
+		}
+		return nil
+	})
 	if err != nil {
 		return m, quitUnless(err), err
-	}
-	open, err := m.context.OpenSubtasks(strID(at))
-	if err != nil {
-		return m, tea.Quit, fmt.Errorf("complete task %d: %w", at, err)
 	}
 	if len(open) > 0 {
 		m.ask(at, open) // the next key answers (see answer)
 		return m, nil, nil
-	}
-	if _, err := m.context.Complete(strID(at), domain.SubtasksAsk); err != nil {
-		return m, tea.Quit, fmt.Errorf("complete task %d: %w", at, err)
 	}
 	if err := refresh(&m); err != nil {
 		return m, tea.Quit, err
@@ -306,26 +338,30 @@ var ReplaceTask = mkAction("replace task", func(m model) (tea.Model, tea.Cmd, er
 	if len(d.problems) > 0 {
 		return m, nil, fmt.Errorf("%w: %s", errUnavailable, d.problems[0])
 	}
-	at, err := m.reload(m.editIndex, m.editRaw, "That task changed while you were editing it; nothing was saved.")
-	if errors.Is(err, errUnavailable) {
-		m.closeInput()
-		return m, nil, err
-	}
-	if err != nil {
-		m.status = fmt.Sprintf("Couldn't save the task: %v", err)
-		return m, nil, err
-	}
-	if d.raw == m.editRaw {
-		m.closeInput()
-		return m, tea.ClearScreen, nil
-	}
 	task, err := domain.NewTask(d.raw)
 	if err != nil {
 		return m, nil, fmt.Errorf("%w: %v", errUnavailable, err)
 	}
-	if _, err := m.context.Replace(strID(at), task); err != nil {
+	at := -1
+	err = m.onShown(m.editIndex, m.editRaw, "That task changed while you were editing it; nothing was saved.", func(c *domain.Context, i int) error {
+		if d.raw == m.editRaw {
+			return nil // unchanged: nothing to save
+		}
+		at = i
+		_, err := c.Replace(strID(at), task)
+		return err
+	})
+	if errors.Is(err, errGone) {
+		m.closeInput()
+		return m, nil, err
+	}
+	if err != nil {
 		m.status = fmt.Sprintf("Couldn't save the task: %v", err)
 		return m, nil, fmt.Errorf("replace task %d: %w", at, err)
+	}
+	if at < 0 {
+		m.closeInput()
+		return m, tea.ClearScreen, nil
 	}
 	m.closeInput()
 	if err := refresh(&m); err != nil {
@@ -377,28 +413,32 @@ var AddTask = mkAction("add task", func(m model) (tea.Model, tea.Cmd, error) {
 	// Add to the visible context regardless of what the repo considers
 	// "current". The TUI's NextContext action syncs the two (calls
 	// SetCurrent on every move), but we name the target context
-	// explicitly here for clarity. It's loaded as the file is now, so
-	// nothing written elsewhere since the list was loaded is lost.
-	var target *domain.Context
+	// explicitly here for clarity. Adding is a transaction on the file
+	// as it is now, so nothing written elsewhere since the list was
+	// loaded is lost.
+	target := m.context
 	if m.input == inputSubtask {
 		// Under the task the input was opened for, wherever it is now.
-		at, err := m.reload(m.editIndex, m.editRaw, changedElsewhere(m.editIndex, "the subtask wasn't added"))
-		if errors.Is(err, errUnavailable) {
+		at := -1
+		err := m.onShown(m.editIndex, m.editRaw, changedElsewhere(m.editIndex, "the subtask wasn't added"), func(c *domain.Context, i int) error {
+			at = i
+			// A task of this run's own: a run before may have given
+			// the last one a p:.
+			fresh, err := domain.NewTask(d.raw)
+			if err != nil {
+				return err
+			}
+			task = fresh
+			return c.AddSubtask(strID(at), task)
+		})
+		if errors.Is(err, errGone) {
 			m.closeInput()
 			return m, tea.ClearScreen, err
 		}
 		if err != nil {
 			m.status = fmt.Sprintf("Couldn't save the subtask: %v", err)
-			return m, nil, err
-		}
-		target = m.context
-		if err := target.AddSubtask(strID(at), task); err != nil {
-			m.status = fmt.Sprintf("Couldn't save the subtask: %v", err)
 			return m, nil, fmt.Errorf("add subtask of task %d: %w", at, err)
 		}
-	} else if target, err = m.repo.Context(m.context.Name); err != nil {
-		m.status = fmt.Sprintf("Couldn't save the task: %v", err)
-		return m, nil, fmt.Errorf("load %s: %w", m.context.Name, err)
 	} else if err := target.AddTask(task); err != nil {
 		m.status = fmt.Sprintf("Couldn't save the task: %v", err)
 		return m, nil, fmt.Errorf("add task: %w", err)
@@ -420,13 +460,16 @@ var Delete = mkAction("delete", func(m model) (tea.Model, tea.Cmd, error) {
 	if !ok {
 		return m, nil, errNoTaskSelected
 	}
-	at, err := m.reload(it.index, it.task.Raw, changedElsewhere(it.index, "nothing was deleted"))
+	var gone []*domain.Task
+	err := m.onShown(it.index, it.task.Raw, changedElsewhere(it.index, "nothing was deleted"), func(c *domain.Context, at int) error {
+		var err error
+		if gone, err = c.Delete(strID(at)); err != nil {
+			return fmt.Errorf("delete task %d: %w", at, err)
+		}
+		return nil
+	})
 	if err != nil {
 		return m, quitUnless(err), err
-	}
-	gone, err := m.context.Delete(strID(at))
-	if err != nil {
-		return m, tea.Quit, fmt.Errorf("delete task %d: %w", at, err)
 	}
 	if err := refresh(&m); err != nil {
 		return m, tea.Quit, err
@@ -443,13 +486,16 @@ var IncreasePriority = mkAction("increase priority", func(m model) (tea.Model, t
 	if !ok {
 		return m, nil, errNoTaskSelected
 	}
-	at, err := m.reload(it.index, it.task.Raw, changedElsewhere(it.index, "its priority wasn't changed"))
+	var before, changed *domain.Task
+	err := m.onShown(it.index, it.task.Raw, changedElsewhere(it.index, "its priority wasn't changed"), func(c *domain.Context, at int) error {
+		var err error
+		if before, changed, err = c.IncreasePriority(strID(at)); err != nil {
+			return fmt.Errorf("raise priority of task %d: %w", at, err)
+		}
+		return nil
+	})
 	if err != nil {
 		return m, quitUnless(err), err
-	}
-	before, changed, err := m.context.IncreasePriority(strID(at))
-	if err != nil {
-		return m, tea.Quit, fmt.Errorf("raise priority of task %d: %w", at, err)
 	}
 	if err := refresh(&m); err != nil {
 		return m, tea.Quit, err
@@ -480,13 +526,16 @@ var DecreasePriority = mkAction("decrease priority", func(m model) (tea.Model, t
 	if !ok {
 		return m, nil, errNoTaskSelected
 	}
-	at, err := m.reload(it.index, it.task.Raw, changedElsewhere(it.index, "its priority wasn't changed"))
+	var before, changed *domain.Task
+	err := m.onShown(it.index, it.task.Raw, changedElsewhere(it.index, "its priority wasn't changed"), func(c *domain.Context, at int) error {
+		var err error
+		if before, changed, err = c.DecreasePriority(strID(at)); err != nil {
+			return fmt.Errorf("lower priority of task %d: %w", at, err)
+		}
+		return nil
+	})
 	if err != nil {
 		return m, quitUnless(err), err
-	}
-	before, changed, err := m.context.DecreasePriority(strID(at))
-	if err != nil {
-		return m, tea.Quit, fmt.Errorf("lower priority of task %d: %w", at, err)
 	}
 	if err := refresh(&m); err != nil {
 		return m, tea.Quit, err

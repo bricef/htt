@@ -67,21 +67,31 @@ var NestTask = mkAction("nest under the task above", func(m model) (tea.Model, t
 	if !ok {
 		return m, nil, errNoTaskSelected
 	}
-	shownAbove := m.taskAbove(it.index)
-	at, err := m.reload(it.index, it.task.Raw, changedElsewhere(it.index, "nothing was moved"))
-	if err != nil {
-		return m, quitUnless(err), err
-	}
-	if m.taskAbove(at) != shownAbove {
+	shownAbove := taskAbove(m.context, it.index)
+	errAbove := fmt.Errorf("%w: the task above task %d changed elsewhere", errUnavailable, it.index)
+	at := -1
+	var moved *domain.Task
+	err := m.onShown(it.index, it.task.Raw, changedElsewhere(it.index, "nothing was moved"), func(c *domain.Context, i int) error {
+		at = i
+		if taskAbove(c, at) != shownAbove {
+			return errAbove
+		}
+		var err error
+		moved, err = c.NestUnderPrevious(strID(at))
+		return err
+	})
+	if errors.Is(err, errAbove) {
 		m.status = fmt.Sprintf("The task above task %d was changed or moved elsewhere; nothing was moved.", it.index)
-		return m, nil, fmt.Errorf("%w: the task above task %d changed elsewhere", errUnavailable, it.index)
+		return m, nil, err
 	}
-	moved, err := m.context.NestUnderPrevious(strID(at))
 	if err != nil {
+		if errors.Is(err, errGone) {
+			return m, quitUnless(err), err
+		}
 		if unavailable := m.treeChange(at, err); unavailable != nil {
 			return m, nil, unavailable
 		}
-		return m, tea.Quit, fmt.Errorf("nest task %d: %w", at, err)
+		return m, quitUnless(err), fmt.Errorf("nest task %d: %w", at, err)
 	}
 	if err := m.arranged(moved); err != nil {
 		return m, tea.Quit, err
@@ -96,16 +106,22 @@ var UnnestTask = mkAction("unnest a level", func(m model) (tea.Model, tea.Cmd, e
 	if !ok {
 		return m, nil, errNoTaskSelected
 	}
-	at, err := m.reload(it.index, it.task.Raw, changedElsewhere(it.index, "nothing was moved"))
+	at := -1
+	var moved *domain.Task
+	err := m.onShown(it.index, it.task.Raw, changedElsewhere(it.index, "nothing was moved"), func(c *domain.Context, i int) error {
+		at = i
+		var err error
+		moved, err = c.UnnestOneLevel(strID(at))
+		return err
+	})
 	if err != nil {
-		return m, quitUnless(err), err
-	}
-	moved, err := m.context.UnnestOneLevel(strID(at))
-	if err != nil {
+		if errors.Is(err, errGone) {
+			return m, quitUnless(err), err
+		}
 		if unavailable := m.treeChange(at, err); unavailable != nil {
 			return m, nil, unavailable
 		}
-		return m, tea.Quit, fmt.Errorf("unnest task %d: %w", at, err)
+		return m, quitUnless(err), fmt.Errorf("unnest task %d: %w", at, err)
 	}
 	if err := m.arranged(moved); err != nil {
 		return m, tea.Quit, err
@@ -113,10 +129,11 @@ var UnnestTask = mkAction("unnest a level", func(m model) (tea.Model, tea.Cmd, e
 	return m, nil, nil
 })
 
-// taskAbove is the line of the task Tab would nest the task with the
-// given index under (domain.Context.TaskAbove); "" when there's none.
-func (m *model) taskAbove(index int) string {
-	above, err := m.context.TaskAbove(strID(index))
+// taskAbove is the line of the task Tab would nest the task of c with
+// the given index under (domain.Context.TaskAbove); "" when there's
+// none.
+func taskAbove(c *domain.Context, index int) string {
+	above, err := c.TaskAbove(strID(index))
 	if err != nil || above == nil {
 		return ""
 	}
@@ -206,21 +223,26 @@ var cancelCompleting = mkAction("cancel completing", func(m model) (tea.Model, t
 // the ones asked about.
 func completeAnswered(q question, choice domain.Subtasks) *Action {
 	return mkAction("complete, subtasks answered", func(m model) (tea.Model, tea.Cmd, error) {
-		at, err := m.reload(q.index, q.raw, changedElsewhere(q.index, "nothing was completed"))
+		errOpen := fmt.Errorf("%w: task %d's open subtasks changed elsewhere", errUnavailable, q.index)
+		var done []*domain.Task
+		err := m.onShown(q.index, q.raw, changedElsewhere(q.index, "nothing was completed"), func(c *domain.Context, at int) error {
+			open, err := c.OpenSubtasks(strID(at))
+			if err != nil {
+				return fmt.Errorf("complete task %d: %w", at, err)
+			}
+			if !slices.Equal(lineOf(open), q.open) {
+				return errOpen
+			}
+			if done, err = c.Complete(strID(at), choice); err != nil {
+				return fmt.Errorf("complete task %d: %w", at, err)
+			}
+			return nil
+		})
+		if errors.Is(err, errOpen) {
+			m.status = fmt.Sprintf("Task %d's open subtasks changed elsewhere; nothing was completed.", q.index)
+		}
 		if err != nil {
 			return m, quitUnless(err), err
-		}
-		open, err := m.context.OpenSubtasks(strID(at))
-		if err != nil {
-			return m, tea.Quit, fmt.Errorf("complete task %d: %w", at, err)
-		}
-		if !slices.Equal(lineOf(open), q.open) {
-			m.status = fmt.Sprintf("Task %d's open subtasks changed elsewhere; nothing was completed.", q.index)
-			return m, nil, fmt.Errorf("%w: task %d's open subtasks changed elsewhere", errUnavailable, q.index)
-		}
-		done, err := m.context.Complete(strID(at), choice)
-		if err != nil {
-			return m, tea.Quit, fmt.Errorf("complete task %d: %w", at, err)
 		}
 		if err := refresh(&m); err != nil {
 			return m, tea.Quit, err

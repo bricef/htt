@@ -323,6 +323,7 @@ func resetReplFlags() {
 	reportWeek, reportMonth = false, false
 	showSortKey = ""
 	showFilters = nil
+	showFlat = false
 	tuiLogFile = ""
 	tuiLogLevel = "debug"
 	guiPort = 0
@@ -345,7 +346,7 @@ func renderReplView() {
 		fmt.Fprintln(os.Stderr, "Could not load current context:", err)
 		return
 	}
-	ctx.Show()
+	printContext(ctx, false)
 }
 
 // printReplHelp writes the REPL keymap to w. Curated rather than

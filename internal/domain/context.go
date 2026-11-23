@@ -89,15 +89,6 @@ func showTasks(ts []*Task) {
 	fmt.Println()
 }
 
-func (c *Context) Show() {
-	if len(c.Tasks) == 0 {
-		fmt.Printf("(%s): Context is empty.\n", c.ConsoleString())
-		return
-	}
-	showTasks(c.Tasks)
-	fmt.Printf("(%s): %d tasks\n", c.ConsoleString(), len(c.Tasks))
-}
-
 func (c *Context) ShowOnly(predicate func(*Task) bool) {
 	ts := c.Search(predicate)
 	if len(ts) == 0 {

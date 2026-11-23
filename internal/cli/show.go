@@ -14,6 +14,7 @@ import (
 var (
 	showSortKey string
 	showFilters []string
+	showFlat    bool
 )
 
 var show = &cobra.Command{
@@ -22,8 +23,15 @@ var show = &cobra.Command{
 	Short:   "Show the current tasklist.",
 	Long: `Show the current tasklist.
 
-With no flags, tasks are listed in file order. --sort and --filter
-narrow and reorder the list instead:
+With no flags, tasks are listed in file order, each subtask indented
+under its parent, two spaces a level, after its number. A task whose
+parent was completed (it names a task in the done file) shows at the
+top level, marked "(parent done)". The id: and p: tags that link them
+stay in the lines, as in the file.
+
+--flat lists the tasks as they are, without indenting them. --sort and
+--filter narrow and reorder the list instead, also without indenting:
+the tags still say what belongs to what.
 
   --sort KEY      priority, created or due. Prefix with - to reverse
                   (-created lists the newest first). Tasks with no
@@ -49,7 +57,7 @@ Examples:
 			return fmt.Errorf("load current context: %w", err)
 		}
 		if showSortKey == "" && len(showFilters) == 0 {
-			ctx.Show()
+			printContext(ctx, showFlat)
 			return nil
 		}
 		view, err := buildView(ctx, showSortKey, showFilters, time.Now())
@@ -66,6 +74,37 @@ func init() {
 		"Order by priority, created or due; prefix with - to reverse")
 	show.Flags().StringSliceVar(&showFilters, "filter", nil,
 		"Keep only tasks matching: overdue, due-soon, no-due, has-tag:NAME, priority:A|B|C (repeatable)")
+	show.Flags().BoolVar(&showFlat, "flat", false, "List the tasks without indenting subtasks under their parents")
+}
+
+// printContext prints ctx's tasks with their numbers: as a tree, each
+// subtask indented two spaces a level after its number and a task whose
+// parent is in the done file marked "(parent done)", or, flat, as the
+// plain list. The done file and the archive are always flat. A done
+// file htt can't read (its warning is on stderr) leaves the tree
+// without done marks.
+func printContext(ctx *domain.Context, flat bool) {
+	if len(ctx.Tasks) == 0 {
+		fmt.Printf("(%s): Context is empty.\n", ctx.ConsoleString())
+		return
+	}
+	tree, err := ctx.Tree()
+	if err != nil {
+		tree = domain.NewTree(ctx.Tasks, nil)
+	}
+	fmt.Println()
+	for _, n := range tree.Order() {
+		indent, mark := strings.Repeat("  ", n.Depth), ""
+		if n.DoneParent {
+			mark = "  (parent done)"
+		}
+		if flat {
+			indent, mark = "", ""
+		}
+		fmt.Printf("%3d %s%s%s\n", n.Index, indent, n.Task.ConsoleString(), mark)
+	}
+	fmt.Println()
+	fmt.Printf("(%s): %d tasks\n", ctx.ConsoleString(), len(ctx.Tasks))
 }
 
 // buildView returns the tasks in ctx that match every filter
@@ -109,7 +148,7 @@ func buildView(ctx *domain.Context, sortKey string, filters []string, now time.T
 // with a footer saying how much of the list the view covers.
 func printView(ctx *domain.Context, view []*domain.Task) {
 	if len(ctx.Tasks) == 0 {
-		ctx.Show()
+		printContext(ctx, true)
 		return
 	}
 	if len(view) == 0 {

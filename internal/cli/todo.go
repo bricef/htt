@@ -26,7 +26,7 @@ var TodoCommand = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("load current context: %w", err)
 		}
-		ctx.Show()
+		printContext(ctx, false)
 		return nil
 	},
 }
@@ -466,7 +466,7 @@ var todoStatus = &cobra.Command{
 		}
 		fmt.Println()
 		fmt.Printf("Current Context: %s\n", current.ConsoleString())
-		current.Show()
+		printContext(current, false)
 		return nil
 	},
 }

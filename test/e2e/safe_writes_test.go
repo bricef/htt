@@ -8,13 +8,38 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
 	"github.com/gofrs/flock"
 )
+
+// readAsAReader reads path as another program would while htt writes
+// it. On Windows a file can't be opened at the moment one is renamed
+// over it, which a reader there meets (access denied, or a sharing
+// violation) and tries again, as htt's own reads do; and a reader with
+// the file open in a tight loop would keep htt's rename waiting, so
+// there it pauses a millisecond before each read.
+func readAsAReader(path string) ([]byte, error) {
+	if runtime.GOOS != "windows" {
+		return os.ReadFile(path)
+	}
+	heldOpen := func(err error) bool {
+		var errno syscall.Errno
+		return errors.As(err, &errno) && (errno == 5 || errno == 32)
+	}
+	time.Sleep(time.Millisecond)
+	b, err := os.ReadFile(path)
+	for tries := 0; err != nil && heldOpen(err) && tries < 200; tries++ {
+		time.Sleep(time.Millisecond)
+		b, err = os.ReadFile(path)
+	}
+	return b, err
+}
 
 // Safe writes (docs/design/safe-writes.md): several htt processes
 // changing the same files at once lose nothing, and a reader never sees
@@ -208,7 +233,7 @@ func TestSafeWrites_ThePointerIsAlwaysWhole(t *testing.T) {
 			t.Fatal("the switches took over two minutes")
 		default:
 		}
-		b, err := os.ReadFile(path)
+		b, err := readAsAReader(path)
 		if err != nil || !slices.Contains(names, string(b)) {
 			bad++
 			if example == "" {
@@ -283,7 +308,7 @@ func TestSafeWrites_AReaderNeverSeesAPartFile(t *testing.T) {
 			t.Fatal("the rewrites took over two minutes")
 		default:
 		}
-		b, err := os.ReadFile(path)
+		b, err := readAsAReader(path)
 		switch {
 		case errors.Is(err, os.ErrNotExist):
 			missing++

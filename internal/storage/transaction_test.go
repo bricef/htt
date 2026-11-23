@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -50,6 +51,25 @@ func writeFile(t *testing.T, path, content string) {
 	if err := os.WriteFile(path, []byte(content), fileMode); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// readAsAReader reads path as another program would while htt writes
+// it. On Windows a file can't be opened at the moment one is renamed
+// over it (a sharing violation), which a reader there meets and tries
+// again, as htt's own reads do (readFile); and a reader with the file
+// open in a tight loop would keep htt's rename waiting, so there it
+// pauses a millisecond before each read.
+func readAsAReader(path string) ([]byte, error) {
+	if runtime.GOOS != "windows" {
+		return os.ReadFile(path)
+	}
+	time.Sleep(time.Millisecond)
+	b, err := os.ReadFile(path)
+	for tries := 0; err != nil && heldOpen(err) && tries < 200; tries++ {
+		time.Sleep(time.Millisecond)
+		b, err = os.ReadFile(path)
+	}
+	return b, err
 }
 
 func readString(t *testing.T, path string) string {
@@ -135,7 +155,7 @@ func TestTransact_AReaderNeverSeesAPartFile(t *testing.T) {
 			t.Fatal("the saves took over a minute")
 		default:
 		}
-		b, err := os.ReadFile(path)
+		b, err := readAsAReader(path)
 		switch {
 		case errors.Is(err, os.ErrNotExist):
 			missing++

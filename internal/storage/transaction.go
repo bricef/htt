@@ -233,9 +233,17 @@ func (t *transaction) commit(dirs []string, h hooks) error {
 }
 
 // readFile reads path whole. A file that doesn't exist isn't an error:
-// its snapshot has exists false.
+// its snapshot has exists false. On Windows, opening a file at the
+// moment another process renames a new one over it fails (a sharing
+// violation), so there, as for rename, it's tried again for a couple of
+// seconds.
 func readFile(path string) (snapshot, error) {
+	deadline := time.Now().Add(renameWait)
 	b, err := os.ReadFile(path)
+	for err != nil && runtime.GOOS == "windows" && heldOpen(err) && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+		b, err = os.ReadFile(path)
+	}
 	if errors.Is(err, os.ErrNotExist) {
 		return snapshot{}, nil
 	}

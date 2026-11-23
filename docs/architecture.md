@@ -27,6 +27,7 @@ test/
   architecture/            asserts the import rules below
 docs/
   architecture.md          you are here
+  design/                  designs that stand as references: what a feature is and how it behaves, without how it's built
   plans/active/            in-flight design docs
   plans/complete/          historical record of merged design docs
   archive/                 older notes preserved for context

@@ -370,15 +370,18 @@ func contextFile(ctx *domain.Context) []byte {
 	return b.Bytes()
 }
 
+// CurrentContextName reads the pointer as every read of htt's files is
+// made (readFile): on Windows, opening it at the moment another htt
+// renames a new one over it fails, and is tried again.
 func (r *FileRepository) CurrentContextName() (string, error) {
-	b, err := os.ReadFile(r.currentPointerPath())
+	file, err := readFile(r.currentPointerPath())
 	if err != nil {
-		if os.IsNotExist(err) {
-			return domain.DefaultContextName, nil
-		}
-		return "", fmt.Errorf("read current-context: %w", err)
+		return "", err
 	}
-	return pointerName(b), nil
+	if !file.exists {
+		return domain.DefaultContextName, nil
+	}
+	return pointerName(file.data), nil
 }
 
 // pointerName is the context the current-context pointer's content, b,

@@ -133,6 +133,37 @@ func TestFileTransact_TheGainingFileIsWrittenFirst(t *testing.T) {
 	}
 }
 
+// A body composing operations (Context.Transact) can save the losing
+// file first: adding a task saves todo, then completing one saves done
+// and todo. The gaining file is written first all the same.
+func TestFileTransact_AComposedBodyWritesTheGainingFileFirst(t *testing.T) {
+	r, dir := fileRepo(t, map[string]string{"todo.txt": "the task\nstay\n"})
+	var order []string
+	r.hooks.replacing = func(path string) error {
+		order = append(order, filepath.Base(path))
+		if len(order) == 2 {
+			return errors.New("no space left on device")
+		}
+		return nil
+	}
+	err := loaded(t, r, "todo").Transact(func(c *domain.Context) error {
+		if err := c.AddTask(mustTask(t, "2026-01-01 new")); err != nil {
+			return err
+		}
+		_, err := c.Complete("0", domain.SubtasksAsk)
+		return err
+	})
+	if err == nil || !strings.Contains(err.Error(), "no space") {
+		t.Fatalf("err = %v, want the failed write", err)
+	}
+	if !slices.Equal(order, []string{"done.txt", "todo.txt"}) {
+		t.Errorf("written in the order %v, want done.txt first", order)
+	}
+	if got := readString(t, filepath.Join(dir, "done.txt")); !strings.Contains(got, "the task") {
+		t.Errorf("done.txt = %q, want the task", got)
+	}
+}
+
 // The transaction's view reads what the change saved: a context saved,
 // then loaded again in the same transaction, is the one saved, and a
 // new context is listed.

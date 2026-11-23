@@ -423,14 +423,21 @@ hooks, change)` runs a change as a transaction:
    file beside it (`.<name>.<random>.tmp`, created exclusively, the
    files' mode and the umask as always), written, synced and closed.
    The `.bak` is the bytes read, which the check covers; a file written
-   unread is read now and checked too.
+   unread is read now and checked too. A file that is a symlink (to a
+   file a sync tool keeps elsewhere, say) is followed (`realPath`): the
+   temporary file goes beside the file it points to, which is replaced,
+   and the link stays a link. Temporary files a crashed htt left in a
+   directory written, an hour old or more, are removed (`sweep`).
 5. **Check** that every file read still has the bytes read (or still
    doesn't exist). If not, another program wrote it: remove the
    temporary files and run the change again from 2, up to 5 runs, then
    `domain.ErrKeepsChanging` ("<file> keeps changing; nothing was
    saved"), writing nothing.
 6. **Replace:** rename each temporary file over its file (each `.bak`
-   just before its file), in the order the change wrote them. Only
+   just before its file): the files that keep every line they had
+   (gaining tasks) before those that lose one (`gainingFirst`), each
+   group in the order the change wrote them, so a composed change that
+   saved the losing file first still can't leave a task in neither. Only
    renames follow the check, so the moment in which another program's
    write can go unseen is the renames' alone, not the writes' and
    syncs' too. On Windows a rename over a file another process has
@@ -461,8 +468,9 @@ the same lines, so a task the caller holds sees the change, as the
 CLI's `Under:` line needs); its repository is the transaction's while
 the body runs, so the done file, the archive or a move's target the
 body loads and saves are part of it. The body saves the file gaining
-tasks before the one losing them, and the storage writes them in that
-order, so a failure part-way leaves a task in both, never in neither.
+tasks before the one losing them, and the storage writes the gaining
+file first whatever the order of the saves, so a failure part-way
+leaves a task in both, never in neither.
 A body may run again, so it decides from the context alone; a task
 number is read then (the design's Limits), and `AddSubtask` puts its
 task back as it was given before running again. `Context.Transact`

@@ -32,9 +32,11 @@ import (
 	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -212,20 +214,32 @@ func (t *transaction) changed() (string, error) {
 	return "", nil
 }
 
-// stage writes each file the change wrote, in the order it wrote them,
-// to a temporary file beside it, and the file's previous version to one
-// beside its .bak where asked, each synced: everything but the renames,
-// so before the check. The .bak is the file as the transaction read it,
-// which the check makes sure is still the file's; a file written
-// without being read is read now, and checked too. A failure removes
-// what was written and returns the error.
+// stage writes each file the change wrote, the file gaining tasks first
+// (gainingFirst), to a temporary file beside it, and the file's
+// previous version to one beside its .bak where asked, each synced:
+// everything but the renames, so before the check. The .bak is the file
+// as the transaction read it, which the check makes sure is still the
+// file's; a file written without being read is read now, and checked
+// too. A failure removes what was written and returns the error. On the
+// way, what a crashed htt left in the directories written is swept
+// (sweep).
 func (t *transaction) stage(dirs []string, h hooks) (staged, error) {
 	for _, w := range t.writes {
 		if !slices.ContainsFunc(dirs, func(d string) bool { return filepath.Clean(d) == filepath.Dir(w.path) }) {
 			return nil, fmt.Errorf("write %s: outside the directories locked (%v)", w.path, dirs)
 		}
 	}
+	for _, w := range t.writes {
+		if _, ok := t.read[w.path]; !ok && w.bak { // written without being read: checked from now on
+			was, err := readFile(w.path)
+			if err != nil {
+				return nil, err
+			}
+			t.read[w.path] = was
+		}
+	}
 	var files staged
+	swept := map[string]bool{}
 	add := func(w write, bak bool, data []byte) error {
 		path := w.path
 		if bak {
@@ -236,7 +250,15 @@ func (t *transaction) stage(dirs []string, h hooks) (staged, error) {
 				return err
 			}
 		}
-		f, err := stage(path, data)
+		real, err := realPath(path)
+		if err != nil {
+			return fmt.Errorf("write %s: %w", path, err)
+		}
+		if dir := filepath.Dir(real); !swept[dir] {
+			swept[dir] = true
+			sweep(dir)
+		}
+		f, err := stage(real, data)
 		if err != nil {
 			return err
 		}
@@ -244,22 +266,11 @@ func (t *transaction) stage(dirs []string, h hooks) (staged, error) {
 		files = append(files, f)
 		return nil
 	}
-	for _, w := range t.writes {
-		if w.bak {
-			was, ok := t.read[w.path]
-			if !ok { // written without being read: checked from now on
-				var err error
-				if was, err = readFile(w.path); err != nil {
-					files.discard()
-					return nil, err
-				}
-				t.read[w.path] = was
-			}
-			if was.exists {
-				if err := add(w, true, was.data); err != nil {
-					files.discard()
-					return nil, fmt.Errorf("back up %s: %w", w.path, err)
-				}
+	for _, w := range t.gainingFirst() {
+		if was := t.read[w.path]; w.bak && was.exists {
+			if err := add(w, true, was.data); err != nil {
+				files.discard()
+				return nil, fmt.Errorf("back up %s: %w", w.path, err)
 			}
 		}
 		if err := add(w, false, w.data); err != nil {
@@ -270,14 +281,122 @@ func (t *transaction) stage(dirs []string, h hooks) (staged, error) {
 	return files, nil
 }
 
+// gainingFirst returns the transaction's writes with the files that
+// keep every line they had (they gain tasks, or are new) before those
+// that lose a line (they lose a task, or a task changed), each group in
+// the order the change wrote them. The domain saves the file gaining a
+// task before the one losing it, but a body composing operations
+// (Context.Transact) can save them the other way round, adding a task
+// to a file before completing one from it; whatever the order of the
+// saves, a failure part-way then leaves a task in both files, never in
+// neither. Lines are compared as the repositories read them: trimmed,
+// blank ones left out.
+func (t *transaction) gainingFirst() []write {
+	loses := func(w write) bool {
+		was, ok := t.read[w.path]
+		if !ok || !was.exists {
+			return false
+		}
+		left := map[string]int{}
+		for l := range strings.Lines(string(was.data)) {
+			if l = strings.TrimSpace(l); l != "" {
+				left[l]++
+			}
+		}
+		for l := range strings.Lines(string(w.data)) {
+			if l = strings.TrimSpace(l); left[l] > 0 {
+				left[l]--
+			}
+		}
+		for _, n := range left {
+			if n > 0 {
+				return true
+			}
+		}
+		return false
+	}
+	out := make([]write, 0, len(t.writes))
+	var losing []write
+	for _, w := range t.writes {
+		if loses(w) {
+			losing = append(losing, w)
+		} else {
+			out = append(out, w)
+		}
+	}
+	return append(out, losing...)
+}
+
+// realPath is the file a write to path replaces. A symlink (to a file a
+// sync tool keeps elsewhere, say) is followed, so that the rename
+// replaces the file it points to, beside which the temporary file is
+// written, keeping the rename on that file's file system, and the link
+// stays a link; renaming over the link itself would replace it with a
+// regular file. A link to a file not there yet names where it will be.
+func realPath(path string) (string, error) {
+	for range 40 { // links followed at most, as on Linux
+		fi, err := os.Lstat(path)
+		if errors.Is(err, os.ErrNotExist) {
+			return path, nil
+		}
+		if err != nil {
+			return "", err
+		}
+		if fi.Mode()&os.ModeSymlink == 0 {
+			return path, nil
+		}
+		if real, err := filepath.EvalSymlinks(path); err == nil {
+			return real, nil
+		}
+		to, err := os.Readlink(path) // pointing to nothing yet
+		if err != nil {
+			return "", err
+		}
+		if !filepath.IsAbs(to) {
+			to = filepath.Join(filepath.Dir(path), to)
+		}
+		path = to
+	}
+	return "", fmt.Errorf("%s: too many links", path)
+}
+
+// leftoverAge is how old a temporary file of htt's must be for a
+// transaction to take it for one a crashed htt left behind: a
+// transaction takes moments, and no htt holds the lock for an hour.
+const leftoverAge = time.Hour
+
+// leftover matches the temporary files createTemp names: a dot, the
+// name of a file of htt's (a context or the done file, a day's log,
+// either's .bak, the current-context pointer), a random number, .tmp.
+var leftover = regexp.MustCompile(`^\.(.+\.(txt|log)(\.bak)?|` + currentContextFile + `)\.[0-9a-z]{1,13}\.tmp$`)
+
+// sweep removes from dir the temporary files a crashed htt left behind
+// (leftover), at least leftoverAge old. It runs with the lock held,
+// before a transaction writes in dir; a file it can't remove waits for
+// the next one.
+func sweep(dir string) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if e.IsDir() || !leftover.MatchString(e.Name()) {
+			continue
+		}
+		if info, err := e.Info(); err == nil && time.Since(info.ModTime()) >= leftoverAge {
+			_ = os.Remove(filepath.Join(dir, e.Name()))
+		}
+	}
+}
+
 // staged are the temporary files of a transaction's writes, in the
-// order the change wrote them, each file's .bak just before it.
+// order they're replaced, each file's .bak just before it.
 type staged []stagedFile
 
-// replace renames each temporary file over its file, in order. The
-// change wrote the file gaining tasks before the one losing them, so a
-// failure part-way leaves a task in both, never in neither. A failure
-// removes the temporary files not yet renamed.
+// replace renames each temporary file over its file, in order: the file
+// gaining tasks before the one losing them (gainingFirst), so a failure
+// part-way leaves a task in both, never in neither. A failure removes
+// the temporary files not yet renamed.
 func (files staged) replace(h hooks) error {
 	for i, f := range files {
 		first := i == 0 || files[i-1].of != f.of // the write's .bak, or the file

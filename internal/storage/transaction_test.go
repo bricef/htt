@@ -580,6 +580,157 @@ func TestTransact_AFailureWritingTheFilesReplacesNone(t *testing.T) {
 	}
 }
 
+// A change that saves the file losing a task before the one gaining it
+// is written gaining-first all the same: when the second file can't be
+// replaced, the task is in both, never in neither.
+func TestTransact_TheGainingFileIsReplacedFirstWhateverTheChangesOrder(t *testing.T) {
+	dir := t.TempDir()
+	todo, done := filepath.Join(dir, "todo.txt"), filepath.Join(dir, "done.txt")
+	writeFile(t, todo, "finish me\nstay\n")
+	writeFile(t, done, "x old\n")
+	var order []string
+	h := hooks{replacing: func(path string) error {
+		order = append(order, filepath.Base(path))
+		if len(order) == 2 {
+			return errors.New("disk full")
+		}
+		return nil
+	}}
+	err := transact([]string{dir}, h, func(tx *transaction) error {
+		tx.Write(todo, []byte("stay\n"), true) // the losing file first
+		tx.Write(done, []byte("x old\nx finish me\n"), true)
+		return nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "disk full") {
+		t.Fatalf("err = %v, want the failure", err)
+	}
+	if !slices.Equal(order, []string{"done.txt", "todo.txt"}) {
+		t.Errorf("replaced in the order %v, want done.txt, which gains the task, first", order)
+	}
+	inTodo := strings.Contains(readString(t, todo), "finish me")
+	inDone := strings.Contains(readString(t, done), "finish me")
+	if !inTodo && !inDone {
+		t.Error("the task is in neither file")
+	}
+}
+
+// A file that only gains lines goes before one that loses some; files
+// alike keep the order the change wrote them in.
+func TestGainingFirst(t *testing.T) {
+	read := map[string]snapshot{
+		"todo":  {data: []byte("a\nb\n"), exists: true},
+		"done":  {data: []byte("x old\n"), exists: true},
+		"work":  {data: []byte("w\n"), exists: true},
+		"other": {data: []byte("o\n"), exists: true},
+	}
+	for _, tc := range []struct {
+		writes []write
+		want   []string
+	}{
+		{[]write{{path: "todo", data: []byte("b\n")}, {path: "done", data: []byte("x old\nx a\n")}}, []string{"done", "todo"}},
+		{[]write{{path: "done", data: []byte("x old\nx a\n")}, {path: "todo", data: []byte("b\n")}}, []string{"done", "todo"}},
+		// a changed line is a line lost
+		{[]write{{path: "todo", data: []byte("(A) a\nb\n")}, {path: "work", data: []byte("w\nnew\n")}}, []string{"work", "todo"}},
+		// both lose: as written
+		{[]write{{path: "work", data: []byte("")}, {path: "todo", data: []byte("b\n")}}, []string{"work", "todo"}},
+		// both gain, and a file never read (a new one): as written
+		{[]write{{path: "other", data: []byte("o\np\n")}, {path: "new", data: []byte("n\n")}, {path: "work", data: []byte("w\nv\n")}}, []string{"other", "new", "work"}},
+		// lines kept in another order, blank lines and spaces aside: nothing lost
+		{[]write{{path: "todo", data: []byte("x\n")}, {path: "done", data: []byte("\n  x old \r\n")}}, []string{"done", "todo"}},
+	} {
+		tx := &transaction{read: read, writes: tc.writes}
+		var got []string
+		for _, w := range tx.gainingFirst() {
+			got = append(got, w.path)
+		}
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("writes %v: order %v, want %v", tc.writes, got, tc.want)
+		}
+	}
+}
+
+// A context file that is a symlink, to a file a sync tool keeps
+// elsewhere say, stays one: the file it points to is replaced, its
+// temporary file written beside it, so the rename stays on its file
+// system.
+func TestTransact_ASymlinkedFileStaysALink(t *testing.T) {
+	dir, synced := t.TempDir(), t.TempDir()
+	target := filepath.Join(synced, "todo.txt")
+	writeFile(t, target, "one\n")
+	link := filepath.Join(dir, "todo.txt")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("no symlinks here: %v", err)
+	}
+	r := NewFileRepository(dir, dir)
+	ctx := loaded(t, r, "todo")
+	if err := ctx.AddTask(mustTask(t, "2026-01-01 two")); err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Lstat(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Mode()&os.ModeSymlink == 0 {
+		t.Errorf("todo.txt is no longer a link: %v", fi.Mode())
+	}
+	if got := readString(t, target); got != "one\n2026-01-01 two\n" {
+		t.Errorf("the file linked to = %q", got)
+	}
+	if got := readString(t, link+".bak"); got != "one\n" {
+		t.Errorf("todo.txt.bak = %q", got)
+	}
+	if left := leftovers(t, synced, "todo.txt"); len(left) > 0 {
+		t.Errorf("left beside the file linked to: %v", left)
+	}
+	if left := leftovers(t, dir, "todo.txt"); len(left) > 0 {
+		t.Errorf("left in the data directory: %v", left)
+	}
+
+	// A link to a file not made yet: the file is made where it points.
+	dangling := filepath.Join(dir, "work.txt")
+	if err := os.Symlink(filepath.Join("..", filepath.Base(synced), "work.txt"), dangling); err != nil {
+		t.Fatal(err)
+	}
+	if err := loaded(t, r, "work").AddTask(mustTask(t, "2026-01-01 first")); err != nil {
+		t.Fatal(err)
+	}
+	if fi, err := os.Lstat(dangling); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+		t.Errorf("work.txt is no longer a link: %v", err)
+	}
+	if got := readString(t, filepath.Join(synced, "work.txt")); got != "2026-01-01 first\n" {
+		t.Errorf("the file linked to = %q", got)
+	}
+}
+
+// Temporary files a crashed htt left behind, an hour old or more, are
+// removed by the next transaction to write there; one being written
+// now, and files that only look like them, are left alone.
+func TestTransact_SweepsWhatACrashLeftBehind(t *testing.T) {
+	dir := t.TempDir()
+	old := time.Now().Add(-2 * time.Hour)
+	crashed := []string{".todo.txt.3dj51ikthyg7a.tmp", ".todo.txt.bak.2vdjzu744su5p.tmp", ".current-context.k2j3.tmp", ".2026-01-01.log.9.tmp"}
+	kept := []string{".done.txt.1sn7ev20zmfdt.tmp", ".notes.tmp", ".notes.md.abc.tmp", "todo.txt.abc.tmp"}
+	for _, n := range append(slices.Clone(crashed), kept...) {
+		writeFile(t, filepath.Join(dir, n), "part of a file")
+		if n == kept[0] {
+			continue // being written now
+		}
+		if err := os.Chtimes(filepath.Join(dir, n), old, old); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r := NewFileRepository(dir, dir)
+	if err := r.Save(&domain.Context{Name: "todo", Tasks: []*domain.Task{mustTask(t, "one")}}); err != nil {
+		t.Fatal(err)
+	}
+	left := leftovers(t, dir, "todo.txt")
+	slices.Sort(left)
+	want := slices.Sorted(slices.Values(kept))
+	if !slices.Equal(left, want) {
+		t.Errorf("left %v, want %v", left, want)
+	}
+}
+
 // An error from the change writes nothing, and comes back as it is.
 func TestTransact_AnErrorFromTheChangeWritesNothing(t *testing.T) {
 	dir := t.TempDir()
